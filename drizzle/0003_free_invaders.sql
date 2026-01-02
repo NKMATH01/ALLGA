@@ -1,0 +1,1 @@
+ALTER TABLE "exam_attempts" ADD COLUMN "correct_count" integer;

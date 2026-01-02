@@ -1,0 +1,41 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1762848422323,
+      "tag": "0000_cloudy_shooting_star",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1762866205215,
+      "tag": "0001_bored_ender_wiggin",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1762868999940,
+      "tag": "0002_empty_morph",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1763351130573,
+      "tag": "0003_free_invaders",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1763397197091,
+      "tag": "0004_milky_rachel_grey",
+      "breakpoints": true
+    }
+  ]
+}

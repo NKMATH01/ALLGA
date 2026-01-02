@@ -1,0 +1,901 @@
+import { useState, useEffect } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { api } from '../lib/api';
+import { Button } from '../components/ui/button';
+import { Input } from '../components/ui/input';
+import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
+import { Users, FileText, BarChart3, LogOut, LayoutDashboard, Menu, X, UserCircle, Home, TrendingUp, Award, Target, ExternalLink, Loader2 } from 'lucide-react';
+import { Line } from 'react-chartjs-2';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend,
+  Filler,
+} from 'chart.js';
+
+// Register Chart.js components
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend,
+  Filler
+);
+
+interface User {
+  id: string;
+  username: string;
+  name: string;
+  role: string;
+}
+
+type MenuSection = 'dashboard' | 'exams' | 'results';
+type ExamTab = 'available' | 'completed';
+
+// AI Report Button Component
+function AIReportButton({ attemptId }: { attemptId: string }) {
+  const [loading, setLoading] = useState(false);
+  const [reportStatus, setReportStatus] = useState<string | null>(null);
+
+  const checkReportStatus = async () => {
+    try {
+      const response = await api.get(`/reports/attempt/${attemptId}`);
+      const reportData = response.data.data;
+      // If report exists and has htmlContent, it's completed
+      if (reportData && reportData.htmlContent) {
+        setReportStatus('completed');
+        return 'completed';
+      } else {
+        setReportStatus('none');
+        return 'none';
+      }
+    } catch (error: any) {
+      console.error('Error checking report status:', error);
+      // If 404, report doesn't exist yet
+      if (error.response?.status === 404) {
+        setReportStatus('none');
+      }
+      return 'none';
+    }
+  };
+
+  const handleViewReport = async () => {
+    setLoading(true);
+    try {
+      const response = await api.get(`/reports/attempt/${attemptId}`);
+      const reportData = response.data.data;
+
+      if (reportData && reportData.htmlContent) {
+        const newWindow = window.open('', '_blank');
+        if (newWindow) {
+          newWindow.document.write(reportData.htmlContent);
+          newWindow.document.close();
+        }
+      } else {
+        alert('AI 보고서가 아직 생성되지 않았습니다.');
+      }
+    } catch (error: any) {
+      console.error('Error fetching report:', error);
+      if (error.response?.status === 404) {
+        alert('AI 보고서가 아직 생성되지 않았습니다. 잠시 후 다시 시도해주세요.');
+      } else {
+        alert(error.response?.data?.message || 'AI 보고서를 불러오는데 실패했습니다.');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Check report status on mount
+  useEffect(() => {
+    checkReportStatus();
+  }, [attemptId]);
+
+  if (reportStatus === 'completed') {
+    return (
+      <Button
+        onClick={handleViewReport}
+        disabled={loading}
+        className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 min-w-[140px]"
+      >
+        {loading ? (
+          <>
+            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            로딩 중...
+          </>
+        ) : (
+          <>
+            <ExternalLink className="w-4 h-4 mr-2" />
+            AI 보고서 보기
+          </>
+        )}
+      </Button>
+    );
+  }
+
+  return null;
+}
+
+export default function StudentDashboard({ user }: { user: User }) {
+  const queryClient = useQueryClient();
+  const [activeSection, setActiveSection] = useState<MenuSection>('dashboard');
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [selectedExam, setSelectedExam] = useState<any>(null);
+  const [answers, setAnswers] = useState<Record<number, number>>({});
+  const [activeExamTab, setActiveExamTab] = useState<ExamTab>('available');
+
+  const logoutMutation = useMutation({
+    mutationFn: async () => {
+      await api.post('/auth/logout');
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['auth', 'me'] });
+    },
+  });
+
+  // Fetch distributed exams
+  const { data: examsData } = useQuery({
+    queryKey: ['student', 'exams'],
+    queryFn: async () => {
+      const res = await api.get('/my-exams');
+      return res.data;
+    },
+  });
+
+  // Remove duplicate exams (same examId) - keep the latest distribution
+  const exams = (() => {
+    const rawExams = examsData?.data || [];
+    const examMap = new Map<string, any>();
+
+    rawExams.forEach((item: any) => {
+      const examId = item.exam.id;
+      const existing = examMap.get(examId);
+
+      if (!existing) {
+        examMap.set(examId, item);
+      } else {
+        // Keep the one with the latest startDate
+        const existingDate = new Date(existing.distribution.startDate);
+        const currentDate = new Date(item.distribution.startDate);
+
+        if (currentDate > existingDate) {
+          examMap.set(examId, item);
+        }
+      }
+    });
+
+    return Array.from(examMap.values());
+  })();
+
+  const startExamMutation = useMutation({
+    mutationFn: async (distributionId: string) => {
+      // Start exam attempt
+      const attemptRes = await api.post('/exam-attempts', { distributionId });
+
+      // Get exam details with questions
+      const examRes = await api.get(`/my-exams/${distributionId}`);
+
+      return {
+        attempt: attemptRes.data.data,
+        examData: examRes.data.data,
+      };
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['student', 'exams'] });
+      // Properly structure the exam data
+      setSelectedExam({
+        id: data.attempt.id,
+        exam: data.examData.exam,
+        distribution: data.examData.distribution,
+        attempt: data.attempt
+      });
+      setActiveSection('exams');
+    },
+    onError: (error: any) => {
+      alert(error.response?.data?.message || '시험 시작에 실패했습니다.');
+    },
+  });
+
+  const submitExamMutation = useMutation({
+    mutationFn: async ({ attemptId, answers }: { attemptId: string; answers: Record<number, number> }) => {
+      const res = await api.post(`/exam-attempts/${attemptId}/submit`, { answers });
+      return res.data;
+    },
+    onSuccess: () => {
+      alert('시험이 제출되었습니다.');
+      queryClient.invalidateQueries({ queryKey: ['student', 'exams'] });
+      setSelectedExam(null);
+      setAnswers({});
+      setActiveSection('results');
+    },
+    onError: (error: any) => {
+      alert(error.response?.data?.message || '시험 제출에 실패했습니다.');
+    },
+  });
+
+  const handleAnswerChange = (questionNumber: number, choiceIndex: number) => {
+    setAnswers((prev) => ({ ...prev, [questionNumber]: choiceIndex }));
+  };
+
+  const handleSubmitExam = () => {
+    if (!selectedExam) return;
+
+    if (confirm('시험을 제출하시겠습니까? 제출 후에는 수정할 수 없습니다.')) {
+      submitExamMutation.mutate({ attemptId: selectedExam.id, answers });
+    }
+  };
+
+  // Calculate statistics from completed exams
+  const completedExams = exams?.filter((e: any) => e.status === 'completed' && e.attempt?.score !== undefined) || [];
+  const scores = completedExams.map((e: any) => e.attempt.score);
+  const averageScore = scores.length > 0 ? Math.round(scores.reduce((a: number, b: number) => a + b, 0) / scores.length) : 0;
+  const highestScore = scores.length > 0 ? Math.max(...scores) : 0;
+  const lowestScore = scores.length > 0 ? Math.min(...scores) : 0;
+
+  // Prepare chart data for score trend
+  const chartData = {
+    labels: completedExams.map((e: any) => e.exam.title.length > 15 ? e.exam.title.substring(0, 15) + '...' : e.exam.title),
+    datasets: [
+      {
+        label: '점수',
+        data: scores,
+        fill: true,
+        borderColor: 'rgb(147, 51, 234)',
+        backgroundColor: 'rgba(147, 51, 234, 0.1)',
+        tension: 0.4,
+        pointBackgroundColor: 'rgb(147, 51, 234)',
+        pointBorderColor: '#fff',
+        pointBorderWidth: 2,
+        pointRadius: 6,
+        pointHoverRadius: 8,
+      },
+    ],
+  };
+
+  const chartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        display: false,
+      },
+      tooltip: {
+        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+        padding: 12,
+        titleColor: '#fff',
+        bodyColor: '#fff',
+        borderColor: 'rgb(147, 51, 234)',
+        borderWidth: 1,
+      },
+    },
+    scales: {
+      y: {
+        beginAtZero: true,
+        max: 100,
+        grid: {
+          color: 'rgba(0, 0, 0, 0.05)',
+        },
+        ticks: {
+          callback: function(value: any) {
+            return value + '점';
+          },
+        },
+      },
+      x: {
+        grid: {
+          display: false,
+        },
+      },
+    },
+  };
+
+  const menuItems = [
+    { id: 'dashboard' as MenuSection, label: '대시보드', icon: LayoutDashboard },
+    { id: 'exams' as MenuSection, label: '내 시험', icon: FileText },
+    { id: 'results' as MenuSection, label: '성적 조회', icon: BarChart3 },
+  ];
+
+  return (
+    <div className="flex h-screen bg-gray-50">
+      {/* Sidebar */}
+      <aside
+        className={`${
+          sidebarOpen ? 'w-64' : 'w-0'
+        } bg-gradient-to-b from-purple-600 to-indigo-700 text-white transition-all duration-300 overflow-hidden`}
+      >
+        <div className="p-6">
+          <div className="flex items-center gap-3 mb-8">
+            <Home className="w-8 h-8" />
+            <div>
+              <h1 className="text-xl font-bold">ALLGA 학생</h1>
+              <p className="text-sm text-purple-200">학습 관리 시스템</p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3 mb-6 p-3 bg-white/10 rounded-lg">
+            <UserCircle className="w-10 h-10" />
+            <div>
+              <p className="font-semibold">{user.name}</p>
+              <p className="text-xs text-purple-200">학생</p>
+            </div>
+          </div>
+
+          <nav className="space-y-2">
+            {menuItems.map((item) => {
+              const Icon = item.icon;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => setActiveSection(item.id)}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+                    activeSection === item.id
+                      ? 'bg-white text-purple-600 font-semibold'
+                      : 'hover:bg-white/10'
+                  }`}
+                >
+                  <Icon className="w-5 h-5" />
+                  {item.label}
+                </button>
+              );
+            })}
+          </nav>
+
+          <div className="mt-8">
+            <Button
+              onClick={() => logoutMutation.mutate()}
+              variant="outline"
+              className="w-full border-white/30 text-white hover:bg-white/10"
+            >
+              <LogOut className="w-4 h-4 mr-2" />
+              로그아웃
+            </Button>
+          </div>
+        </div>
+      </aside>
+
+      {/* Main Content */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Header */}
+        <header className="bg-white shadow-sm z-10">
+          <div className="flex items-center justify-between px-6 py-4">
+            <div className="flex items-center gap-4">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setSidebarOpen(!sidebarOpen)}
+                className="text-gray-600"
+              >
+                {sidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+              </Button>
+              <div>
+                <h2 className="text-2xl font-bold text-gray-800">
+                  {activeSection === 'dashboard' && '대시보드'}
+                  {activeSection === 'exams' && '내 시험'}
+                  {activeSection === 'results' && '성적 조회'}
+                </h2>
+                <p className="text-sm text-gray-600">{user.name}님 환영합니다</p>
+              </div>
+            </div>
+          </div>
+        </header>
+
+        {/* Content Area */}
+        <main className="flex-1 overflow-y-auto p-6">
+          {activeSection === 'dashboard' && (
+            <div className="space-y-6">
+              {/* Statistics Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <Card className="border-purple-200 shadow-lg">
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-gray-600 font-medium">평균 점수</p>
+                        <p className="text-3xl font-bold text-purple-600 mt-2">{averageScore}점</p>
+                      </div>
+                      <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center">
+                        <Target className="w-6 h-6 text-purple-600" />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="border-green-200 shadow-lg">
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-gray-600 font-medium">최고 점수</p>
+                        <p className="text-3xl font-bold text-green-600 mt-2">{highestScore}점</p>
+                      </div>
+                      <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
+                        <Award className="w-6 h-6 text-green-600" />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="border-blue-200 shadow-lg">
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-gray-600 font-medium">최저 점수</p>
+                        <p className="text-3xl font-bold text-blue-600 mt-2">{lowestScore}점</p>
+                      </div>
+                      <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
+                        <TrendingUp className="w-6 h-6 text-blue-600" />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Score Trend Chart */}
+              {completedExams.length > 0 && (
+                <Card className="border-purple-200 shadow-lg">
+                  <CardHeader className="bg-gradient-to-r from-purple-50 to-indigo-50">
+                    <CardTitle className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                      <BarChart3 className="w-5 h-5 text-purple-600" />
+                      성적 추이
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-6">
+                    <div className="h-64">
+                      <Line data={chartData} options={chartOptions} />
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Recent Exam Results Summary */}
+              {completedExams.length > 0 && (
+                <Card className="border-purple-200 shadow-lg">
+                  <CardHeader className="bg-gradient-to-r from-purple-50 to-indigo-50">
+                    <CardTitle className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                      <FileText className="w-5 h-5 text-purple-600" />
+                      최근 시험 결과
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-6">
+                    <div className="grid gap-4">
+                      {completedExams.slice(0, 3).map((item: any) => (
+                        <div
+                          key={item.distribution.id}
+                          className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow bg-white"
+                        >
+                          <div className="flex justify-between items-center">
+                            <div className="flex-1">
+                              <h3 className="text-lg font-semibold text-gray-900">{item.exam.title}</h3>
+                              <p className="text-sm text-gray-600 mt-1">{item.exam.subject}</p>
+                            </div>
+                            <div className="text-right ml-4">
+                              <div className="text-2xl font-bold text-purple-600">
+                                {item.attempt.score}점
+                              </div>
+                              <div className="text-sm text-gray-600 mt-1">
+                                {item.attempt.grade}등급
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Available Exams */}
+              <Card className="border-purple-200 shadow-lg">
+                <CardHeader className="bg-gradient-to-r from-purple-50 to-indigo-50">
+                  <CardTitle className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                    <FileText className="w-5 h-5 text-purple-600" />
+                    응시 가능한 시험
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-6">
+                  {exams && exams.filter((e: any) => e.status === 'available' || e.status === 'in_progress').length > 0 ? (
+                    <div className="grid gap-4">
+                      {exams.filter((e: any) => e.status === 'available' || e.status === 'in_progress').map((item: any) => (
+                        <div
+                          key={item.distribution.id}
+                          className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow"
+                        >
+                          <div className="flex justify-between items-start">
+                            <div className="flex-1">
+                              <h3 className="text-lg font-semibold text-gray-900">{item.exam.title}</h3>
+                              <p className="text-sm text-gray-600 mt-1">{item.exam.subject}</p>
+                              <div className="flex gap-4 mt-2 text-sm text-gray-500">
+                                <span>문항: {item.exam.totalQuestions}개</span>
+                                <span>배점: {item.exam.totalScore}점</span>
+                              </div>
+                              <div className="flex gap-4 mt-2 text-sm text-gray-500">
+                                <span>
+                                  시작일: {new Date(item.distribution.startDate).toLocaleDateString('ko-KR')}
+                                </span>
+                                <span>
+                                  종료일: {new Date(item.distribution.endDate).toLocaleDateString('ko-KR')}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="ml-4">
+                              {item.status === 'in_progress' ? (
+                                <Button
+                                  onClick={async () => {
+                                    const examRes = await api.get(`/my-exams/${item.distribution.id}`);
+                                    setSelectedExam({ ...item.attempt, ...examRes.data.data });
+                                    setActiveSection('exams');
+                                  }}
+                                  className="bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700"
+                                >
+                                  계속하기
+                                </Button>
+                              ) : (
+                                <Button
+                                  onClick={() => startExamMutation.mutate(item.distribution.id)}
+                                  className="bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700"
+                                >
+                                  시험 시작
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-12">
+                      <FileText className="w-16 h-16 mx-auto text-gray-300 mb-4" />
+                      <p className="text-gray-500">응시 가능한 시험이 없습니다.</p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          {activeSection === 'exams' && (
+            <div className="space-y-6">
+              {selectedExam ? (
+                <Card className="border-purple-200">
+                  <CardHeader className="bg-gradient-to-r from-purple-50 to-indigo-50">
+                    <CardTitle className="text-xl font-bold text-gray-800">
+                      {selectedExam.exam?.title || '시험 응시'}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-6">
+                    <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                      <p className="text-sm text-blue-800">
+                        <strong>안내:</strong> 주어진 시험지를 보고 각 문제의 답을 선택해주세요.
+                      </p>
+                    </div>
+                    <div className="space-y-6">
+                      {selectedExam.exam?.questionsData && selectedExam.exam.questionsData.length > 0 ? (
+                        selectedExam.exam.questionsData.map((question: any, idx: number) => (
+                          <div key={idx} className="bg-white rounded-xl shadow-lg transition-all hover:shadow-xl overflow-hidden border-t-4 border-indigo-500">
+                            <div className="p-6 md:p-8">
+                              <div className="mb-6">
+                                <h2 className="text-2xl font-semibold text-gray-800">문항 {question.questionNumber || idx + 1}</h2>
+                                <p className="text-sm text-gray-500 mt-1">
+                                  {question.difficulty && `난이도: ${question.difficulty} | `}
+                                  {question.points && `배점: ${question.points}점 | `}
+                                  {question.category || ''}
+                                </p>
+                              </div>
+
+                              {/* 답안 선택 버튼 */}
+                              <div className="flex flex-wrap gap-4 items-center">
+                                {[1, 2, 3, 4, 5].map((choice) => (
+                                  <div key={choice}>
+                                    <input
+                                      type="radio"
+                                      id={`q${question.questionNumber}-${choice}`}
+                                      name={`question-${question.questionNumber}`}
+                                      value={choice}
+                                      checked={answers[question.questionNumber] === choice}
+                                      onChange={() => handleAnswerChange(question.questionNumber, choice)}
+                                      className="peer hidden"
+                                    />
+                                    <label
+                                      htmlFor={`q${question.questionNumber}-${choice}`}
+                                      className="flex items-center justify-center w-16 h-16 rounded-full border-2 border-gray-300 bg-white text-gray-700 text-xl font-semibold cursor-pointer transition-all duration-200 hover:bg-indigo-50 peer-checked:bg-indigo-600 peer-checked:text-white peer-checked:border-indigo-600"
+                                    >
+                                      {choice}
+                                    </label>
+                                  </div>
+                                ))}
+                                {/* '모름' 옵션 */}
+                                <div className="ml-4">
+                                  <input
+                                    type="radio"
+                                    id={`q${question.questionNumber}-unknown`}
+                                    name={`question-${question.questionNumber}`}
+                                    value={0}
+                                    checked={answers[question.questionNumber] === 0}
+                                    onChange={() => handleAnswerChange(question.questionNumber, 0)}
+                                    className="peer hidden"
+                                  />
+                                  <label
+                                    htmlFor={`q${question.questionNumber}-unknown`}
+                                    className="flex items-center justify-center w-16 h-16 rounded-full border-2 border-gray-300 bg-gray-100 text-gray-500 text-base font-semibold cursor-pointer transition-all duration-200 hover:bg-gray-200 peer-checked:bg-gray-700 peer-checked:text-white peer-checked:border-gray-700"
+                                  >
+                                    모름
+                                  </label>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="text-center py-8 text-gray-500">
+                          시험 문제 정보를 불러오는 중...
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="mt-6 flex gap-4">
+                      <Button
+                        onClick={handleSubmitExam}
+                        className="flex-1 bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700"
+                      >
+                        제출하기
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          setSelectedExam(null);
+                          setAnswers({});
+                        }}
+                        className="flex-1"
+                      >
+                        취소
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ) : (
+                <Card className="border-purple-200">
+                  <CardHeader className="bg-gradient-to-r from-purple-50 to-indigo-50">
+                    <CardTitle className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                      <FileText className="w-5 h-5 text-purple-600" />
+                      내 시험
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-6">
+                    {/* Tabs */}
+                    <div className="flex gap-2 mb-6 border-b border-gray-200">
+                      <button
+                        onClick={() => setActiveExamTab('available')}
+                        className={`px-4 py-2 font-medium transition-colors ${
+                          activeExamTab === 'available'
+                            ? 'text-purple-600 border-b-2 border-purple-600'
+                            : 'text-gray-600 hover:text-gray-800'
+                        }`}
+                      >
+                        배포된 시험
+                      </button>
+                      <button
+                        onClick={() => setActiveExamTab('completed')}
+                        className={`px-4 py-2 font-medium transition-colors ${
+                          activeExamTab === 'completed'
+                            ? 'text-purple-600 border-b-2 border-purple-600'
+                            : 'text-gray-600 hover:text-gray-800'
+                        }`}
+                      >
+                        완료된 시험
+                      </button>
+                    </div>
+
+                    {/* Available/In Progress Tab */}
+                    {activeExamTab === 'available' && (
+                      <>
+                        {exams && exams.filter((e: any) => e.status === 'available' || e.status === 'in_progress').length > 0 ? (
+                          <div className="grid gap-4">
+                            {exams.filter((e: any) => e.status === 'available' || e.status === 'in_progress').map((item: any) => (
+                              <div
+                                key={item.distribution.id}
+                                className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow"
+                              >
+                                <div className="flex justify-between items-start">
+                                  <div className="flex-1">
+                                    <h3 className="text-lg font-semibold text-gray-900">{item.exam.title}</h3>
+                                    <p className="text-sm text-gray-600 mt-1">{item.exam.subject}</p>
+                                    <div className="flex gap-4 mt-2 text-sm text-gray-500">
+                                      <span>문항: {item.exam.totalQuestions}개</span>
+                                      <span>배점: {item.exam.totalScore}점</span>
+                                    </div>
+                                    <div className="flex gap-4 mt-2 text-sm text-gray-500">
+                                      <span>
+                                        시작일: {new Date(item.distribution.startDate).toLocaleDateString('ko-KR')}
+                                      </span>
+                                      <span>
+                                        종료일: {new Date(item.distribution.endDate).toLocaleDateString('ko-KR')}
+                                      </span>
+                                    </div>
+                                  </div>
+                                  <div className="ml-4">
+                                    {item.status === 'in_progress' ? (
+                                      <Button
+                                        onClick={async () => {
+                                          const examRes = await api.get(`/my-exams/${item.distribution.id}`);
+                                          setSelectedExam({ ...item.attempt, ...examRes.data.data });
+                                        }}
+                                        className="bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700"
+                                      >
+                                        계속하기
+                                      </Button>
+                                    ) : (
+                                      <Button
+                                        onClick={() => startExamMutation.mutate(item.distribution.id)}
+                                        className="bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700"
+                                      >
+                                        시험 시작
+                                      </Button>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="text-center py-12">
+                            <FileText className="w-16 h-16 mx-auto text-gray-300 mb-4" />
+                            <p className="text-gray-500">배포된 시험이 없습니다.</p>
+                          </div>
+                        )}
+                      </>
+                    )}
+
+                    {/* Completed Tab */}
+                    {activeExamTab === 'completed' && (
+                      <>
+                        {exams && exams.filter((e: any) => e.status === 'completed').length > 0 ? (
+                          <div className="grid gap-4">
+                            {exams.filter((e: any) => e.status === 'completed').map((item: any) => (
+                              <div
+                                key={item.distribution.id}
+                                className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow bg-green-50"
+                              >
+                                <div className="flex justify-between items-start">
+                                  <div className="flex-1">
+                                    <h3 className="text-lg font-semibold text-gray-900">{item.exam.title}</h3>
+                                    <p className="text-sm text-gray-600 mt-1">{item.exam.subject}</p>
+                                    <div className="flex gap-4 mt-2 text-sm text-gray-500">
+                                      <span>문항: {item.exam.totalQuestions}개</span>
+                                      <span>배점: {item.exam.totalScore}점</span>
+                                    </div>
+                                    <div className="flex gap-4 mt-2 text-sm text-gray-500">
+                                      <span>
+                                        제출일: {item.attempt?.submittedAt ? new Date(item.attempt.submittedAt).toLocaleDateString('ko-KR') : '-'}
+                                      </span>
+                                    </div>
+                                  </div>
+                                  <div className="text-center ml-4">
+                                    <div className="px-4 py-2 bg-green-600 text-white rounded-lg font-semibold mb-2">
+                                      제출 완료
+                                    </div>
+                                    {item.attempt?.score !== undefined && (
+                                      <>
+                                        <div className="text-2xl font-bold text-green-600">
+                                          {item.attempt.score}점
+                                        </div>
+                                        {item.attempt?.grade && (
+                                          <div className="text-sm text-gray-600 mt-1">
+                                            {item.attempt.grade}등급
+                                          </div>
+                                        )}
+                                      </>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="text-center py-12">
+                            <FileText className="w-16 h-16 mx-auto text-gray-300 mb-4" />
+                            <p className="text-gray-500">완료된 시험이 없습니다.</p>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+          )}
+
+          {activeSection === 'results' && (
+            <div className="space-y-6">
+              <Card className="border-purple-200">
+                <CardHeader className="bg-gradient-to-r from-purple-50 to-indigo-50">
+                  <CardTitle className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                    <BarChart3 className="w-5 h-5 text-purple-600" />
+                    내 성적
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-6">
+                  {exams && exams.filter((e: any) => e.status === 'completed').length > 0 ? (
+                    <div className="space-y-4">
+                      {exams
+                        .filter((e: any) => e.status === 'completed')
+                        .map((item: any) => (
+                          <div
+                            key={item.distribution.id}
+                            className="border border-gray-200 rounded-lg p-6 hover:shadow-md transition-shadow bg-white"
+                          >
+                            <div className="flex justify-between items-start">
+                              <div className="flex-1">
+                                <h3 className="text-xl font-bold text-gray-900">{item.exam.title}</h3>
+                                <p className="text-sm text-gray-600 mt-1">{item.exam.subject}</p>
+
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
+                                  <div className="bg-purple-50 rounded-lg p-3">
+                                    <p className="text-xs text-gray-600 mb-1">점수</p>
+                                    <p className="text-2xl font-bold text-purple-600">
+                                      {item.attempt?.score || 0}점
+                                    </p>
+                                  </div>
+
+                                  <div className="bg-indigo-50 rounded-lg p-3">
+                                    <p className="text-xs text-gray-600 mb-1">등급</p>
+                                    <p className="text-2xl font-bold text-indigo-600">
+                                      {item.attempt?.grade || '-'}등급
+                                    </p>
+                                  </div>
+
+                                  <div className="bg-blue-50 rounded-lg p-3">
+                                    <p className="text-xs text-gray-600 mb-1">정답 수</p>
+                                    <p className="text-2xl font-bold text-blue-600">
+                                      {item.attempt?.correctCount || 0}/{item.exam.totalQuestions}
+                                    </p>
+                                  </div>
+
+                                  <div className="bg-green-50 rounded-lg p-3">
+                                    <p className="text-xs text-gray-600 mb-1">정답률</p>
+                                    <p className="text-2xl font-bold text-green-600">
+                                      {item.exam.totalQuestions > 0
+                                        ? Math.round(((item.attempt?.correctCount || 0) / item.exam.totalQuestions) * 100)
+                                        : 0}%
+                                    </p>
+                                  </div>
+                                </div>
+
+                                <div className="mt-4 text-sm text-gray-500">
+                                  <span>
+                                    제출일: {item.attempt?.submittedAt
+                                      ? new Date(item.attempt.submittedAt).toLocaleString('ko-KR')
+                                      : '-'}
+                                  </span>
+                                </div>
+                              </div>
+
+                              <div className="ml-6 flex flex-col gap-2">
+                                {item.attempt?.id && (
+                                  <AIReportButton attemptId={item.attempt.id} />
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-12">
+                      <BarChart3 className="w-16 h-16 mx-auto text-gray-300 mb-4" />
+                      <p className="text-gray-500">제출한 시험이 없습니다.</p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          )}
+        </main>
+      </div>
+    </div>
+  );
+}

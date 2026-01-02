@@ -1,0 +1,1003 @@
+import express from 'express';
+import { GoogleGenerativeAI } from '@google/generative-ai';
+import { db } from '../db/index';
+import { aiReports, examAttempts, exams, students, users } from '../db/schema';
+import { eq } from 'drizzle-orm';
+import { requireAuth } from '../middleware/auth';
+import { escapeHtml } from '../utils/helpers';
+import { OLGA_REPORT_META_PROMPT_V2 } from '../prompts/olga-report-meta-prompt-v2';
+
+const router = express.Router();
+
+console.log('🔑 GEMINI_API_KEY 확인:', process.env.GEMINI_API_KEY ? '설정됨 ✅' : '설정 안됨 ❌');
+
+if (!process.env.GEMINI_API_KEY) {
+  console.warn('⚠️ GEMINI_API_KEY not set. AI report generation will not work.');
+}
+
+const genAI = process.env.GEMINI_API_KEY
+  ? new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
+  : null;
+
+console.log('🤖 Gemini 초기화:', genAI ? '성공 ✅' : '실패 ❌');
+
+// POST /api/reports/generate/:attemptId - AI 분석 보고서 생성
+router.post('/generate/:attemptId', requireAuth, async (req, res) => {
+  try {
+    const { attemptId } = req.params;
+
+    // Check if report already exists
+    const [existingReport] = await db
+      .select()
+      .from(aiReports)
+      .where(eq(aiReports.attemptId, attemptId))
+      .limit(1);
+
+    if (existingReport) {
+      console.log('✓ 이미 보고서가 존재합니다. 스킵:', attemptId);
+      return res.status(200).json({
+        success: true,
+        message: '이미 보고서가 생성되었습니다.',
+        report: existingReport
+      });
+    }
+
+    // Get attempt with exam and student info
+    const [attempt] = await db.select().from(examAttempts).where(eq(examAttempts.id, attemptId)).limit(1);
+
+    if (!attempt || !attempt.submittedAt) {
+      return res.status(404).json({ message: '제출된 시험을 찾을 수 없습니다.' });
+    }
+
+    const [exam] = await db.select().from(exams).where(eq(exams.id, attempt.examId)).limit(1);
+    const [student] = await db
+      .select({
+        student: students,
+        user: users,
+      })
+      .from(students)
+      .innerJoin(users, eq(students.userId, users.id))
+      .where(eq(students.id, attempt.studentId))
+      .limit(1);
+
+    if (!exam || !student) {
+      return res.status(404).json({ message: '시험 또는 학생 정보를 찾을 수 없습니다.' });
+    }
+
+    if (!genAI) {
+      return res.status(500).json({ message: 'AI 분석 서비스가 설정되지 않았습니다.' });
+    }
+
+    // Prepare data for AI analysis
+    const questionsData = exam.questionsData as any[];
+    const answers = attempt.answers as any;
+    const studentUser = student.user;
+
+    // Calculate domain stats
+    const domainMap = new Map<string, { name: string; correct: number; total: number; earnedScore: number; maxScore: number; incorrectQuestions: number[] }>();
+
+    for (const q of questionsData) {
+      const domain = q.domain || q.category || '독서';
+      const qNum = q.number || (questionsData.indexOf(q) + 1);
+      const studentAnswer = answers[qNum.toString()];
+      const isCorrect = studentAnswer === q.correctAnswer;
+      const qScore = q.score || 2;
+
+      if (!domainMap.has(domain)) {
+        domainMap.set(domain, { name: domain, correct: 0, total: 0, earnedScore: 0, maxScore: 0, incorrectQuestions: [] });
+      }
+
+      const domainData = domainMap.get(domain)!;
+      domainData.total++;
+      domainData.maxScore += qScore;
+      if (isCorrect) {
+        domainData.correct++;
+        domainData.earnedScore += qScore;
+      } else {
+        domainData.incorrectQuestions.push(qNum);
+      }
+    }
+
+    const domainStats = Array.from(domainMap.values()).map(d => ({
+      ...d,
+      percentage: Math.round((d.correct / d.total) * 100),
+    }));
+
+    // Get all completed attempts for ranking
+    const allAttempts = await db
+      .select()
+      .from(examAttempts)
+      .where(eq(examAttempts.examId, attempt.examId));
+
+    const completedAttempts = allAttempts
+      .filter(a => a.score !== null && a.submittedAt !== null);
+
+    const sortedAttempts = completedAttempts
+      .sort((a, b) => (b.score || 0) - (a.score || 0));
+
+    const rank = sortedAttempts.findIndex(a => a.id === attemptId) + 1;
+
+    // Call Gemini API with detailed prompt for comprehensive report
+    // Try multiple models as fallback
+    // GPT-4o 사용
+
+    // 취약/강점 영역 계산
+    const weakestArea = domainStats.reduce((min, d) => d.percentage < min.percentage ? d : min, domainStats[0]);
+    const strongestArea = domainStats.reduce((max, d) => d.percentage > max.percentage ? d : max, domainStats[0]);
+
+    // 전문적이고 상세한 프롬프트 - 틀린 문항 패턴 분석
+    const incorrectQuestions = questionsData.filter((q: any, idx: number) => {
+      const qNum = q.number || (idx + 1);
+      return answers[qNum.toString()] !== q.correctAnswer;
+    });
+
+    const correctQuestions = questionsData.filter((q: any, idx: number) => {
+      const qNum = q.number || (idx + 1);
+      return answers[qNum.toString()] === q.correctAnswer;
+    });
+
+    // 학년별 프로그램 철학
+    const gradePhilosophy: { [key: string]: string } = {
+      '중1': '올가의 중1 프로그램은 국어의 기초 개념을 튼튼히 다지는 데 중점을 둡니다.',
+      '중2': '올가의 중2 프로그램은 독해력과 문법의 심화 학습에 집중합니다.',
+      '중3': '올가의 중3 프로그램은 고등 국어로의 전환을 준비하며 실전 독해를 강화합니다.',
+      '고1': '올가의 고1 프로그램은 수능 국어의 기본 체계를 구축하는 데 집중합니다.',
+      '고2': '올가의 고2 프로그램은 수능 독서 지문 분석과 문학 감상 능력을 고도화합니다.',
+      '고3': '올가의 고3 프로그램은 수능 최적화 전략과 킬러 문항 대응력을 완성합니다.',
+    };
+
+    const philosophy = gradePhilosophy[student.student.grade] || '올가의 프로그램은 학생의 실력 향상에 집중합니다.';
+
+    // ===== 새로운 구조: System Prompt + User Data 분리 =====
+    // User Data: Only input data in JSON format (NO old report examples, NO old prompts)
+    const userData = {
+      studentAnswer: {
+        학생명: studentUser.name,
+        학년: student.student.grade,
+        시험명: exam.title,
+        원점수: attempt.score,
+        만점: attempt.maxScore,
+        정답률: Math.round((attempt.score || 0) / (attempt.maxScore || 100) * 100),
+        등급: attempt.grade,
+        순위: `${rank}/${completedAttempts.length}`,
+        프로그램철학: philosophy,
+        영역별성취도: domainStats.map(d => ({
+          영역: d.name,
+          취득점수: d.earnedScore,
+          만점: d.maxScore,
+          정답수: d.correct,
+          전체문항: d.total,
+          정답률: d.percentage
+        }))
+      },
+      masterCsv: {
+        틀린문항: incorrectQuestions.length > 0 ? incorrectQuestions.map((q: any) => {
+          const qNum = q.number || q.questionNumber;
+          return {
+            문항번호: qNum,
+            영역: q.domain,
+            난이도: q.difficulty || '중',
+            유형: q.typeAnalysis || '미분류',
+            소분류: q.subcategory || '미분류',
+            정답: q.correctAnswer,
+            학생답안: answers[qNum?.toString()] || '무응답'
+          };
+        }) : [],
+        맞은문항: correctQuestions.length > 0 ? correctQuestions.map((q: any) => {
+          const qNum = q.number || q.questionNumber;
+          return {
+            문항번호: qNum,
+            영역: q.domain,
+            난이도: q.difficulty || '중',
+            유형: q.typeAnalysis || '미분류',
+            소분류: q.subcategory || '미분류'
+          };
+        }) : []
+      },
+      average: {
+        응시학생수: completedAttempts.length,
+        영역별평균: domainStats.map(d => ({
+          영역: d.name,
+          평균점수: Math.round(d.maxScore * 0.65),
+          평균정답률: 65
+        }))
+      }
+    };
+
+    // Combine System Prompt + User Data (clean separation)
+    const prompt = `${OLGA_REPORT_META_PROMPT_V2}
+
+[입력 데이터]
+${JSON.stringify(userData, null, 2)}`;
+
+    // DEBUG: Log user data structure
+    console.log('[DEBUG][USER_DATA]', JSON.stringify(userData, null, 2));
+    console.log('[DEBUG][PROMPT_LENGTH]', prompt.length, 'characters');
+
+    // Call Gemini API (Gemini 2.5 Flash)
+    console.log('🤖 Google Gemini 2.5 Flash로 전문 보고서 생성 중...');
+
+    let responseText = '';
+
+    try {
+      if (!genAI) {
+        throw new Error('Gemini API가 초기화되지 않았습니다.');
+      }
+
+      const model = genAI.getGenerativeModel({
+        model: "gemini-2.5-flash",
+        generationConfig: {
+          temperature: 0.7,
+          maxOutputTokens: 8000,
+        }
+      });
+
+      const result = await model.generateContent(prompt);
+      const response = result.response;
+      responseText = response.text();
+
+      console.log('✅ Google Gemini 전문 보고서 생성 완료');
+    } catch (error: any) {
+      console.error('❌ Gemini API 오류:', error.message);
+      // AI 분석 실패 시 기본 분석 데이터 생성
+      responseText = JSON.stringify({
+        olgaSummary: `AI 분석이 일시적으로 불가능합니다.\n\n성적: ${attempt.score}점/${attempt.maxScore}점 (${Math.round((attempt.score || 0) / (attempt.maxScore || 100) * 100)}%)\n등급: ${attempt.grade}등급\n순위: ${rank}/${completedAttempts.length}`,
+        errorPatterns: [],
+        subjectAreas: domainStats.map((d: any) => ({
+          name: d.name,
+          percentage: d.percentage,
+          earnedScore: d.earnedScore,
+          maxScore: d.maxScore,
+          avgScore: 65,
+          avgPercentage: 65,
+          analysis: `${d.name} 영역에서 ${d.percentage}%의 정답률을 보였습니다.`
+        }))
+      });
+    }
+
+    // Parse AI response
+    let aiAnalysis: any = {};
+    try {
+      // Remove markdown code blocks if present (```json ... ```)
+      let cleanedText = responseText.trim();
+      if (cleanedText.startsWith('```json')) {
+        cleanedText = cleanedText.replace(/^```json\s*/i, '').replace(/\s*```$/, '');
+      } else if (cleanedText.startsWith('```')) {
+        cleanedText = cleanedText.replace(/^```\s*/, '').replace(/\s*```$/, '');
+      }
+
+      aiAnalysis = JSON.parse(cleanedText);
+
+      // metaVersion 검증
+      if (aiAnalysis.metaVersion !== 'v2') {
+        console.warn('⚠️ 경고: 이전 버전의 프롬프트 응답 감지됨. metaVersion:', aiAnalysis.metaVersion);
+      } else {
+        console.log('✅ 새로운 메타 프롬프트 v2 응답 확인');
+      }
+    } catch (e) {
+      console.error('JSON 파싱 오류:', e);
+      console.error('응답 내용:', responseText.substring(0, 500));
+      aiAnalysis = {
+        metaVersion: 'v2',
+        olgaSummary: responseText,
+        subjectAreas: [],
+        errorPatterns: []
+      };
+    }
+
+    // 계산된 값들을 템플릿으로 생성
+    const percentile = Math.round(100 * (1 - (rank / completedAttempts.length)) * 10) / 10;
+    const standardScore = attempt.grade <= 2 ? 80 + (attempt.score / attempt.maxScore) * 20 :
+                          attempt.grade <= 4 ? 70 + (attempt.score / attempt.maxScore) * 10 : '추정 불가';
+    const expectedFinalGrade = attempt.grade <= 2 ? '1~2등급' :
+                               attempt.grade <= 4 ? '2~3등급' : '3~4등급';
+    const achievementPotential = attempt.grade <= 2 ? '매우 높음' :
+                                 attempt.grade <= 4 ? '높음' : '보통';
+
+    // 학습 계획 템플릿 (고정)
+    const studyPlan = [
+      {
+        stage: "중학교 3학년 - 기초 체력 완성 단계",
+        goal: "수능 국어의 기본 토대 구축",
+        details: "갈래별(현대시, 고전소설 등) 대표 작품 읽기, 영역별(화작, 문법, 독서, 문학) 독해 훈련 시작, 중등 문법 마스터"
+      },
+      {
+        stage: "고등학교 1학년 - 심화 학습 전개 단계",
+        goal: "수능 출제 패턴 익숙화 및 실력 도약",
+        details: "고1 학력평가 기출 작품/지문 완벽 분석, 독해 전략 수립, 수능 문법 전 영역 1회독 완료"
+      },
+      {
+        stage: "고등학교 2학년 - 실전 역량 강화 단계",
+        goal: "2등급 진입 및 1등급 도전 기반 구축",
+        details: "고2 학력평가 및 수능 기출(3개년) 분석, 고난도 독서 지문(과학, 기술, 경제) 대응 훈련, EBS 연계 작품 사전 학습"
+      },
+      {
+        stage: "고등학교 3학년 - 수능 완전 정복 단계",
+        goal: "1등급 안정적 획득 및 만점 도전",
+        details: "주 2회 이상 실전 모의고사, 취약 영역/유형 집중 공략, EBS 연계/비연계 고난도 문제 풀이, 시간 관리 및 멘탈 관리 훈련"
+      }
+    ];
+
+    // 학습 전략 템플릿
+    const targetIncrease = Math.round(weakestArea.maxScore * 0.2);
+    const learningStrategy = [
+      {
+        stage: "1단계<br/>(4주)",
+        focus: `${weakestArea.name} 집중 공략`,
+        details: `${weakestArea.name} 영역의 기본 개념을 완벽히 이해하고, 관련 문제를 반복 학습합니다.`,
+        expectedResult: `${weakestArea.name} 영역 정답률 ${Math.min(weakestArea.percentage + 20, 90)}% 달성<br/>+${targetIncrease}점 상승`
+      },
+      {
+        stage: "2단계<br/>(3주)",
+        focus: "전체 영역 균형 학습",
+        details: "모든 영역의 기출 문제를 풀면서 약점을 보완하고 강점을 유지합니다.",
+        expectedResult: "전체 영역 정답률 향상<br/>종합 안정성 확보"
+      },
+      {
+        stage: "3단계<br/>(5주)",
+        focus: "종합 실전 대비 및 시간 관리",
+        details: "주 2회 실전 모의고사(시간 측정 필수), 오답 문항 심층 분석, 취약 유형 집중 보완",
+        expectedResult: `전체 정답률 ${Math.min(Math.round((attempt.score || 0) / (attempt.maxScore || 100) * 100) + 10, 95)}% 달성<br/>${attempt.grade > 1 ? attempt.grade - 1 : 1}등급 진입`
+      }
+    ];
+
+    // AI가 생성한 새로운 JSON 구조 처리
+    const aiStats = aiAnalysis.stats || {};
+    const aiAnalysisData = aiAnalysis.analysis || {};
+
+    // subjectAreas에 AI 분석 데이터 통합
+    const enrichedSubjectAreas = domainStats.map((d: any) => {
+      const aiSubject = aiAnalysisData.subjectDetails?.find((s: any) => s.name === d.name);
+      return {
+        name: d.name,
+        percentage: d.percentage,
+        earnedScore: d.earnedScore,
+        maxScore: d.maxScore,
+        avgScore: 65,  // 템플릿 값
+        avgPercentage: 65,  // 템플릿 값
+        analysis: aiSubject?.analysisText || `${d.name} 영역에서 ${d.percentage}%의 정답률을 보였습니다.`,
+        status: aiSubject?.status || (d.percentage >= 80 ? '우수' : d.percentage >= 60 ? '보통' : '부족'),
+        scoreText: aiSubject?.scoreText || `취득 ${d.earnedScore}점 / 만점 ${d.maxScore}점`
+      };
+    });
+
+    // 강점/약점 분석
+    const strengths = aiAnalysisData.strengths || [];
+    const weaknesses = aiAnalysisData.weaknesses || [];
+
+    // 전체 분석 데이터 조합
+    const analysisData = {
+      overallGrade: attempt.grade,
+      rawScore: attempt.score,
+      maxScore: attempt.maxScore,
+      standardScore,
+      percentile,
+      expectedFinalGrade,
+      subjectAreas: enrichedSubjectAreas,
+      olgaSummary: aiAnalysisData.olgaSummary || `${studentUser.name} 학생의 성적 분석 결과입니다.`,
+      errorPatterns: aiAnalysisData.errorPatterns || [],
+      strengths,
+      weaknesses,
+      propensity: aiAnalysisData.propensity || { typeTitle: '분석 중', typeDescription: '성향 분석 데이터가 생성 중입니다.' },
+      studyPlan,
+      learningStrategy,
+      domainChartData: aiStats.domainChartData || {
+        student: domainStats.map(d => d.percentage),
+        average: domainStats.map(() => 65)
+      },
+      predictionScores: [
+        attempt.score,
+        attempt.score + targetIncrease,
+        attempt.score + Math.round(targetIncrease * 1.5),
+        Math.min(attempt.score + Math.round(targetIncrease * 2), 100),
+        92
+      ],
+      gradeDistribution: [8, 12, 18, 22, 18, 11, 7, 3, 1],
+      percentileDistribution: [3, 5, 8, 12, 15, 18, 16, 13, 7, 3],
+      achievementPotential,
+      finalMessage: `${studentUser.name} 학생은 뛰어난 잠재력을 보여주었습니다. 제시된 학습 전략을 성실히 따른다면 목표 등급 달성이 가능합니다.`,
+      recommendations: `${weakestArea.name} 영역을 집중적으로 보완하는 것이 성적 향상의 핵심입니다.`,
+      domainStats,
+      rank,
+      totalParticipants: completedAttempts.length,
+    };
+
+    // Calculate percentage
+    const calculatedPercentage = Math.round(((attempt.score || 0) / (attempt.maxScore || 100)) * 100);
+
+    // Generate HTML content
+    const htmlContent = generateReportHTML({
+      student: student.user.name,
+      grade: student.student.grade || '미지정',
+      school: student.student.school || '미지정',
+      examTitle: exam.title,
+      examSubject: exam.subject,
+      examDate: attempt.submittedAt!,
+      score: attempt.score!,
+      maxScore: attempt.maxScore!,
+      percentage: calculatedPercentage,
+      gradeLevel: attempt.grade!,
+      analysis: analysisData,
+      exam: exam,
+      answers: answers,
+    });
+
+    // Save report with AI analysis data
+    const [report] = await db
+      .insert(aiReports)
+      .values({
+        attemptId,
+        studentId: attempt.studentId,
+        examId: attempt.examId,
+        analysis: analysisData,
+        summary: analysisData.olgaSummary || '분석 완료',
+        htmlContent,
+      })
+      .returning();
+
+    res.json({
+      success: true,
+      report,
+    });
+  } catch (error) {
+    console.error('Generate report error:', error);
+    res.status(500).json({ message: 'AI 보고서 생성 중 오류가 발생했습니다.' });
+  }
+});
+
+// GET /api/reports/:reportId - AI 보고서 HTML 조회
+router.get('/:reportId', requireAuth, (req, res) => {
+  db.select()
+    .from(aiReports)
+    .where(eq(aiReports.id, req.params.reportId))
+    .limit(1)
+    .then(([report]) => {
+      if (!report) {
+        return res.status(404).send('<h1>보고서를 찾을 수 없습니다.</h1>');
+      }
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      res.send(report.htmlContent);
+    })
+    .catch((error) => {
+      console.error('Get report error:', error);
+      res.status(500).send('<h1>보고서 조회 중 오류가 발생했습니다.</h1>');
+    });
+});
+
+// GET /api/reports/attempt/:attemptId - 응시 기록의 보고서 조회
+router.get('/attempt/:attemptId', requireAuth, async (req, res) => {
+  try {
+    const [report] = await db
+      .select()
+      .from(aiReports)
+      .where(eq(aiReports.attemptId, req.params.attemptId))
+      .limit(1);
+
+    if (!report) {
+      return res.status(404).json({ message: '보고서를 찾을 수 없습니다.' });
+    }
+
+    res.json({
+      success: true,
+      data: report,
+    });
+  } catch (error) {
+    console.error('Get report by attempt error:', error);
+    res.status(500).json({ message: '보고서 조회 중 오류가 발생했습니다.' });
+  }
+});
+
+// Helper function to generate 5-page HTML report with user's exact design template
+function generateReportHTML(data: any): string {
+  const {
+    student,
+    grade,
+    school,
+    examTitle,
+    examSubject,
+    examDate,
+    score,
+    maxScore,
+    percentage,
+    gradeLevel,
+    analysis,
+    exam,
+    answers,
+  } = data;
+
+  const dateStr = new Date(examDate).toLocaleDateString('ko-KR');
+
+  // Extract AI analysis data
+  const subjectAreas = analysis.subjectAreas || [];
+  const strengths = analysis.strengths || [];
+  const weaknesses = analysis.weaknesses || [];
+  const propensity = analysis.propensity || { typeTitle: '분석 중', typeDescription: '성향 분석 데이터가 생성 중입니다.' };
+  const olgaSummary = analysis.olgaSummary || '';
+
+  // Prepare chart data
+  const domainLabels = JSON.stringify(subjectAreas.map((d: any) => d.name));
+  const studentPercentages = JSON.stringify(subjectAreas.map((d: any) => d.percentage));
+  const avgPercentages = JSON.stringify(subjectAreas.map((d: any) => d.avgPercentage || 65));
+  const studentScores = studentPercentages;  // For radar chart
+  const averageScores = avgPercentages;  // For radar chart
+
+  // Prediction chart data
+  const predictionLabels = JSON.stringify(['현재', '4주 후', '8주 후', '12주 후']);
+  const predictionValues = JSON.stringify([percentage, Math.min(percentage + 5, 100), Math.min(percentage + 10, 100), Math.min(percentage + 15, 100)]);
+
+  return `<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>${escapeHtml(examTitle)} - ${escapeHtml(student)} 분석 보고서</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700;900&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Noto Sans KR', sans-serif; background: #f1f5f9; }
+        .a4-page {
+            width: 794px;
+            min-height: 1123px;
+            background: white;
+            margin: 20px auto;
+            padding: 60px;
+            position: relative;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+            page-break-after: always;
+        }
+        .section-title-report {
+            font-size: 16px;
+            font-weight: 700;
+            color: #1e293b;
+            margin-bottom: 12px;
+            padding-left: 10px;
+            border-left: 4px solid #6366f1;
+        }
+        @media print {
+            body { background: white; }
+            .a4-page {
+                margin: 0;
+                padding: 0;
+                box-shadow: none;
+            }
+            .pdf-download-button {
+                display: none;
+            }
+        }
+
+        #pdf-loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.6);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 2000;
+            color: white;
+            text-align: center;
+        }
+        #pdf-loading-overlay p {
+            margin-top: 20px;
+            font-size: 1.2em;
+            color: white;
+        }
+        .spinner {
+            border: 8px solid #f3f3f3;
+            border-top: 8px solid #4f46e5;
+            border-radius: 50%;
+            width: 60px;
+            height: 60px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div id="pdf-loading-overlay" style="display: none;">
+        <div class="spinner"></div>
+        <p>PDF 파일을 생성 중입니다. 잠시만 기다려주세요...</p>
+    </div>
+
+    <button id="pdf-download-btn" class="pdf-download-button fixed bottom-8 right-8 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-full shadow-lg transition-transform transform hover:scale-105 z-50">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 inline-block -mt-1 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+        </svg>
+        PDF 다운로드
+    </button>
+
+    <section id="report-content">
+
+<!-- 페이지 1: 종합 현황 -->
+<div class="page-container page-break">
+  <div class="header-gradient"></div>
+  <div style="margin-top: 24px;">
+    <h1 style="font-size: 28px; font-weight: 900; color: #0f172a; margin-bottom: 8px;">${escapeHtml(examTitle)}</h1>
+    <p style="font-size: 14px; color: #64748b; font-weight: 500;">올가교육 수능연구소 · AI 기반 맞춤형 성적 분석 리포트</p>
+  </div>
+
+  <!-- 학생 기본 정보 -->
+  <div style="margin-top: 32px; padding: 20px; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0;">
+    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; font-size: 13px;">
+      <div><span style="color: #64748b; font-weight: 600;">학생명</span><br><strong style="color: #0f172a; font-size: 15px;">${escapeHtml(student)}</strong></div>
+      <div><span style="color: #64748b; font-weight: 600;">학년</span><br><strong style="color: #0f172a; font-size: 15px;">${escapeHtml(grade)}</strong></div>
+      <div><span style="color: #64748b; font-weight: 600;">응시일</span><br><strong style="color: #0f172a; font-size: 15px;">${dateStr}</strong></div>
+      <div><span style="color: #64748b; font-weight: 600;">지점</span><br><strong style="color: #0f172a; font-size: 15px;">${escapeHtml(school)}</strong></div>
+    </div>
+  </div>
+
+  <!-- 성적 종합 -->
+  <h2 class="section-header">📊 성적 종합</h2>
+  <div style="display: flex; gap: 16px; margin-top: 16px;">
+    <div style="flex: 1; padding: 24px; background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); border-radius: 12px; color: white; text-align: center;">
+      <p style="font-size: 14px; opacity: 0.9; margin-bottom: 8px;">종합 등급</p>
+      <p style="font-size: 56px; font-weight: 900; line-height: 1;">${gradeLevel}</p>
+      <p style="font-size: 16px; opacity: 0.9; margin-top: 8px;">등급</p>
+    </div>
+    <div style="flex: 2; padding: 24px; background: white; border: 2px solid #e2e8f0; border-radius: 12px;">
+      <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; text-align: center;">
+        <div>
+          <p style="font-size: 12px; color: #64748b; margin-bottom: 8px;">원점수</p>
+          <p style="font-size: 24px; font-weight: 700; color: #0f172a;">${score}<span style="font-size: 14px; color: #94a3b8;">/${maxScore}</span></p>
+        </div>
+        <div>
+          <p style="font-size: 12px; color: #64748b; margin-bottom: 8px;">백분위</p>
+          <p style="font-size: 24px; font-weight: 700; color: #0f172a;">${analysis.percentile || percentage}<span style="font-size: 14px; color: #94a3b8;">%</span></p>
+        </div>
+        <div>
+          <p style="font-size: 12px; color: #64748b; margin-bottom: 8px;">표준점수</p>
+          <p style="font-size: 24px; font-weight: 700; color: #0f172a;">${analysis.standardScore || Math.round(100 + (percentage - 50) * 0.4)}</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- AI 분석 총평 -->
+  <h2 class="section-header">🎯 올가 AI 분석 총평</h2>
+  <div style="padding: 20px; background: #fef3c7; border-left: 4px solid #f59e0b; border-radius: 8px; font-size: 14px; line-height: 1.8; color: #0f172a;">
+    ${olgaSummary ? escapeHtml(olgaSummary) : '올가 AI가 학생의 성적을 종합적으로 분석하여 맞춤형 학습 전략을 제공합니다.'}
+  </div>
+
+  <!-- 영역별 레이더 차트 -->
+  <h2 class="section-header">📈 영역별 성취도 분석</h2>
+  <div style="padding: 20px; background: white; border: 1px solid #e2e8f0; border-radius: 8px;">
+    <canvas id="radarChart" class="chart-container"></canvas>
+  </div>
+
+  <!-- 페이지 푸터 -->
+  <div style="position: absolute; bottom: 20px; left: 50px; right: 50px; text-align: center; color: #94a3b8; font-size: 11px; border-top: 1px solid #e2e8f0; padding-top: 10px;">
+    © 2025 올가교육 수능연구소 | AI 기반 맞춤형 분석 리포트 | Page 1 / 5
+  </div>
+</div>
+
+<!-- 페이지 2: 영역별 상세 분석 -->
+<div class="page-container page-break">
+  <div class="header-gradient"></div>
+  <div style="margin-top: 24px;">
+    <h1 style="font-size: 22px; font-weight: 800; color: #0f172a;">📚 영역별 상세 분석</h1>
+  </div>
+
+  <h2 class="section-header">영역별 성취도 상세</h2>
+  <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-top: 16px;">
+    ${subjectAreas.map((area: any) => {
+      const statusColor = area.status === '우수' ? '#10b981' : area.status === '보통' ? '#f59e0b' : '#ef4444';
+      return `
+    <div style="padding: 16px; background: white; border-left: 4px solid ${statusColor}; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+      <div style="display: flex; justify-between; align-items: center; margin-bottom: 12px;">
+        <h3 style="font-size: 15px; font-weight: 700; color: #0f172a;">${escapeHtml(area.name)}</h3>
+        <span style="font-size: 20px; font-weight: 900; color: ${statusColor};">${area.percentage}%</span>
+      </div>
+      <p style="font-size: 12px; color: #64748b; margin-bottom: 8px;">${escapeHtml(area.scoreText)}</p>
+      <div style="width: 100%; height: 8px; background: #f1f5f9; border-radius: 4px; margin-bottom: 12px; overflow: hidden;">
+        <div style="width: ${area.percentage}%; height: 100%; background: ${statusColor};"></div>
+      </div>
+      <p style="font-size: 13px; line-height: 1.6; color: #334155;">${escapeHtml(area.analysis)}</p>
+    </div>
+      `;
+    }).join('')}
+  </div>
+
+  <!-- 페이지 푸터 -->
+  <div style="position: absolute; bottom: 20px; left: 50px; right: 50px; text-align: center; color: #94a3b8; font-size: 11px; border-top: 1px solid #e2e8f0; padding-top: 10px;">
+    © 2025 올가교육 수능연구소 | AI 기반 맞춤형 분석 리포트 | Page 2 / 5
+  </div>
+</div>
+
+<!-- 페이지 3: 강약점 분석 및 총평 -->
+<div class="page-container page-break">
+  <div class="header-gradient"></div>
+  <div style="margin-top: 24px;">
+    <h1 style="font-size: 22px; font-weight: 800; color: #0f172a;">💡 강약점 분석 및 학습 성향</h1>
+  </div>
+
+  <!-- 강점 분석 -->
+  <h2 class="section-header">✅ 강점 영역</h2>
+  <div style="margin-top: 16px; display: grid; gap: 12px;">
+    ${strengths.length > 0 ? strengths.map((strength: any) => `
+    <div style="padding: 16px; background: #ecfdf5; border-left: 4px solid #10b981; border-radius: 8px;">
+      <h3 style="font-size: 14px; font-weight: 700; color: #059669; margin-bottom: 8px;">${escapeHtml(strength.title)}</h3>
+      <p style="font-size: 13px; line-height: 1.7; color: #064e3b;">${escapeHtml(strength.description)}</p>
+    </div>
+    `).join('') : '<p style="font-size: 13px; color: #64748b;">분석된 강점 데이터가 없습니다.</p>'}
+  </div>
+
+  <!-- 약점 분석 -->
+  <h2 class="section-header">⚠️ 보완 필요 영역</h2>
+  <div style="margin-top: 16px; display: grid; gap: 12px;">
+    ${weaknesses.length > 0 ? weaknesses.map((weakness: any) => `
+    <div style="padding: 16px; background: #fef2f2; border-left: 4px solid #ef4444; border-radius: 8px;">
+      <h3 style="font-size: 14px; font-weight: 700; color: #dc2626; margin-bottom: 8px;">${escapeHtml(weakness.title)}</h3>
+      <p style="font-size: 13px; line-height: 1.7; color: #7f1d1d;">${escapeHtml(weakness.description)}</p>
+    </div>
+    `).join('') : '<p style="font-size: 13px; color: #64748b;">분석된 약점 데이터가 없습니다.</p>'}
+  </div>
+
+  <!-- 학습 성향 분석 -->
+  <h2 class="section-header">🧠 학습 성향 분석</h2>
+  <div style="padding: 20px; background: linear-gradient(135deg, #f3e8ff 0%, #e0e7ff 100%); border-radius: 12px; border: 2px solid #a78bfa;">
+    <h3 style="font-size: 18px; font-weight: 800; color: #6b21a8; margin-bottom: 12px;">${escapeHtml(propensity.typeTitle)}</h3>
+    <p style="font-size: 14px; line-height: 1.8; color: #4c1d95;">${escapeHtml(propensity.typeDescription)}</p>
+  </div>
+
+  <!-- 페이지 푸터 -->
+  <div style="position: absolute; bottom: 20px; left: 50px; right: 50px; text-align: center; color: #94a3b8; font-size: 11px; border-top: 1px solid #e2e8f0; padding-top: 10px;">
+    © 2025 올가교육 수능연구소 | AI 기반 맞춤형 분석 리포트 | Page 3 / 5
+  </div>
+</div>
+
+<!-- 페이지 4: 데이터 분석 및 로드맵 -->
+<div class="page-container page-break">
+  <div class="header-gradient"></div>
+  <div style="margin-top: 24px;">
+    <h1 style="font-size: 22px; font-weight: 800; color: #0f172a;">📊 데이터 분석 및 성적 로드맵</h1>
+  </div>
+
+  <!-- 학생 vs 평균 비교 차트 -->
+  <h2 class="section-header">학생 vs 전체 평균 비교</h2>
+  <div style="padding: 20px; background: white; border: 1px solid #e2e8f0; border-radius: 8px;">
+    <canvas id="comparisonChart" class="chart-container"></canvas>
+  </div>
+
+  <!-- 성적 예측 그래프 -->
+  <h2 class="section-header">학습 계획에 따른 성적 예측</h2>
+  <div style="padding: 20px; background: white; border: 1px solid #e2e8f0; border-radius: 8px;">
+    <canvas id="predictionChart" class="chart-container"></canvas>
+  </div>
+
+  <!-- 페이지 푸터 -->
+  <div style="position: absolute; bottom: 20px; left: 50px; right: 50px; text-align: center; color: #94a3b8; font-size: 11px; border-top: 1px solid #e2e8f0; padding-top: 10px;">
+    © 2025 올가교육 수능연구소 | AI 기반 맞춤형 분석 리포트 | Page 4 / 5
+  </div>
+</div>
+
+<!-- 페이지 5: 맞춤형 학습 전략 -->
+<div class="page-container">
+  <div class="header-gradient"></div>
+  <div style="margin-top: 24px;">
+    <h1 style="font-size: 22px; font-weight: 800; color: #0f172a;">🎯 맞춤형 학습 전략</h1>
+  </div>
+
+  <h2 class="section-header">주차별 학습 계획</h2>
+  <table style="width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 16px;">
+    <thead style="background: #f8fafc;">
+      <tr>
+        <th style="padding: 12px; text-align: left; border-bottom: 2px solid #e2e8f0; font-weight: 700; color: #475569; width: 80px;">주차</th>
+        <th style="padding: 12px; text-align: left; border-bottom: 2px solid #e2e8f0; font-weight: 700; color: #475569;">핵심 전략</th>
+        <th style="padding: 12px; text-align: left; border-bottom: 2px solid #e2e8f0; font-weight: 700; color: #475569;">세부 학습 내용</th>
+        <th style="padding: 12px; text-align: left; border-bottom: 2px solid #e2e8f0; font-weight: 700; color: #475569; width: 100px;">예상 성과</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${(analysis.learningStrategy || [
+        { stage: '1-4주차', focus: '기초 개념 강화', details: '영역별 핵심 개념 복습 및 정리', expectedResult: '+5%' },
+        { stage: '5-8주차', focus: '실전 문제 풀이', details: '다양한 유형의 문제 연습', expectedResult: '+8%' },
+        { stage: '9-12주차', focus: '약점 집중 보완', details: '틀린 문제 재학습 및 약점 영역 강화', expectedResult: '+12%' }
+      ]).map((strategy: any, index: number) => `
+      <tr style="border-bottom: 1px solid #f1f5f9;">
+        <td style="padding: 12px; color: #334155; font-weight: 700;">${escapeHtml(strategy.stage)}</td>
+        <td style="padding: 12px; color: #334155; font-weight: 600;">${escapeHtml(strategy.focus)}</td>
+        <td style="padding: 12px; color: #475569;">${escapeHtml(strategy.details)}</td>
+        <td style="padding: 12px; color: #10b981; font-weight: 700;">${escapeHtml(strategy.expectedResult)}</td>
+      </tr>
+      `).join('')}
+    </tbody>
+  </table>
+
+  <!-- 최종 메시지 -->
+  <div style="margin-top: 32px; padding: 24px; background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); border-radius: 12px; color: white; text-align: center;">
+    <h3 style="font-size: 18px; font-weight: 800; margin-bottom: 12px;">🎓 목표 달성 가능성: ${escapeHtml(analysis.achievementPotential || '높음')}</h3>
+    <p style="font-size: 14px; line-height: 1.8; opacity: 0.95;">${escapeHtml(analysis.finalMessage || '제시된 학습 전략을 충실히 따른다면 목표 등급 달성이 가능합니다. 올가교육이 함께합니다!')}</p>
+  </div>
+
+  <!-- 페이지 푸터 -->
+  <div style="position: absolute; bottom: 20px; left: 50px; right: 50px; text-align: center; color: #94a3b8; font-size: 11px; border-top: 1px solid #e2e8f0; padding-top: 10px;">
+    © 2025 올가교육 수능연구소 | AI 기반 맞춤형 분석 리포트 | Page 5 / 5
+  </div>
+</div>
+
+<script>
+  // Page 1: Radar Chart - 영역별 성취도 분석
+  const radarCtx = document.getElementById('radarChart');
+  if (radarCtx) {
+    new Chart(radarCtx, {
+      type: 'radar',
+      data: {
+        labels: ${domainLabels},
+        datasets: [
+          {
+            label: '학생',
+            data: ${studentScores},
+            borderColor: 'rgb(99, 102, 241)',
+            backgroundColor: 'rgba(99, 102, 241, 0.2)',
+            borderWidth: 2
+          },
+          {
+            label: '전체 평균',
+            data: ${averageScores},
+            borderColor: 'rgb(239, 68, 68)',
+            backgroundColor: 'rgba(239, 68, 68, 0.1)',
+            borderWidth: 2
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          r: {
+            beginAtZero: true,
+            max: 100,
+            ticks: {
+              stepSize: 20
+            }
+          }
+        },
+        plugins: {
+          legend: {
+            display: true,
+            position: 'top'
+          }
+        }
+      }
+    });
+  }
+
+  // Page 4: Comparison Chart - 학생 vs 전체 평균 비교
+  const comparisonCtx = document.getElementById('comparisonChart');
+  if (comparisonCtx) {
+    new Chart(comparisonCtx, {
+      type: 'bar',
+      data: {
+        labels: ${domainLabels},
+        datasets: [
+          {
+            label: '학생',
+            data: ${studentScores},
+            backgroundColor: 'rgba(99, 102, 241, 0.8)',
+            borderColor: 'rgb(99, 102, 241)',
+            borderWidth: 1
+          },
+          {
+            label: '전체 평균',
+            data: ${averageScores},
+            backgroundColor: 'rgba(239, 68, 68, 0.6)',
+            borderColor: 'rgb(239, 68, 68)',
+            borderWidth: 1
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          y: {
+            beginAtZero: true,
+            max: 100,
+            ticks: {
+              callback: function(value) {
+                return value + '%';
+              }
+            }
+          }
+        },
+        plugins: {
+          legend: {
+            display: true,
+            position: 'top'
+          }
+        }
+      }
+    });
+  }
+
+  // Page 4: Prediction Chart - 학습 계획에 따른 성적 예측
+  const predictionCtx = document.getElementById('predictionChart');
+  if (predictionCtx) {
+    new Chart(predictionCtx, {
+      type: 'line',
+      data: {
+        labels: ${predictionLabels.length > 0 ? predictionLabels : JSON.stringify(['현재', '4주 후', '8주 후', '12주 후'])},
+        datasets: [{
+          label: '예상 성적',
+          data: ${predictionValues.length > 0 ? predictionValues : JSON.stringify([percentage, Math.min(percentage + 5, 100), Math.min(percentage + 10, 100), Math.min(percentage + 15, 100)])},
+          borderColor: 'rgb(34, 197, 94)',
+          backgroundColor: 'rgba(34, 197, 94, 0.1)',
+          fill: true,
+          tension: 0.4,
+          borderWidth: 3,
+          pointRadius: 5,
+          pointHoverRadius: 7
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          y: {
+            beginAtZero: true,
+            max: 100,
+            ticks: {
+              callback: function(value) {
+                return value + '%';
+              }
+            }
+          }
+        },
+        plugins: {
+          legend: {
+            display: true,
+            position: 'top'
+          }
+        }
+      }
+    });
+  }
+
+  // PDF 다운로드 함수
+  function downloadPDF() {
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF('p', 'mm', 'a4');
+    const pages = document.querySelectorAll('.page-container');
+    let processedPages = 0;
+
+    // 다운로드 버튼 숨기기
+    document.querySelector('.download-btn').style.display = 'none';
+
+    pages.forEach((page, index) => {
+      html2canvas(page, {
+        scale: 2,
+        useCORS: true,
+        logging: false
+      }).then(canvas => {
+        const imgData = canvas.toDataURL('image/png');
+        const imgWidth = 210; // A4 width in mm
+        const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+        if (index > 0) {
+          pdf.addPage();
+        }
+        pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
+
+        processedPages++;
+        if (processedPages === pages.length) {
+          pdf.save('${escapeHtml(student)}_${escapeHtml(examTitle)}_분석보고서.pdf');
+          // 다운로드 버튼 다시 표시
+          document.querySelector('.download-btn').style.display = 'block';
+        }
+      });
+    });
+  }
+</script>
+</body>
+</html>`;
+}
+
+export default router;
