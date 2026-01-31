@@ -101,13 +101,15 @@ export default function LoginPage() {
               {loginMutation.isPending ? '로그인 중...' : '로그인'}
             </Button>
           </form>
-          <div className="mt-8 p-4 bg-gray-50 rounded-lg border border-gray-100">
-            <p className="text-xs font-semibold text-gray-700 mb-2">테스트 계정</p>
-            <div className="space-y-1 text-xs text-gray-600">
-              <p>👨‍💼 관리자: <span className="font-mono bg-white px-2 py-0.5 rounded">allga / allga</span></p>
-              <p>🏢 지점장: <span className="font-mono bg-white px-2 py-0.5 rounded">allga1 / allga1</span></p>
+          {import.meta.env.DEV && (
+            <div className="mt-8 p-4 bg-gray-50 rounded-lg border border-gray-100">
+              <p className="text-xs font-semibold text-gray-700 mb-2">테스트 계정 (개발 환경)</p>
+              <div className="space-y-1 text-xs text-gray-600">
+                <p>👨‍💼 관리자: <span className="font-mono bg-white px-2 py-0.5 rounded">allga / allga</span></p>
+                <p>🏢 지점장: <span className="font-mono bg-white px-2 py-0.5 rounded">allga1 / allga1</span></p>
+              </div>
             </div>
-          </div>
+          )}
         </CardContent>
       </Card>
     </div>

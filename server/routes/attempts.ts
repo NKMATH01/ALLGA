@@ -358,16 +358,34 @@ router.put('/exam-attempts/:id', requireStudent, async (req, res) => {
   try {
     const { id } = req.params;
     const { answers } = req.body;
+    const userId = req.session.user!.id;
+
+    // 현재 로그인한 학생 정보 조회
+    const [student] = await db.select().from(students).where(eq(students.userId, userId)).limit(1);
+    if (!student) {
+      return res.status(404).json({ message: '학생 정보를 찾을 수 없습니다.' });
+    }
+
+    // 답안이 현재 학생의 것인지 검증
+    const [existingAttempt] = await db
+      .select()
+      .from(examAttempts)
+      .where(and(eq(examAttempts.id, id), eq(examAttempts.studentId, student.id)))
+      .limit(1);
+
+    if (!existingAttempt) {
+      return res.status(403).json({ message: '본인의 답안만 수정할 수 있습니다.' });
+    }
+
+    if (existingAttempt.submittedAt) {
+      return res.status(400).json({ message: '이미 제출된 시험은 수정할 수 없습니다.' });
+    }
 
     const [attempt] = await db
       .update(examAttempts)
       .set({ answers })
       .where(eq(examAttempts.id, id))
       .returning();
-
-    if (!attempt) {
-      return res.status(404).json({ message: '시험 응시를 찾을 수 없습니다.' });
-    }
 
     res.json({
       success: true,
@@ -412,8 +430,9 @@ router.post('/exam-attempts/:id/submit', requireStudent, async (req, res) => {
     for (const question of questionsData) {
       const questionNum = question.number || question.questionNumber;
       const studentAnswer = answers[questionNum];
-      // studentAnswer가 1이면 정답으로 처리
-      if (studentAnswer === 1) {
+      const correctAnswer = question.correctAnswer || question.answer;
+      // 학생 답안과 정답 비교
+      if (studentAnswer === correctAnswer) {
         score += question.points || question.score || 0;
         correctCount++;
       }
@@ -625,8 +644,9 @@ router.put('/exam-attempts/:id/branch-grade', requireBranchManager, async (req, 
     for (const question of questionsData) {
       const questionNum = question.number || question.questionNumber;
       const studentAnswer = answers[questionNum];
-      // studentAnswer가 1이면 정답으로 처리
-      if (studentAnswer === 1) {
+      const correctAnswer = question.correctAnswer || question.answer;
+      // 학생 답안과 정답 비교
+      if (studentAnswer === correctAnswer) {
         score += question.points || question.score || 0;
         correctCount++;
       }

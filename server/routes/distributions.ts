@@ -240,6 +240,23 @@ router.put('/:id', requireAdminOrBranch, async (req, res) => {
 router.delete('/:id', requireAdminOrBranch, async (req, res) => {
   try {
     const { id } = req.params;
+    const user = req.session.user!;
+
+    // 배포 조회
+    const [distribution] = await db
+      .select()
+      .from(examDistributions)
+      .where(eq(examDistributions.id, id))
+      .limit(1);
+
+    if (!distribution) {
+      return res.status(404).json({ message: '배포를 찾을 수 없습니다.' });
+    }
+
+    // 지점 관리자는 본인 지점의 배포만 삭제 가능
+    if (user.role === 'branch' && distribution.branchId !== user.branchId) {
+      return res.status(403).json({ message: '본인 지점의 배포만 삭제할 수 있습니다.' });
+    }
 
     await db.delete(examDistributions).where(eq(examDistributions.id, id));
 

@@ -1,0 +1,107 @@
+{
+  "version": "2.0",
+  "lastUpdated": "2026-01-31T08:30:00.000Z",
+  "activeFeatures": ["olga-system-v2"],
+  "primaryFeature": "olga-system-v2",
+  "features": {
+    "olga-system-v2": {
+      "name": "올가 미수등 시스템 v2.0",
+      "description": "Next.js + Supabase 마이그레이션 및 버그/보안 수정",
+      "level": "Dynamic",
+      "phase": "do",
+      "status": "in_progress",
+      "techStack": {
+        "frontend": "Next.js 14 App Router",
+        "backend": "Next.js API Routes + Server Actions",
+        "database": "Supabase (PostgreSQL + Auth + Storage)",
+        "ai": "Google Gemini API"
+      },
+      "documents": {
+        "plan": [
+          "docs/01-plan/project-plan.md",
+          "docs/01-plan/development-plan-v2.md"
+        ],
+        "design": [
+          "docs/02-design/system-design.md",
+          "docs/02-design/system-design-v2.md",
+          "docs/02-design/data-model.md",
+          "docs/02-design/api-spec.md"
+        ],
+        "analysis": [
+          "docs/03-analysis/code-analysis-report.md"
+        ],
+        "report": null
+      },
+      "issues": {
+        "critical": 0,
+        "warning": 8,
+        "info": 12,
+        "qualityScore": 68
+      },
+      "targetQualityScore": 85,
+      "estimatedDuration": "4 weeks",
+      "createdAt": "2026-01-31T06:56:39.591Z",
+      "updatedAt": "2026-01-31T08:30:00.000Z"
+    }
+  },
+  "pipeline": {
+    "currentPhase": 1,
+    "level": "Dynamic",
+    "phases": [
+      { "phase": 1, "name": "Critical Bug Fix", "status": "completed", "duration": "3 days", "completedAt": "2026-01-31T08:30:00.000Z" },
+      { "phase": 2, "name": "Project Setup", "status": "pending", "duration": "2 days" },
+      { "phase": 3, "name": "Database Migration", "status": "pending", "duration": "3 days" },
+      { "phase": 4, "name": "Auth System", "status": "pending", "duration": "2 days" },
+      { "phase": 5, "name": "API Implementation", "status": "pending", "duration": "5 days" },
+      { "phase": 6, "name": "Frontend", "status": "pending", "duration": "7 days" },
+      { "phase": 7, "name": "Optimization", "status": "pending", "duration": "2 days" },
+      { "phase": 8, "name": "Testing", "status": "pending", "duration": "3 days" },
+      { "phase": 9, "name": "Deployment", "status": "pending", "duration": "1 day" }
+    ]
+  },
+  "session": {
+    "startedAt": "2026-01-31T06:56:39.591Z",
+    "onboardingCompleted": true,
+    "lastActivity": "2026-01-31T08:30:00.000Z"
+  },
+  "history": [
+    {
+      "action": "design_created",
+      "feature": "olga-system",
+      "timestamp": "2026-01-31T07:30:00.000Z"
+    },
+    {
+      "action": "code_analysis",
+      "feature": "olga-system-v2",
+      "timestamp": "2026-01-31T08:00:00.000Z",
+      "result": {
+        "qualityScore": 58,
+        "criticalIssues": 5,
+        "warningIssues": 8
+      }
+    },
+    {
+      "action": "design_v2_created",
+      "feature": "olga-system-v2",
+      "timestamp": "2026-01-31T08:00:00.000Z",
+      "documents": [
+        "system-design-v2.md",
+        "development-plan-v2.md",
+        "code-analysis-report.md"
+      ]
+    },
+    {
+      "action": "critical_bugs_fixed",
+      "feature": "olga-system-v2",
+      "timestamp": "2026-01-31T08:30:00.000Z",
+      "fixes": [
+        "채점 로직 버그 수정 (attempts.ts)",
+        "답안 수정 소유권 검증 추가 (attempts.ts)",
+        "시험 수정 입력 검증 추가 (exams.ts)",
+        "테스트 계정 개발환경만 표시 (LoginPage.tsx)",
+        "안전한 비밀번호 생성 (students.ts)",
+        "배포 삭제 권한 검증 (distributions.ts)"
+      ]
+    }
+  ]
+}

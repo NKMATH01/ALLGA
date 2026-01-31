@@ -131,7 +131,20 @@ router.post('/', requireAdmin, async (req, res) => {
 router.patch('/:id', requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
-    const updateData = req.body;
+
+    // 허용된 필드만 화이트리스트로 필터링
+    const allowedFields = ['title', 'subject', 'grade', 'description', 'overallReview', 'examTrends'];
+    const updateData: Record<string, any> = {};
+
+    for (const key of allowedFields) {
+      if (req.body[key] !== undefined) {
+        updateData[key] = req.body[key];
+      }
+    }
+
+    if (Object.keys(updateData).length === 0) {
+      return res.status(400).json({ message: '수정할 필드가 없습니다.' });
+    }
 
     const [exam] = await db.update(exams).set(updateData).where(eq(exams.id, id)).returning();
 

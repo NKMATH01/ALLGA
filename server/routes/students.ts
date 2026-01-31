@@ -1,9 +1,21 @@
 import express from 'express';
+import crypto from 'crypto';
 import { db } from '../db/index';
 import { students, users, parents, studentParents, examAttempts, exams } from '../db/schema';
 import { eq, and, desc } from 'drizzle-orm';
 import { requireBranchManager } from '../middleware/auth';
 import { hashPassword } from '../utils/helpers';
+
+// 안전한 랜덤 비밀번호 생성 (8자리: 영문+숫자)
+function generateSecurePassword(): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+  let password = '';
+  const randomBytes = crypto.randomBytes(8);
+  for (let i = 0; i < 8; i++) {
+    password += chars[randomBytes[i] % chars.length];
+  }
+  return password;
+}
 
 const router = express.Router();
 
@@ -142,8 +154,8 @@ router.post('/', requireBranchManager, async (req, res) => {
       return res.status(400).json({ message: '이미 사용 중인 연락처입니다.' });
     }
 
-    // Generate password from last 4 digits of phone
-    const password = phone.slice(-4);
+    // 안전한 랜덤 비밀번호 생성 (8자리)
+    const password = generateSecurePassword();
 
     // Create user
     const passwordHash = await hashPassword(password);
@@ -177,7 +189,7 @@ router.post('/', requireBranchManager, async (req, res) => {
         ...student,
         user,
       },
-      message: '학생이 등록되었습니다. (초기 비밀번호: 연락처 끝 4자리)',
+      message: `학생이 등록되었습니다. 초기 비밀번호: ${password} (반드시 학생에게 전달 후 변경 안내)`,
     });
   } catch (error) {
     console.error('Create student error:', error);
