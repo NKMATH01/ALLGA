@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<!--
+  방향 B. "프리미엄"
+  이 방향이 어울리는 사용자·상황: 매일 앱처럼 들어와 성적을 확인하는 학생, 브랜드 완성도까지 보여줘야 하는 학원 대표 화면.
+  다이얼: DESIGN_VARIANCE 9 / MOTION_INTENSITY 3 / VISUAL_DENSITY 6
+  골격: 좌측 고정 사이드바 + 우측 콘텐츠 그리드 (2컬럼 앱). 테마 잠금: 다크 전용.
+  컬러 2계층: --brand-* 는 브랜드(딥 그래파이트 + 단일 블루 액센트) 전용, --fn-* 는 등급·상승폭 같은 상태 의미 전용으로 브랜드와 독립 정의되어 브랜드가 바뀌어도 의미가 유지된다.
+  모션: 다이얼 3 이므로 자동 애니메이션 없이 hover/active 전이만 사용한다 (prefers-reduced-motion 자연 충족).
+-->
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>프리미엄 - 김민수 학생 대시보드</title>
+<style>
+  :root {
+    /* ---- 브랜드 계층 ---- */
+    --brand-bg:        #0C0E11;
+    --brand-shell:     #15181C;
+    --brand-core:      #1A1E23;
+    --brand-core-2:    #20252B;
+    --brand-hairline:  rgba(255, 255, 255, 0.07);
+    --brand-hairline-2:rgba(255, 255, 255, 0.12);
+    --brand-text:      #E9ECEF;
+    --brand-text-mid:  #A7AEB6;
+    --brand-text-low:  #6F7780;
+    --brand-accent:    #4E7FD4;
+    --brand-accent-dim:#2E4470;
+    --brand-accent-wash: rgba(78, 127, 212, 0.12);
+
+    /* ---- 기능 계층 (브랜드와 독립. 상태 의미 전용) ---- */
+    --fn-success:      #4FB07C;
+    --fn-success-wash: rgba(79, 176, 124, 0.14);
+    --fn-warning:      #D2A046;
+    --fn-warning-wash: rgba(210, 160, 70, 0.14);
+    --fn-error:        #D96A6A;
+    --fn-error-wash:   rgba(217, 106, 106, 0.14);
+
+    /* ---- 형태 규칙: 외피 24px, 내피 18px, 컨트롤 12px, 버튼과 배지만 pill ---- */
+    --r-shell: 24px;
+    --r-core:  18px;
+    --r-ctrl:  12px;
+
+    --ease: cubic-bezier(0.32, 0.72, 0, 1);
+    --font-sans: "Pretendard Variable", Pretendard, "Noto Sans KR", "Apple SD Gothic Neo",
+                 "Malgun Gothic", "Segoe UI", system-ui, sans-serif;
+    --font-mono: "JetBrains Mono", "Cascadia Mono", Consolas, "D2Coding", "Courier New", monospace;
+  }
+
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    min-height: 100dvh;
+    background: var(--brand-bg);
+    color: var(--brand-text);
+    font-family: var(--font-sans);
+    font-size: 15px;
+    line-height: 1.55;
+    word-break: keep-all;
+    overflow-wrap: anywhere;
+    -webkit-font-smoothing: antialiased;
+  }
+  .shell { display: grid; grid-template-columns: 268px 1fr; min-height: 100dvh; }
+
+  a:focus-visible, button:focus-visible {
+    outline: 2px solid var(--brand-accent);
+    outline-offset: 3px;
+  }
+
+  /* ================= 사이드바 ================= */
+  .side {
+    border-right: 1px solid var(--brand-hairline);
+    padding: 28px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 28px;
+    background: #0A0C0F;
+  }
+  .brand { display: flex; align-items: center; gap: 12px; padding: 0 8px; }
+  .brand-mark {
+    width: 34px; height: 34px;
+    border-radius: var(--r-ctrl);
+    background: var(--brand-accent);
+    color: #FFFFFF;
+    display: grid; place-items: center;
+    font-weight: 700; font-size: 15px;
+    letter-spacing: -0.02em;
+  }
+  .brand-name { font-size: 14px; font-weight: 600; letter-spacing: -0.01em; }
+  .brand-sub { font-size: 12px; color: var(--brand-text-low); }
+
+  /* 프로필: 외피 + 내피 중첩 구조 */
+  .profile { background: var(--brand-shell); border: 1px solid var(--brand-hairline); border-radius: var(--r-shell); padding: 6px; }
+  .profile-core {
+    background: var(--brand-core);
+    border-radius: var(--r-core);
+    padding: 18px;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  }
+  .profile-name { font-size: 17px; font-weight: 600; letter-spacing: -0.02em; }
+  .profile-meta { margin: 10px 0 0; font-size: 12.5px; color: var(--brand-text-mid); line-height: 1.7; }
+  .profile-meta span { color: var(--brand-text-low); }
+
+  .sidenav { display: flex; flex-direction: column; gap: 4px; }
+  .sidenav a {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 11px 14px;
+    border-radius: var(--r-ctrl);
+    color: var(--brand-text-mid);
+    text-decoration: none;
+    font-size: 14px;
+    border: 1px solid transparent;
+    transition: color 400ms var(--ease), background-color 400ms var(--ease), border-color 400ms var(--ease);
+  }
+  .sidenav a:hover { color: var(--brand-text); background: var(--brand-shell); }
+  .sidenav a:active { transform: scale(0.99); }
+  .sidenav a[aria-current="page"] {
+    color: var(--brand-text);
+    font-weight: 600;
+    background: var(--brand-accent-wash);
+    border-color: var(--brand-accent-dim);
+  }
+  .sidenav .count { font-family: var(--font-mono); font-size: 11px; color: var(--brand-text-low); }
+  .side-foot { margin-top: auto; padding: 0 8px; font-size: 11.5px; color: var(--brand-text-low); line-height: 1.7; }
+
+  /* ================= 메인 ================= */
+  .main { padding: 40px 44px 56px; max-width: 1180px; }
+  .head { display: flex; align-items: flex-end; justify-content: space-between; gap: 32px; margin-bottom: 40px; }
+  .head .today { font-family: var(--font-mono); font-size: 11.5px; letter-spacing: 0.08em; color: var(--brand-text-low); }
+  .head h1 { margin: 12px 0 0; font-size: 34px; font-weight: 600; letter-spacing: -0.035em; line-height: 1.15; }
+  .head p { margin: 8px 0 0; color: var(--brand-text-mid); font-size: 14.5px; }
+
+  .cta {
+    display: inline-flex; align-items: center; gap: 14px;
+    padding: 9px 9px 9px 22px;
+    border-radius: 9999px;
+    background: var(--brand-accent);
+    color: #FFFFFF;
+    border: none;
+    font-family: inherit; font-size: 14.5px; font-weight: 600;
+    letter-spacing: -0.01em;
+    white-space: nowrap;
+    cursor: pointer;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 2px 6px rgba(0, 0, 0, 0.45);
+    transition: background-color 400ms var(--ease), transform 400ms var(--ease), box-shadow 400ms var(--ease);
+  }
+  .cta:hover { background: #5A8AD9; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.24), 0 4px 12px rgba(0, 0, 0, 0.5); }
+  .cta:active { transform: scale(0.98); }
+  .cta .pip {
+    width: 30px; height: 30px;
+    border-radius: 9999px;
+    background: rgba(255, 255, 255, 0.16);
+    display: grid; place-items: center;
+    font-size: 13px;
+    transition: transform 400ms var(--ease), background-color 400ms var(--ease);
+  }
+  .cta:hover .pip { transform: translate(2px, -1px) scale(1.05); background: rgba(255, 255, 255, 0.24); }
+
+  /* ---- 중첩 카드 (외피 + 내피) ---- */
+  .card { background: var(--brand-shell); border: 1px solid var(--brand-hairline); border-radius: var(--r-shell); padding: 6px; }
+  .card-core {
+    background: var(--brand-core);
+    border-radius: var(--r-core);
+    padding: 22px;
+    height: 100%;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  }
+
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 22px; }
+  .stat-label { font-size: 12.5px; color: var(--brand-text-mid); }
+  .stat-value {
+    margin: 14px 0 0;
+    font-size: 38px; font-weight: 600; letter-spacing: -0.045em; line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+  .stat-value small { font-size: 14px; font-weight: 500; color: var(--brand-text-low); letter-spacing: 0; margin-left: 3px; }
+  .stat-value.is-empty { font-size: 20px; font-weight: 500; color: var(--brand-text-low); letter-spacing: -0.01em; padding: 9px 0; }
+  .stat-foot { margin: 10px 0 0; font-size: 12px; color: var(--brand-text-low); }
+  .stat-foot.up { color: var(--fn-success); font-weight: 600; }
+
+  .panels { display: grid; grid-template-columns: 1.7fr 1fr; gap: 22px; margin-bottom: 22px; }
+  .panel-title { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 22px; }
+  .panel-title h2 { margin: 0; font-size: 16px; font-weight: 600; letter-spacing: -0.02em; }
+  .panel-title span { font-size: 12.5px; color: var(--brand-text-low); }
+
+  /* ---- 차트 ---- */
+  .chart { width: 100%; height: auto; display: block; }
+  .chart .grid { stroke: var(--brand-hairline); stroke-width: 1; }
+  .chart .line { stroke: var(--brand-accent); stroke-width: 2.5; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+  .chart .fill { fill: var(--brand-accent); opacity: 0.1; }
+  .chart .dot-out { fill: var(--brand-core); stroke: var(--brand-accent); stroke-width: 2.5; }
+  .chart .lab { fill: var(--brand-text); font-family: var(--font-sans); font-size: 20px; font-weight: 600; letter-spacing: -0.03em; }
+  .chart .cap { fill: var(--brand-text-mid); font-family: var(--font-sans); font-size: 13px; }
+  .chart .axis-t { fill: var(--brand-text-low); font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.06em; }
+  .chart .gain { fill: var(--fn-success); font-family: var(--font-sans); font-size: 12.5px; font-weight: 700; }
+
+  .ring { display: block; margin: 0 auto; }
+  .ring .track { fill: none; stroke: var(--brand-core-2); stroke-width: 14; }
+  .ring .seg-success { fill: none; stroke: var(--fn-success); stroke-width: 14; stroke-linecap: butt; }
+  .ring .seg-warning { fill: none; stroke: var(--fn-warning); stroke-width: 14; stroke-linecap: butt; }
+  .ring-center { fill: var(--brand-text); font-family: var(--font-sans); font-size: 26px; font-weight: 600; letter-spacing: -0.03em; }
+  .ring-sub { fill: var(--brand-text-low); font-family: var(--font-sans); font-size: 12px; }
+
+  .legend { list-style: none; margin: 22px 0 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+  .legend li { display: flex; align-items: center; gap: 10px; font-size: 13.5px; color: var(--brand-text-mid); }
+  .legend .key { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+  .legend .key--success { background: var(--fn-success); }
+  .legend .key--warning { background: var(--fn-warning); }
+  .legend b { color: var(--brand-text); font-weight: 600; margin-left: auto; font-variant-numeric: tabular-nums; }
+  .legend-note { margin: 18px 0 0; font-size: 12px; color: var(--brand-text-low); }
+
+  /* ---- 응시 기록 ---- */
+  .rec {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    align-items: center;
+    gap: 22px;
+    padding: 16px 18px;
+    border-radius: var(--r-ctrl);
+    border: 1px solid transparent;
+    transition: background-color 400ms var(--ease), border-color 400ms var(--ease), transform 400ms var(--ease);
+  }
+  .rec + .rec { margin-top: 6px; }
+  .rec:hover { background: var(--brand-core-2); border-color: var(--brand-hairline-2); transform: translateY(-1px); }
+  .rec-name { font-size: 15px; font-weight: 500; letter-spacing: -0.015em; }
+  .rec-sub { margin: 5px 0 0; font-size: 12.5px; color: var(--brand-text-low); }
+  .rec-score { font-size: 22px; font-weight: 600; letter-spacing: -0.035em; font-variant-numeric: tabular-nums; }
+  .rec-score small { font-size: 12.5px; font-weight: 500; color: var(--brand-text-low); letter-spacing: 0; }
+  .rec-right { display: flex; align-items: center; gap: 12px; min-width: 148px; justify-content: flex-end; }
+  .badge {
+    border-radius: 9999px;
+    padding: 5px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .badge--success { background: var(--fn-success-wash); color: var(--fn-success); }
+  .badge--warning { background: var(--fn-warning-wash); color: var(--fn-warning); }
+  .rec-delta { font-size: 12.5px; font-weight: 700; color: var(--fn-success); font-variant-numeric: tabular-nums; }
+
+  .foot {
+    margin-top: 34px;
+    padding-top: 22px;
+    border-top: 1px solid var(--brand-hairline);
+    display: flex; justify-content: space-between; gap: 20px; flex-wrap: wrap;
+    font-size: 12.5px; color: var(--brand-text-low);
+  }
+  .foot strong { color: var(--brand-text-mid); font-weight: 600; }
+  .foot .dials { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.08em; }
+
+  /* ================= 768px 미만 단일 컬럼 폴백 ================= */
+  @media (max-width: 767px) {
+    .shell { grid-template-columns: 1fr; }
+    .side { border-right: none; border-bottom: 1px solid var(--brand-hairline); padding: 20px 16px; }
+    .sidenav { display: grid; grid-template-columns: repeat(2, 1fr); }
+    .side-foot { margin-top: 8px; }
+    .main { width: 100%; padding: 28px 16px 40px; }
+    .head { flex-direction: column; align-items: flex-start; gap: 20px; }
+    .head h1 { font-size: 26px; }
+    .cta { width: 100%; justify-content: space-between; }
+    .stats { grid-template-columns: 1fr; }
+    .panels { grid-template-columns: 1fr; }
+    .rec { grid-template-columns: 1fr; gap: 10px; }
+    .rec-right { justify-content: flex-start; min-width: 0; }
+  }
+</style>
+</head>
+<body>
+
+<div class="shell">
+
+  <aside class="side">
+    <div class="brand">
+      <div class="brand-mark">올</div>
+      <div>
+        <div class="brand-name">올가 미수등</div>
+        <div class="brand-sub">둔산점</div>
+      </div>
+    </div>
+
+    <div class="profile">
+      <div class="profile-core">
+        <div class="profile-name">김민수</div>
+        <p class="profile-meta">
+          올가국어_둔산점<br>
+          강남고등학교 <span>중3</span>
+        </p>
+      </div>
+    </div>
+
+    <nav class="sidenav" aria-label="주요 메뉴">
+      <a href="#" aria-current="page">대시보드</a>
+      <a href="#">시험 응시<span class="count">0</span></a>
+      <a href="#">성적 조회<span class="count">2</span></a>
+      <a href="#">내 정보</a>
+    </nav>
+
+    <div class="side-foot">
+      등급 체계 1등급에서 9등급<br>
+      숫자가 낮을수록 우수합니다.
+    </div>
+  </aside>
+
+  <main class="main">
+
+    <div class="head">
+      <div>
+        <div class="today">2026. 08. 19 (수)</div>
+        <h1>다시 본 시험에서 29점 올랐어요</h1>
+        <p>김민수 학생의 올가국어 2025 2차 결과입니다.</p>
+      </div>
+      <button class="cta" type="button">시험 응시하기<span class="pip" aria-hidden="true">&#8599;</span></button>
+    </div>
+
+    <section class="stats" aria-label="요약 통계">
+      <div class="card"><div class="card-core">
+        <div class="stat-label">평균 점수</div>
+        <p class="stat-value">75<small>점</small></p>
+        <p class="stat-foot">2회 응시 기준</p>
+      </div></div>
+      <div class="card"><div class="card-core">
+        <div class="stat-label">최고 점수</div>
+        <p class="stat-value">89<small>점</small></p>
+        <p class="stat-foot up">2등급</p>
+      </div></div>
+      <div class="card"><div class="card-core">
+        <div class="stat-label">응시 횟수</div>
+        <p class="stat-value">2<small>회</small></p>
+        <p class="stat-foot">2025년 2차</p>
+      </div></div>
+      <div class="card"><div class="card-core">
+        <div class="stat-label">대기 중 시험</div>
+        <p class="stat-value is-empty">배정된 시험 없음</p>
+        <p class="stat-foot">새 시험이 열리면 여기에 표시됩니다.</p>
+      </div></div>
+    </section>
+
+    <section class="panels">
+      <div class="card"><div class="card-core">
+        <div class="panel-title">
+          <h2>성적 추이</h2>
+          <span>올가국어 2025 2차</span>
+        </div>
+        <svg class="chart" viewBox="0 0 660 290" role="img" aria-label="1회차 60점에서 재응시 89점으로 29점 상승">
+          <line class="grid" x1="70" y1="30"  x2="620" y2="30"></line>
+          <line class="grid" x1="70" y1="130" x2="620" y2="130"></line>
+          <line class="grid" x1="70" y1="230" x2="620" y2="230"></line>
+          <text class="axis-t" x="42" y="34"  text-anchor="end">100</text>
+          <text class="axis-t" x="42" y="134" text-anchor="end">50</text>
+          <text class="axis-t" x="42" y="234" text-anchor="end">0</text>
+
+          <path class="fill" d="M150,110 L530,52 L530,230 L150,230 Z"></path>
+          <path class="line" d="M150,110 L530,52"></path>
+          <circle class="dot-out" cx="150" cy="110" r="6"></circle>
+          <circle class="dot-out" cx="530" cy="52"  r="6"></circle>
+
+          <text class="lab" x="150" y="90" text-anchor="middle">60</text>
+          <text class="lab" x="530" y="32" text-anchor="middle">89</text>
+          <text class="gain" x="530" y="14" text-anchor="middle">+29</text>
+
+          <text class="cap" x="150" y="262" text-anchor="middle">1회차</text>
+          <text class="cap" x="530" y="262" text-anchor="middle">재응시</text>
+        </svg>
+      </div></div>
+
+      <div class="card"><div class="card-core">
+        <div class="panel-title">
+          <h2>등급 분포</h2>
+        </div>
+        <svg class="ring" viewBox="0 0 160 160" width="160" height="160" role="img" aria-label="등급 분포. 2등급 1회, 4등급 1회">
+          <circle class="track" cx="80" cy="80" r="54"></circle>
+          <g transform="rotate(-90 80 80)">
+            <circle class="seg-success" cx="80" cy="80" r="54" stroke-dasharray="165.6 173.7"></circle>
+            <circle class="seg-warning" cx="80" cy="80" r="54" stroke-dasharray="165.6 173.7" stroke-dashoffset="-169.6"></circle>
+          </g>
+          <text class="ring-center" x="80" y="80" text-anchor="middle">2회</text>
+          <text class="ring-sub" x="80" y="100" text-anchor="middle">응시</text>
+        </svg>
+        <ul class="legend">
+          <li><span class="key key--success"></span>2등급<b>1회</b></li>
+          <li><span class="key key--warning"></span>4등급<b>1회</b></li>
+        </ul>
+        <p class="legend-note">등급은 1에서 9까지, 낮을수록 우수합니다.</p>
+      </div></div>
+    </section>
+
+    <section class="card"><div class="card-core">
+      <div class="panel-title">
+        <h2>응시 기록</h2>
+        <span>전체 2건</span>
+      </div>
+
+      <div class="rec">
+        <div>
+          <div class="rec-name">올가국어 2025 2차 1회차</div>
+          <p class="rec-sub">올가국어_둔산점</p>
+        </div>
+        <div class="rec-score">60<small> / 100</small></div>
+        <div class="rec-right"><span class="badge badge--warning">4등급</span></div>
+      </div>
+
+      <div class="rec">
+        <div>
+          <div class="rec-name">올가국어 2025 2차 재응시</div>
+          <p class="rec-sub">올가국어_둔산점</p>
+        </div>
+        <div class="rec-score">89<small> / 100</small></div>
+        <div class="rec-right">
+          <span class="rec-delta">+29점</span>
+          <span class="badge badge--success">2등급</span>
+        </div>
+      </div>
+    </div></section>
+
+    <div class="foot">
+      <div><strong>방향 B. 프리미엄</strong> 매일 앱처럼 들어와 성적을 확인하는 학생, 브랜드 완성도까지 보여줘야 하는 학원 대표 화면.</div>
+      <div class="dials">V9 / M3 / D6</div>
+    </div>
+
+  </main>
+</div>
+
+</body>
+</html>

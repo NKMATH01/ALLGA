@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<!--
+  올가 미수등 시스템 - 학생 대시보드 디자인 방향 3종 비교
+  세 방향(여백 / 프리미엄 / 계기판)을 이름, 한 줄 설명, 다이얼 값, 팔레트, 실제 화면(iframe)으로 나란히 비교한다.
+  이 파일도 독립 단일 HTML. 외부 CDN 및 스크립트 없음. 테마 잠금: 라이트 전용.
+  컬러 2계층: --brand-* 는 비교표 자체의 중립 UI 색, --fn-* 는 상태 의미 전용으로 브랜드와 독립 정의된다.
+-->
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>디자인 방향 비교 - 올가 미수등 학생 대시보드</title>
+<style>
+  :root {
+    /* ---- 브랜드 계층 (중립 비교 UI) ---- */
+    --brand-bg:      #F6F6F5;
+    --brand-surface: #FFFFFF;
+    --brand-ink:     #17181A;
+    --brand-ink-mid: #5B5F66;
+    --brand-ink-low: #8A8F96;
+    --brand-line:    #E3E3E0;
+
+    /* ---- 기능 계층 (브랜드와 독립. 상태 의미 전용) ---- */
+    --fn-success: #2F6B45;
+    --fn-warning: #8A6100;
+    --fn-error:   #A32F2C;
+
+    --s: 0.30;
+    --font-sans: "Pretendard Variable", Pretendard, "Noto Sans KR", "Apple SD Gothic Neo",
+                 "Malgun Gothic", "Segoe UI", system-ui, sans-serif;
+    --font-mono: "JetBrains Mono", "Cascadia Mono", Consolas, "D2Coding", "Courier New", monospace;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--brand-bg);
+    color: var(--brand-ink);
+    font-family: var(--font-sans);
+    font-size: 15px;
+    line-height: 1.55;
+    word-break: keep-all;
+    overflow-wrap: anywhere;
+    -webkit-font-smoothing: antialiased;
+  }
+  a:focus-visible { outline: 2px solid var(--brand-ink); outline-offset: 2px; }
+
+  .wrap { max-width: 1400px; margin: 0 auto; padding: 56px 32px 80px; }
+
+  header.page-head { margin-bottom: 48px; }
+  .page-head .meta {
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--brand-ink-low);
+  }
+  .page-head h1 { margin: 14px 0 0; font-size: 38px; font-weight: 600; letter-spacing: -0.035em; line-height: 1.15; }
+  .page-head p { margin: 12px 0 0; max-width: 62ch; color: var(--brand-ink-mid); }
+
+  .cols {
+    display: grid;
+    grid-template-columns: repeat(3, calc(1440px * var(--s)));
+    gap: 26px;
+    justify-content: center;
+    align-items: start;
+  }
+
+  .col {
+    background: var(--brand-surface);
+    border: 1px solid var(--brand-line);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .col-head { padding: 22px 22px 20px; }
+  .col-title { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+  .col-title h2 { margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -0.025em; }
+  .dials {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    color: var(--brand-ink-mid);
+    background: var(--brand-bg);
+    border: 1px solid var(--brand-line);
+    border-radius: 6px;
+    padding: 3px 8px;
+    white-space: nowrap;
+  }
+  .col-desc { margin: 10px 0 0; font-size: 13.5px; color: var(--brand-ink-mid); min-height: 42px; }
+
+  .skill {
+    margin: 14px 0 0;
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--brand-ink-low);
+  }
+
+  .swatches { display: flex; gap: 6px; margin: 18px 0 0; }
+  .sw { flex: 1; }
+  .sw i {
+    display: block;
+    height: 34px;
+    border: 1px solid var(--brand-line);
+    border-radius: 5px;
+  }
+  .sw code {
+    display: block;
+    margin-top: 6px;
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    letter-spacing: 0.02em;
+    color: var(--brand-ink-low);
+    text-align: center;
+  }
+
+  .frame {
+    width: calc(1440px * var(--s));
+    height: calc(1760px * var(--s));
+    overflow: hidden;
+    border-top: 1px solid var(--brand-line);
+    border-bottom: 1px solid var(--brand-line);
+    background: var(--brand-bg);
+  }
+  .frame iframe {
+    width: 1440px;
+    height: 1760px;
+    border: 0;
+    display: block;
+    transform: scale(var(--s));
+    transform-origin: 0 0;
+  }
+
+  .col-foot { padding: 16px 22px 20px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .open {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 16px;
+    border-radius: 6px;
+    background: var(--brand-ink);
+    color: #FFFFFF;
+    text-decoration: none;
+    font-size: 13.5px;
+    font-weight: 600;
+    transition: background-color 200ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .open:hover { background: #33363B; }
+  .open:active { transform: scale(0.98); }
+  .filename { font-family: var(--font-mono); font-size: 10.5px; color: var(--brand-ink-low); }
+
+  .notes {
+    margin-top: 44px;
+    border-top: 1px solid var(--brand-line);
+    padding-top: 24px;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 26px;
+    font-size: 13px;
+    color: var(--brand-ink-mid);
+  }
+  .notes h3 { margin: 0 0 8px; font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--brand-ink); }
+  .notes p { margin: 0; }
+  .notes code { font-family: var(--font-mono); font-size: 11.5px; color: var(--brand-ink); }
+
+  /* ================= 768px 미만 단일 컬럼 폴백 ================= */
+  @media (max-width: 767px) {
+    :root { --s: 0.21; }
+    .wrap { padding: 32px 16px 56px; }
+    .page-head h1 { font-size: 27px; }
+    .cols { grid-template-columns: 1fr; justify-content: stretch; }
+    .frame { width: 100%; }
+    .notes { grid-template-columns: 1fr; gap: 20px; }
+    .col-foot { flex-direction: column; align-items: flex-start; }
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <header class="page-head">
+    <p class="meta">올가 미수등 시스템 / 학생 대시보드</p>
+    <h1>디자인 방향 3종 비교</h1>
+    <p>같은 데이터(김민수 학생, 올가국어 2025 2차)를 세 가지 시각 언어로 렌더링했습니다. 골격, 밀도, 색 체계가 서로 겹치지 않도록 잡았습니다.</p>
+  </header>
+
+  <div class="cols">
+
+    <article class="col">
+      <div class="col-head">
+        <div class="col-title">
+          <h2>A. 여백</h2>
+          <span class="dials">V9 / M3 / D3</span>
+        </div>
+        <p class="col-desc">성적을 조용히 확인하고 싶은 학생과 학부모, 숫자보다 읽는 흐름이 중요한 상담용 화면.</p>
+        <p class="skill">톱바 + 단일 컬럼 / 라이트 / minimalist-ui</p>
+        <div class="swatches">
+          <div class="sw"><i style="background:#FBFBFA"></i><code>#FBFBFA</code></div>
+          <div class="sw"><i style="background:#1B1B19"></i><code>#1B1B19</code></div>
+          <div class="sw"><i style="background:#EAE8E4"></i><code>#EAE8E4</code></div>
+          <div class="sw"><i style="background:#346538"></i><code>#346538</code></div>
+          <div class="sw"><i style="background:#956400"></i><code>#956400</code></div>
+        </div>
+      </div>
+      <div class="frame"><iframe src="a-yeobaek.html" title="방향 A 여백 미리보기" loading="lazy" scrolling="no"></iframe></div>
+      <div class="col-foot">
+        <span class="filename">a-yeobaek.html</span>
+        <a class="open" href="a-yeobaek.html" target="_blank" rel="noopener">새 창에서 열기</a>
+      </div>
+    </article>
+
+    <article class="col">
+      <div class="col-head">
+        <div class="col-title">
+          <h2>B. 프리미엄</h2>
+          <span class="dials">V9 / M3 / D6</span>
+        </div>
+        <p class="col-desc">매일 앱처럼 들어와 성적을 확인하는 학생, 브랜드 완성도까지 보여줘야 하는 학원 대표 화면.</p>
+        <p class="skill">사이드바 + 카드 그리드 / 다크 / high-end-visual-design</p>
+        <div class="swatches">
+          <div class="sw"><i style="background:#0C0E11"></i><code>#0C0E11</code></div>
+          <div class="sw"><i style="background:#1A1E23"></i><code>#1A1E23</code></div>
+          <div class="sw"><i style="background:#4E7FD4"></i><code>#4E7FD4</code></div>
+          <div class="sw"><i style="background:#4FB07C"></i><code>#4FB07C</code></div>
+          <div class="sw"><i style="background:#D2A046"></i><code>#D2A046</code></div>
+        </div>
+      </div>
+      <div class="frame"><iframe src="b-premium.html" title="방향 B 프리미엄 미리보기" loading="lazy" scrolling="no"></iframe></div>
+      <div class="col-foot">
+        <span class="filename">b-premium.html</span>
+        <a class="open" href="b-premium.html" target="_blank" rel="noopener">새 창에서 열기</a>
+      </div>
+    </article>
+
+    <article class="col">
+      <div class="col-head">
+        <div class="col-title">
+          <h2>C. 계기판</h2>
+          <span class="dials">V9 / M3 / D9</span>
+        </div>
+        <p class="col-desc">여러 회차 데이터를 한 화면에서 훑어야 하는 강사와 관리자, 숫자 자체가 목적인 운영 화면.</p>
+        <p class="skill">12컬럼 블루프린트 그리드 / 라이트 / industrial-brutalist-ui</p>
+        <div class="swatches">
+          <div class="sw"><i style="background:#F4F4F0"></i><code>#F4F4F0</code></div>
+          <div class="sw"><i style="background:#0A0A0A"></i><code>#0A0A0A</code></div>
+          <div class="sw"><i style="background:#E61919"></i><code>#E61919</code></div>
+          <div class="sw"><i style="background:#1F5B3A"></i><code>#1F5B3A</code></div>
+          <div class="sw"><i style="background:#8A6100"></i><code>#8A6100</code></div>
+        </div>
+      </div>
+      <div class="frame"><iframe src="c-cockpit.html" title="방향 C 계기판 미리보기" loading="lazy" scrolling="no"></iframe></div>
+      <div class="col-foot">
+        <span class="filename">c-cockpit.html</span>
+        <a class="open" href="c-cockpit.html" target="_blank" rel="noopener">새 창에서 열기</a>
+      </div>
+    </article>
+
+  </div>
+
+  <div class="notes">
+    <div>
+      <h3>공통 데이터</h3>
+      <p>김민수 / 올가국어_둔산점 / 강남고등학교 중3. 평균 75점, 최고 89점, 응시 2회, 대기 0개. 1회차 60점 4등급, 재응시 89점 2등급.</p>
+    </div>
+    <div>
+      <h3>기능색 분리</h3>
+      <p>세 파일 모두 <code>--brand-*</code> 와 <code>--fn-success / --fn-warning / --fn-error</code> 를 별도 계층으로 정의합니다. 등급과 상승폭 표시에는 기능 계층만 씁니다.</p>
+    </div>
+    <div>
+      <h3>기술 조건</h3>
+      <p>외부 CDN 없이 오프라인에서 열립니다. 차트는 인라인 SVG, 폰트는 시스템 스택, 모션은 hover와 active 전이만 사용합니다.</p>
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>

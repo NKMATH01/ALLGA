@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<!--
+  방향 C. "계기판"
+  이 방향이 어울리는 사용자·상황: 여러 회차 데이터를 한 화면에서 훑어야 하는 강사와 관리자, 숫자 자체가 목적인 운영 화면.
+  다이얼: DESIGN_VARIANCE 9 / MOTION_INTENSITY 3 / VISUAL_DENSITY 9
+  골격: 카드 박스 없는 12컬럼 블루프린트 그리드. 내비게이션도 그리드 셀로 편입. 1px 라인으로만 구획하고 모든 숫자는 mono. 테마 잠금: 라이트(스위스 인더스트리얼 프린트) 전용.
+  컬러 2계층: --brand-* 는 브랜드(뉴스프린트 페이퍼 + 해저드 레드) 전용, --fn-* 는 등급·상승폭 같은 상태 의미 전용으로 브랜드와 독립 정의되어 브랜드가 바뀌어도 의미가 유지된다.
+  참고: 브랜드 액센트 레드는 구조 요소(상단 바, 활성 셀, 평균선)에만, 상태 표현은 --fn-* 에만 쓴다.
+-->
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>계기판 - 김민수 학생 대시보드</title>
+<style>
+  :root {
+    /* ---- 브랜드 계층 ---- */
+    --brand-paper:  #F4F4F0;
+    --brand-paper-2:#EAE8E3;
+    --brand-ink:    #0A0A0A;
+    --brand-ash:    #6A6A64;
+    --brand-accent: #E61919;
+
+    /* ---- 기능 계층 (브랜드와 독립. 상태 의미 전용) ---- */
+    --fn-success: #1F5B3A;
+    --fn-warning: #8A6100;
+    --fn-error:   #A31217;
+
+    --font-sans: "Pretendard Variable", Pretendard, "Noto Sans KR", "Apple SD Gothic Neo",
+                 "Malgun Gothic", "Segoe UI", system-ui, sans-serif;
+    --font-mono: "JetBrains Mono", "Cascadia Mono", Consolas, "D2Coding", "Courier New", monospace;
+  }
+
+  * { box-sizing: border-box; border-radius: 0; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--brand-paper);
+    color: var(--brand-ink);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.45;
+    word-break: keep-all;
+    overflow-wrap: anywhere;
+    -webkit-font-smoothing: antialiased;
+  }
+  .hazard { height: 6px; background: var(--brand-accent); }
+  .page { padding: 0 20px 20px; }
+
+  a:focus-visible { outline: 2px solid var(--brand-accent); outline-offset: -2px; }
+
+  /* ================= 헤더 스트립 ================= */
+  .strip {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    flex-wrap: wrap;
+    padding: 14px 0 12px;
+    border-bottom: 2px solid var(--brand-ink);
+  }
+  .sysname { font-size: 15px; font-weight: 800; letter-spacing: -0.02em; text-transform: uppercase; }
+  .mono {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--brand-ash);
+  }
+  .mono b { color: var(--brand-ink); font-weight: 700; }
+
+  /* ================= 그리드 골격 ================= */
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(12, 1fr);
+    gap: 1px;
+    background: var(--brand-ink);
+    border: 1px solid var(--brand-ink);
+  }
+  .grid + .grid { border-top: none; }
+  .cell { background: var(--brand-paper); padding: 16px 18px; min-width: 0; }
+
+  /* 내비게이션도 그리드 셀 */
+  .nav .cell {
+    grid-column: span 3;
+    padding: 0;
+  }
+  .nav a {
+    display: block;
+    padding: 13px 18px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    text-decoration: none;
+    color: var(--brand-ink);
+    background: var(--brand-paper);
+    transition: background-color 150ms linear, color 150ms linear;
+  }
+  .nav a:hover { background: var(--brand-paper-2); }
+  .nav a:active { background: var(--brand-ink); color: var(--brand-paper); }
+  .nav a[aria-current="page"] { background: var(--brand-ink); color: var(--brand-paper); font-weight: 700; }
+
+  /* ================= 학생 셀 ================= */
+  .who { grid-column: span 4; display: flex; flex-direction: column; justify-content: space-between; }
+  .who h1 {
+    margin: 4px 0 0;
+    font-size: clamp(2.75rem, 4.4vw, 4.25rem);
+    font-weight: 800;
+    letter-spacing: -0.05em;
+    line-height: 0.9;
+  }
+  .who dl {
+    margin: 22px 0 0;
+    display: grid;
+    grid-template-columns: 72px 1fr;
+    gap: 4px 12px;
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    letter-spacing: 0.04em;
+  }
+  .who dt { color: var(--brand-ash); text-transform: uppercase; }
+  .who dd { margin: 0; font-weight: 700; }
+
+  /* ================= 통계 셀 ================= */
+  .kpi { grid-column: span 2; display: flex; flex-direction: column; justify-content: space-between; }
+  .kpi-label {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--brand-ash);
+  }
+  .kpi-value {
+    margin: 24px 0 0;
+    font-family: var(--font-mono);
+    font-size: 44px;
+    font-weight: 700;
+    letter-spacing: -0.05em;
+    line-height: 1;
+  }
+  .kpi-value .u { font-size: 14px; letter-spacing: 0; color: var(--brand-ash); margin-left: 3px; }
+  .kpi-value.nil { font-size: 20px; letter-spacing: 0.02em; color: var(--brand-ash); padding: 12px 0 12px; }
+  .kpi-foot { margin: 10px 0 0; font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.06em; color: var(--brand-ash); }
+  .kpi-foot.ok { color: var(--fn-success); font-weight: 700; }
+
+  /* ================= 섹션 라벨 ================= */
+  .bracket {
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    margin: 0 0 16px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--brand-ink);
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .bracket span { color: var(--brand-ash); font-weight: 400; }
+
+  .plot { grid-column: span 7; }
+  .dist { grid-column: span 5; }
+  .log  { grid-column: span 12; }
+
+  /* ================= 차트 ================= */
+  .chart { width: 100%; height: auto; display: block; }
+  .chart .rule    { stroke: var(--brand-ink); stroke-width: 1; }
+  .chart .rule-lt { stroke: var(--brand-ink); stroke-width: 1; opacity: 0.18; }
+  .chart .avg     { stroke: var(--brand-accent); stroke-width: 2; }
+  .chart .bar     { fill: var(--brand-ink); }
+  .chart .num     { fill: var(--brand-ink); font-family: var(--font-mono); font-size: 26px; font-weight: 700; letter-spacing: -0.03em; }
+  .chart .tag     { fill: var(--brand-ash); font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.1em; }
+  .chart .tag-ink { fill: var(--brand-ink); font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.1em; }
+  .chart .tag-red { fill: var(--brand-accent); font-family: var(--font-mono); font-size: 11px; font-weight: 700; letter-spacing: 0.1em; }
+  .chart .gain    { fill: var(--fn-success); font-family: var(--font-mono); font-size: 13px; font-weight: 700; letter-spacing: 0.04em; }
+  .chart .fill-success { fill: var(--fn-success); }
+  .chart .fill-warning { fill: var(--fn-warning); }
+
+  /* ================= 로그 테이블 ================= */
+  table { width: 100%; border-collapse: collapse; }
+  thead th {
+    text-align: left;
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--brand-ash);
+    padding: 0 12px 8px 0;
+    border-bottom: 1px solid var(--brand-ink);
+  }
+  tbody td {
+    padding: 13px 12px 13px 0;
+    border-bottom: 1px solid rgba(10, 10, 10, 0.18);
+    vertical-align: middle;
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  .t-name { font-size: 14.5px; font-weight: 700; letter-spacing: -0.01em; }
+  .t-num  { font-family: var(--font-mono); font-size: 18px; font-weight: 700; letter-spacing: -0.02em; }
+  .t-num .u { font-size: 11px; color: var(--brand-ash); letter-spacing: 0.06em; }
+  .t-mono { font-family: var(--font-mono); font-size: 11.5px; letter-spacing: 0.08em; color: var(--brand-ash); text-transform: uppercase; }
+  .flag {
+    display: inline-block;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    padding: 4px 9px;
+    border: 1px solid currentColor;
+    white-space: nowrap;
+  }
+  .flag--success { color: var(--fn-success); }
+  .flag--warning { color: var(--fn-warning); }
+  .delta { font-family: var(--font-mono); font-size: 13px; font-weight: 700; color: var(--fn-success); letter-spacing: 0.02em; }
+  .nodelta { font-family: var(--font-mono); font-size: 13px; color: var(--brand-ash); }
+  .col-r { text-align: right; }
+
+  /* ================= 푸터 ================= */
+  .footstrip {
+    display: flex;
+    justify-content: space-between;
+    gap: 20px;
+    flex-wrap: wrap;
+    padding: 12px 0 0;
+    margin-top: 12px;
+    border-top: 2px solid var(--brand-ink);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    color: var(--brand-ash);
+  }
+  .footstrip b { color: var(--brand-ink); font-weight: 700; text-transform: uppercase; }
+  .footstrip .desc { font-family: var(--font-sans); letter-spacing: 0; text-transform: none; font-size: 12px; }
+
+  /* ================= 768px 미만 단일 컬럼 폴백 ================= */
+  @media (max-width: 767px) {
+    .page { padding: 0 12px 12px; }
+    .grid { grid-template-columns: 1fr; }
+    .nav .cell, .who, .kpi, .plot, .dist, .log { grid-column: span 1; }
+    .who h1 { font-size: 3rem; }
+    .kpi-value { font-size: 36px; margin-top: 12px; }
+    thead { display: none; }
+    tbody td { display: block; padding: 4px 0; border-bottom: none; }
+    tbody td.t-first { padding-top: 14px; }
+    tbody tr { display: block; border-bottom: 1px solid rgba(10, 10, 10, 0.18); padding-bottom: 12px; }
+    .col-r { text-align: left; }
+  }
+</style>
+</head>
+<body>
+
+<div class="hazard"></div>
+
+<div class="page">
+
+  <header class="strip">
+    <div class="sysname">올가 미수등 시스템</div>
+    <div class="mono">기준일 <b>2026-08-19 (수)</b> /// 지점 <b>올가국어_둔산점</b></div>
+  </header>
+
+  <nav class="grid nav" aria-label="주요 메뉴">
+    <div class="cell"><a href="#" aria-current="page">대시보드</a></div>
+    <div class="cell"><a href="#">시험 응시</a></div>
+    <div class="cell"><a href="#">성적 조회</a></div>
+    <div class="cell"><a href="#">내 정보</a></div>
+  </nav>
+
+  <div class="grid">
+    <div class="cell who">
+      <div>
+        <div class="mono">학생</div>
+        <h1>김민수</h1>
+      </div>
+      <dl>
+        <dt>소속</dt><dd>올가국어_둔산점</dd>
+        <dt>학교</dt><dd>강남고등학교</dd>
+        <dt>학년</dt><dd>중3</dd>
+      </dl>
+    </div>
+
+    <div class="cell kpi">
+      <div class="kpi-label">평균 점수</div>
+      <div>
+        <div class="kpi-value">75<span class="u">점</span></div>
+        <div class="kpi-foot">2회 평균</div>
+      </div>
+    </div>
+
+    <div class="cell kpi">
+      <div class="kpi-label">최고 점수</div>
+      <div>
+        <div class="kpi-value">89<span class="u">점</span></div>
+        <div class="kpi-foot ok">2등급</div>
+      </div>
+    </div>
+
+    <div class="cell kpi">
+      <div class="kpi-label">응시 횟수</div>
+      <div>
+        <div class="kpi-value">2<span class="u">회</span></div>
+        <div class="kpi-foot">2025년 2차</div>
+      </div>
+    </div>
+
+    <div class="cell kpi">
+      <div class="kpi-label">대기 중 시험</div>
+      <div>
+        <div class="kpi-value nil">배정 없음</div>
+        <div class="kpi-foot">신규 배정 시 표시</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="cell plot">
+      <p class="bracket">[ 성적 추이 ]<span>올가국어 2025 2차</span></p>
+      <svg class="chart" viewBox="0 0 600 330" role="img" aria-label="1회차 60점, 재응시 89점. 평균 75점">
+        <line class="rule" x1="60" y1="270" x2="580" y2="270"></line>
+        <line class="rule-lt" x1="60" y1="30"  x2="580" y2="30"></line>
+        <line class="rule-lt" x1="60" y1="150" x2="580" y2="150"></line>
+        <line class="rule-lt" x1="60" y1="210" x2="580" y2="210"></line>
+        <g class="tag" text-anchor="end">
+          <text x="48" y="34">100</text>
+          <text x="48" y="154">50</text>
+          <text x="48" y="214">25</text>
+          <text x="48" y="274">0</text>
+        </g>
+
+        <rect class="bar" x="140" y="126" width="110" height="144"></rect>
+        <rect class="bar" x="360" y="56"  width="110" height="214"></rect>
+
+        <line class="avg" x1="60" y1="90" x2="580" y2="90"></line>
+        <text class="tag-red" x="580" y="82" text-anchor="end">평균 75</text>
+
+        <text class="num" x="195" y="114" text-anchor="middle">60</text>
+        <text class="num" x="415" y="44"  text-anchor="middle">89</text>
+        <text class="gain" x="415" y="24" text-anchor="middle">+29</text>
+
+        <text class="tag-ink" x="195" y="294" text-anchor="middle">1회차</text>
+        <text class="tag-ink" x="415" y="294" text-anchor="middle">재응시</text>
+        <text class="tag" x="60" y="318">단위 점 / 만점 100</text>
+      </svg>
+    </div>
+
+    <div class="cell dist">
+      <p class="bracket">[ 등급 분포 ]<span>1 = 최우수</span></p>
+      <svg class="chart" viewBox="0 0 600 330" role="img" aria-label="등급 분포. 2등급 1회, 4등급 1회">
+        <line class="rule" x1="40" y1="250" x2="580" y2="250"></line>
+        <g class="rule-lt">
+          <line x1="100" y1="80" x2="100" y2="250"></line>
+          <line x1="160" y1="80" x2="160" y2="250"></line>
+          <line x1="220" y1="80" x2="220" y2="250"></line>
+          <line x1="280" y1="80" x2="280" y2="250"></line>
+          <line x1="340" y1="80" x2="340" y2="250"></line>
+          <line x1="400" y1="80" x2="400" y2="250"></line>
+          <line x1="460" y1="80" x2="460" y2="250"></line>
+          <line x1="520" y1="80" x2="520" y2="250"></line>
+        </g>
+
+        <rect class="fill-success" x="100" y="130" width="60" height="120"></rect>
+        <rect class="fill-warning" x="220" y="130" width="60" height="120"></rect>
+
+        <text class="tag-ink" x="130" y="118" text-anchor="middle">1회</text>
+        <text class="tag-ink" x="250" y="118" text-anchor="middle">1회</text>
+
+        <g class="tag" text-anchor="middle">
+          <text x="70"  y="274">1</text>
+          <text x="130" y="274">2</text>
+          <text x="190" y="274">3</text>
+          <text x="250" y="274">4</text>
+          <text x="310" y="274">5</text>
+          <text x="370" y="274">6</text>
+          <text x="430" y="274">7</text>
+          <text x="490" y="274">8</text>
+          <text x="550" y="274">9</text>
+        </g>
+        <text class="tag" x="40" y="318">등급 축 1 - 9 / 낮을수록 우수</text>
+      </svg>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="cell log">
+      <p class="bracket">[ 응시 기록 ]<span>전체 2건</span></p>
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">시험명</th>
+            <th scope="col">지점</th>
+            <th scope="col" class="col-r">점수</th>
+            <th scope="col" class="col-r">등급</th>
+            <th scope="col" class="col-r">변동</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="t-first"><span class="t-name">올가국어 2025 2차 1회차</span></td>
+            <td class="t-mono">올가국어_둔산점</td>
+            <td class="col-r"><span class="t-num">60<span class="u"> / 100</span></span></td>
+            <td class="col-r"><span class="flag flag--warning">4등급</span></td>
+            <td class="col-r"><span class="nodelta">기준</span></td>
+          </tr>
+          <tr>
+            <td class="t-first"><span class="t-name">올가국어 2025 2차 재응시</span></td>
+            <td class="t-mono">올가국어_둔산점</td>
+            <td class="col-r"><span class="t-num">89<span class="u"> / 100</span></span></td>
+            <td class="col-r"><span class="flag flag--success">2등급</span></td>
+            <td class="col-r"><span class="delta">+29점</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="footstrip">
+    <div><b>방향 C. 계기판</b> <span class="desc">여러 회차 데이터를 한 화면에서 훑어야 하는 강사와 관리자, 숫자 자체가 목적인 운영 화면.</span></div>
+    <div>V9 / M3 / D9</div>
+  </div>
+
+</div>
+
+</body>
+</html>

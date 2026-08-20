@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<!--
+  방향 A. "여백"
+  이 방향이 어울리는 사용자·상황: 성적을 조용히 확인하고 싶은 학생과 학부모, 숫자보다 읽는 흐름이 중요한 상담용 화면.
+  다이얼: DESIGN_VARIANCE 9 / MOTION_INTENSITY 3 / VISUAL_DENSITY 3
+  골격: 톱바형 + 단일 좁은 컬럼 (에디토리얼 문서). 테마 잠금: 라이트 전용.
+  컬러 2계층: --brand-* 는 브랜드(웜 모노크롬) 전용, --fn-* 는 등급·상승폭 같은 상태 의미 전용으로 브랜드와 독립 정의되어 브랜드가 바뀌어도 의미가 유지된다.
+  폰트: 시스템 스택만 사용 (@import 없음). 로컬에 없으면 자연 폴백.
+-->
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>여백 - 김민수 학생 대시보드</title>
+<style>
+  :root {
+    /* ---- 브랜드 계층 (웜 모노크롬) ---- */
+    --brand-paper:   #FBFBFA;
+    --brand-surface: #FFFFFF;
+    --brand-ink:     #1B1B19;
+    --brand-ink-mid: #575650;
+    --brand-ink-low: #8B8A82;
+    --brand-line:    #EAE8E4;
+    --brand-line-2:  #DAD8D2;
+
+    /* ---- 기능 계층 (브랜드와 독립. 상태 의미 전용) ---- */
+    --fn-success:    #346538;
+    --fn-success-bg: #EDF3EC;
+    --fn-warning:    #956400;
+    --fn-warning-bg: #FBF3DB;
+    --fn-error:      #9F2F2D;
+    --fn-error-bg:   #FDEBEC;
+
+    /* ---- 형태 규칙: 컨테이너 8px, 컨트롤 6px, 태그만 pill ---- */
+    --r-container: 8px;
+    --r-control:   6px;
+
+    --font-sans: "Pretendard Variable", Pretendard, "Noto Sans KR", "Apple SD Gothic Neo",
+                 "Malgun Gothic", "Segoe UI", system-ui, sans-serif;
+    --font-mono: "JetBrains Mono", "Cascadia Mono", Consolas, "D2Coding", "Courier New", monospace;
+  }
+
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--brand-paper);
+    color: var(--brand-ink);
+    font-family: var(--font-sans);
+    font-size: 16px;
+    line-height: 1.6;
+    word-break: keep-all;
+    overflow-wrap: anywhere;
+    font-feature-settings: "tnum" 1;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ================= 톱바 ================= */
+  .topbar {
+    height: 72px;
+    border-bottom: 1px solid var(--brand-line);
+    background: var(--brand-paper);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 40px;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+  .wordmark {
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+  .wordmark span {
+    color: var(--brand-ink-low);
+    font-weight: 400;
+    margin-left: 10px;
+  }
+  .topnav { display: flex; gap: 4px; }
+  .topnav a {
+    display: block;
+    padding: 8px 14px;
+    border-radius: var(--r-control);
+    color: var(--brand-ink-mid);
+    text-decoration: none;
+    font-size: 14px;
+    transition: color 180ms cubic-bezier(0.16, 1, 0.3, 1),
+                background-color 180ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .topnav a:hover { color: var(--brand-ink); background: #F2F1EE; }
+  .topnav a:active { transform: scale(0.98); }
+  .topnav a[aria-current="page"] {
+    color: var(--brand-ink);
+    font-weight: 600;
+    background: #F2F1EE;
+  }
+  a:focus-visible, button:focus-visible {
+    outline: 2px solid var(--brand-ink);
+    outline-offset: 2px;
+  }
+
+  /* ================= 문서 컬럼 ================= */
+  .doc {
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 0 40px 160px;
+  }
+  section { padding: 112px 0 0; }
+
+  .meta {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    letter-spacing: 0.06em;
+    color: var(--brand-ink-low);
+    text-transform: uppercase;
+  }
+
+  h1 {
+    margin: 20px 0 0;
+    font-size: 56px;
+    font-weight: 300;
+    letter-spacing: -0.035em;
+    line-height: 1.12;
+  }
+  h1 b { font-weight: 600; }
+  .lede {
+    margin: 18px 0 0;
+    max-width: 46ch;
+    color: var(--brand-ink-mid);
+    font-size: 17px;
+  }
+
+  h2 {
+    margin: 0 0 40px;
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: -0.005em;
+    padding-bottom: 14px;
+    border-bottom: 1px solid var(--brand-line);
+  }
+
+  /* ================= 통계 ================= */
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0;
+  }
+  .stat { padding-right: 24px; }
+  .stat dt {
+    font-size: 13px;
+    color: var(--brand-ink-low);
+    margin: 0 0 12px;
+  }
+  .stat dd {
+    margin: 0;
+    font-size: 46px;
+    font-weight: 250;
+    letter-spacing: -0.04em;
+    line-height: 1;
+  }
+  .stat dd small {
+    font-size: 15px;
+    font-weight: 400;
+    letter-spacing: 0;
+    color: var(--brand-ink-low);
+    margin-left: 4px;
+  }
+  .stat--empty dd { color: var(--brand-ink-low); font-size: 28px; padding-top: 14px; }
+
+  /* ================= 차트 ================= */
+  .chart { width: 100%; height: auto; display: block; }
+  .chart .axis  { stroke: var(--brand-line-2); stroke-width: 1; }
+  .chart .trail { stroke: var(--brand-ink); stroke-width: 1.25; fill: none; }
+  .chart .node  { fill: var(--brand-ink); }
+  .chart .val   { fill: var(--brand-ink); font-family: var(--font-sans); font-size: 30px; font-weight: 300; letter-spacing: -0.03em; }
+  .chart .cap   { fill: var(--brand-ink-mid); font-family: var(--font-sans); font-size: 13px; }
+  .chart .tick  { fill: var(--brand-ink-low); font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.06em; }
+  .chart .gain  { fill: var(--fn-success); font-family: var(--font-sans); font-size: 13px; font-weight: 600; }
+  .chart .mark-success { fill: var(--fn-success); }
+  .chart .mark-warning { fill: var(--fn-warning); }
+
+  .chart-note {
+    margin: 28px 0 0;
+    color: var(--brand-ink-mid);
+    font-size: 15px;
+    max-width: 52ch;
+  }
+
+  /* ================= 태그 ================= */
+  .tags { display: flex; gap: 8px; flex-wrap: wrap; margin: 32px 0 0; }
+  .tag {
+    border-radius: 9999px;
+    padding: 5px 12px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+  .tag--success { background: var(--fn-success-bg); color: var(--fn-success); }
+  .tag--warning { background: var(--fn-warning-bg); color: var(--fn-warning); }
+
+  /* ================= 응시 기록 ================= */
+  .records { list-style: none; margin: 0; padding: 0; }
+  .records li {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    align-items: baseline;
+    gap: 28px;
+    padding: 26px 0;
+    border-bottom: 1px solid var(--brand-line);
+  }
+  .rec-name { font-size: 18px; font-weight: 500; letter-spacing: -0.015em; }
+  .rec-sub { margin: 6px 0 0; font-size: 13px; color: var(--brand-ink-low); }
+  .rec-score {
+    font-size: 34px;
+    font-weight: 250;
+    letter-spacing: -0.04em;
+    font-variant-numeric: tabular-nums;
+  }
+  .rec-score small { font-size: 14px; color: var(--brand-ink-low); letter-spacing: 0; }
+  .rec-side { text-align: right; min-width: 96px; }
+  .delta {
+    display: block;
+    margin-top: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--fn-success);
+  }
+
+  /* ================= 푸터 ================= */
+  footer {
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 40px;
+    border-top: 1px solid var(--brand-line);
+    display: flex;
+    justify-content: space-between;
+    gap: 24px;
+    flex-wrap: wrap;
+    color: var(--brand-ink-low);
+    font-size: 13px;
+  }
+  footer strong { color: var(--brand-ink); font-weight: 600; }
+  footer .dials { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.08em; }
+
+  /* ================= 768px 미만 단일 컬럼 폴백 ================= */
+  @media (max-width: 767px) {
+    .topbar { height: auto; flex-direction: column; align-items: flex-start; gap: 12px; padding: 16px; position: static; }
+    .topnav { flex-wrap: wrap; margin-left: -14px; }
+    .doc { padding: 0 20px 80px; }
+    section { padding: 64px 0 0; }
+    h1 { font-size: 34px; }
+    .stats { grid-template-columns: 1fr; gap: 28px; }
+    .stat { padding-right: 0; }
+    .records li { grid-template-columns: 1fr; gap: 10px; }
+    .rec-side { text-align: left; }
+    footer { padding: 32px 20px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="wordmark">올가 미수등<span>둔산점</span></div>
+  <nav class="topnav" aria-label="주요 메뉴">
+    <a href="#" aria-current="page">대시보드</a>
+    <a href="#">시험 응시</a>
+    <a href="#">성적 조회</a>
+    <a href="#">내 정보</a>
+  </nav>
+</header>
+
+<main class="doc">
+
+  <section>
+    <p class="meta">2026년 8월 19일 수요일</p>
+    <h1>김민수 학생의<br><b>2025년 2차 기록</b></h1>
+    <p class="lede">올가국어_둔산점에서 응시한 두 번의 시험입니다. 강남고등학교 중3.</p>
+  </section>
+
+  <section>
+    <h2>요약</h2>
+    <dl class="stats">
+      <div class="stat"><dt>평균 점수</dt><dd>75<small>점</small></dd></div>
+      <div class="stat"><dt>최고 점수</dt><dd>89<small>점</small></dd></div>
+      <div class="stat"><dt>응시 횟수</dt><dd>2<small>회</small></dd></div>
+      <div class="stat stat--empty"><dt>대기 중 시험</dt><dd>없음</dd></div>
+    </dl>
+  </section>
+
+  <section>
+    <h2>성적 추이</h2>
+    <svg class="chart" viewBox="0 0 880 250" role="img" aria-label="1회차 60점에서 재응시 89점으로 29점 상승한 성적 추이">
+      <line class="axis" x1="0" y1="212" x2="880" y2="212"></line>
+      <line class="axis" x1="0" y1="32" x2="880" y2="32" stroke-dasharray="2 5"></line>
+      <text class="tick" x="0" y="24">100점 만점</text>
+
+      <line class="trail" x1="150" y1="140" x2="700" y2="88"></line>
+      <circle class="node" cx="150" cy="140" r="4"></circle>
+      <circle class="node" cx="700" cy="88" r="4"></circle>
+
+      <text class="val" x="150" y="118" text-anchor="middle">60</text>
+      <text class="val" x="700" y="66" text-anchor="middle">89</text>
+      <text class="gain" x="700" y="44" text-anchor="middle">+29점</text>
+
+      <text class="cap" x="150" y="238" text-anchor="middle">1회차</text>
+      <text class="cap" x="700" y="238" text-anchor="middle">재응시</text>
+    </svg>
+    <p class="chart-note">같은 시험을 다시 치르면서 29점이 올랐습니다. 등급으로는 4등급에서 2등급으로 두 단계 이동했습니다.</p>
+  </section>
+
+  <section>
+    <h2>등급 분포</h2>
+    <svg class="chart" viewBox="0 0 880 130" role="img" aria-label="1등급부터 9등급까지의 척도에서 2등급 1회, 4등급 1회">
+      <line class="axis" x1="40" y1="70" x2="840" y2="70"></line>
+      <g class="tick" text-anchor="middle">
+        <text x="40"  y="102">1</text>
+        <text x="140" y="102">2</text>
+        <text x="240" y="102">3</text>
+        <text x="340" y="102">4</text>
+        <text x="440" y="102">5</text>
+        <text x="540" y="102">6</text>
+        <text x="640" y="102">7</text>
+        <text x="740" y="102">8</text>
+        <text x="840" y="102">9</text>
+      </g>
+      <g class="axis">
+        <line x1="40"  y1="64" x2="40"  y2="76"></line>
+        <line x1="240" y1="64" x2="240" y2="76"></line>
+        <line x1="440" y1="64" x2="440" y2="76"></line>
+        <line x1="540" y1="64" x2="540" y2="76"></line>
+        <line x1="640" y1="64" x2="640" y2="76"></line>
+        <line x1="740" y1="64" x2="740" y2="76"></line>
+        <line x1="840" y1="64" x2="840" y2="76"></line>
+      </g>
+      <rect class="mark-success" x="132" y="42" width="16" height="16"></rect>
+      <rect class="mark-warning" x="332" y="42" width="16" height="16"></rect>
+      <text class="cap" x="140" y="32" text-anchor="middle">재응시</text>
+      <text class="cap" x="340" y="32" text-anchor="middle">1회차</text>
+      <text class="tick" x="40" y="124">낮을수록 우수</text>
+    </svg>
+    <div class="tags">
+      <span class="tag tag--success">2등급 1회</span>
+      <span class="tag tag--warning">4등급 1회</span>
+    </div>
+  </section>
+
+  <section>
+    <h2>응시 기록</h2>
+    <ul class="records">
+      <li>
+        <div>
+          <div class="rec-name">올가국어 2025 2차 1회차</div>
+          <p class="rec-sub">올가국어_둔산점</p>
+        </div>
+        <div class="rec-score">60<small> / 100</small></div>
+        <div class="rec-side">
+          <span class="tag tag--warning">4등급</span>
+        </div>
+      </li>
+      <li>
+        <div>
+          <div class="rec-name">올가국어 2025 2차 재응시</div>
+          <p class="rec-sub">올가국어_둔산점</p>
+        </div>
+        <div class="rec-score">89<small> / 100</small></div>
+        <div class="rec-side">
+          <span class="tag tag--success">2등급</span>
+          <span class="delta">+29점</span>
+        </div>
+      </li>
+    </ul>
+  </section>
+
+</main>
+
+<footer>
+  <div><strong>방향 A. 여백</strong> 성적을 조용히 확인하고 싶은 학생과 학부모, 숫자보다 읽는 흐름이 중요한 상담용 화면.</div>
+  <div class="dials">V9 / M3 / D3</div>
+</footer>
+
+</body>
+</html>

@@ -1,0 +1,716 @@
+<!DOCTYPE html>
+<!--
+  올가 미수등 시스템 - 학생 성취 업무 보고서 (기준 구현)
+  DESIGN.md 준수 구현. 문서와 어긋나면 DESIGN.md가 우선한다.
+
+  이 파일이 증명하는 것
+  - 3계층 토큰: 브랜드(navy/brass) -> 시맨틱(surface/text/border/action) -> 기능(fn-*)
+  - 이원화: 네이비는 구조(헤더, 표 머리, 주 버튼), 브라스는 성취
+  - 브라스 2곳 규칙: (1) 최고 점수 카드  (2) 성적 추이 패널의 +29점 상승 클러스터. 그 외 0곳
+  - 등급색은 기능 계층만 사용. 낮은 등급에 fn-error 금지 (DESIGN.md 2.4)
+  - 라이트 기본 + [data-theme="dark"] + @media print 토큰 교체
+  - hex 리터럴은 토큰 정의부(:root, [data-theme="dark"])에만 존재. 본문은 100% var() 참조
+  - 외부 CDN, 웹폰트 @import 없음. 차트는 인라인 SVG
+-->
+<html lang="ko" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>학생 성취 업무 보고서 - 김민수</title>
+<style>
+/* ============================================================
+   토큰 정의부. hex 리터럴은 이 블록과 [data-theme="dark"] 블록에만 존재한다.
+   ============================================================ */
+:root {
+  /* --- 1계층: 브랜드 원색 스케일 --- */
+  --navy-50:  #F4F6FA;
+  --navy-100: #E6EBF4;
+  --navy-200: #C9D4E7;
+  --navy-300: #A3B4D3;
+  --navy-400: #7189B5;
+  --navy-500: #4C6595;
+  --navy-600: #354C78;
+  --navy-700: #27395C;
+  --navy-800: #1B2942;
+  --navy-900: #131E31;
+  --navy-950: #0C1421;
+
+  --brass-300: #E3C88E;
+  --brass-400: #D4B26A;
+  --brass-500: #C09A4E;
+  --brass-600: #A07F3B;
+  --brass-700: #7D622C;
+
+  /* --- 인쇄 전용 원색 --- */
+  --print-paper: #FFFFFF;
+  --print-ink:   #000000;
+  --print-rule:  #999999;
+
+  /* --- 2계층: 시맨틱 --- */
+  --surface:          #FFFFFF;
+  --surface-sunken:   var(--navy-50);
+  --surface-raised:   #FFFFFF;
+  --surface-inverse:  var(--navy-800);
+  --surface-subtle:   var(--navy-100);
+
+  --text-primary:     var(--navy-900);
+  --text-secondary:   var(--navy-600);
+  --text-tertiary:    var(--navy-400);
+  --text-on-inverse:  #FFFFFF;
+  --text-on-inverse-muted: var(--navy-200);
+
+  --border:           var(--navy-200);
+  --border-strong:    var(--navy-300);
+  --border-subtle:    var(--navy-100);
+  --border-inverse:   var(--navy-700);
+
+  --action:           var(--navy-800);
+  --action-hover:     var(--navy-700);
+  --action-active:    var(--navy-900);
+  --action-text:      #FFFFFF;
+  --action-subtle:    var(--navy-100);
+  --action-subtle-hover: var(--navy-200);
+  --focus-ring:       var(--navy-500);
+
+  --accent:           var(--brass-500);
+  --accent-strong:    var(--brass-700);
+  --accent-surface:   #FBF6EA;
+
+  --shadow-sm: 0 1px 2px rgba(19, 30, 49, 0.06);
+  --shadow-md: 0 2px 8px rgba(19, 30, 49, 0.08);
+  --shadow-lg: 0 8px 24px rgba(19, 30, 49, 0.12);
+
+  /* --- 3계층: 기능색. 브랜드와 독립 --- */
+  --fn-success:         #1D7A4C;
+  --fn-success-surface: #E8F4EE;
+  --fn-success-border:  #A8D4BE;
+  --fn-warning:         #8F5A00;
+  --fn-warning-surface: #FBF1DF;
+  --fn-warning-border:  #E0C48A;
+  --fn-error:           #B3261E;
+  --fn-error-surface:   #FCEDEC;
+  --fn-error-border:    #E9B4B0;
+  --fn-info:            #0F6E7A;
+  --fn-info-surface:    #E6F2F4;
+  --fn-info-border:     #9FCBD2;
+
+  /* --- 간격 4px 스케일 --- */
+  --space-1: 4px;  --space-2: 8px;  --space-3: 12px; --space-4: 16px;
+  --space-5: 20px; --space-6: 24px; --space-8: 32px; --space-10: 40px;
+  --space-12: 48px; --space-16: 64px;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+
+  --container-max: 1280px;
+  --report-max: 840px;
+
+  --font-sans: "Pretendard Variable", Pretendard, -apple-system, "Apple SD Gothic Neo",
+               "Noto Sans KR", "Malgun Gothic", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", "Cascadia Mono", Consolas, "D2Coding", monospace;
+
+  --ease-out: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+[data-theme="dark"] {
+  /* 다크 표면 사다리: 캔버스가 가장 어둡고 위로 올라올수록 밝아진다.
+     sunken(950) < inverse 헤더(900) < surface 카드(800) < raised 모달(700) */
+  --surface:          var(--navy-800);
+  --surface-sunken:   var(--navy-950);
+  --surface-raised:   var(--navy-700);
+  --surface-inverse:  var(--navy-900);
+  --surface-subtle:   var(--navy-700);
+
+  --text-primary:     #EEF2F8;
+  --text-secondary:   var(--navy-200);
+  --text-tertiary:    var(--navy-300);
+  --text-on-inverse:  #EEF2F8;
+  --text-on-inverse-muted: var(--navy-300);
+
+  --border:           var(--navy-600);
+  --border-strong:    var(--navy-500);
+  --border-subtle:    var(--navy-700);
+  --border-inverse:   var(--navy-700);
+
+  --action:           var(--navy-100);
+  --action-hover:     #FFFFFF;
+  --action-active:    var(--navy-200);
+  --action-text:      var(--navy-900);
+  --action-subtle:    var(--navy-700);
+  --action-subtle-hover: var(--navy-600);
+  --focus-ring:       var(--navy-300);
+
+  --accent:           var(--brass-400);
+  --accent-strong:    var(--brass-300);
+  --accent-surface:   #2A2314;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.6);
+
+  --fn-success:         #4FBF85;
+  --fn-success-surface: #12301F;
+  --fn-success-border:  #2C6E4A;
+  --fn-warning:         #D9A441;
+  --fn-warning-surface: #33270D;
+  --fn-warning-border:  #7A5C1E;
+  --fn-error:           #F0837C;
+  --fn-error-surface:   #35191A;
+  --fn-error-border:    #7E3B39;
+  --fn-info:            #4FC2CF;
+  --fn-info-surface:    #102E33;
+  --fn-info-border:     #2A6068;
+}
+
+/* ============================================================
+   여기부터 본문. 색은 전부 var() 참조.
+   ============================================================ */
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  background: var(--surface-sunken);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.6;
+  font-variant-numeric: tabular-nums;   /* DESIGN.md 3.3 전역 적용 */
+  word-break: keep-all;                  /* DESIGN.md 3.4 한글 조판 */
+  overflow-wrap: anywhere;
+  -webkit-font-smoothing: antialiased;
+}
+
+:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+
+/* ---------- 머리글 (네이비 구조) ---------- */
+.report-header {
+  background: var(--surface-inverse);
+  color: var(--text-on-inverse);
+  border-bottom: 1px solid var(--border-inverse);
+}
+.report-header__inner {
+  max-width: var(--report-max);
+  margin: 0 auto;
+  padding: var(--space-8) var(--space-10);
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-8);
+}
+.eyebrow {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  line-height: 1.4;
+  color: var(--text-on-inverse-muted);
+}
+.report-header h1 {
+  margin: var(--space-2) 0 0;
+  font-size: 32px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+}
+.report-header .meta {
+  margin: var(--space-2) 0 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text-on-inverse-muted);
+}
+.report-header__right { text-align: right; flex: none; }
+.report-header__right .date {
+  margin: var(--space-1) 0 0;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+}
+.controls { display: flex; gap: var(--space-2); justify-content: flex-end; margin-top: var(--space-4); }
+.btn {
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+  padding: 0 var(--space-4);
+  height: 32px;
+  min-width: 44px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background-color 150ms ease-out, border-color 150ms ease-out, color 150ms ease-out;
+}
+.btn:active { transform: scale(0.98); }
+.btn--secondary-on-inverse {
+  background: transparent;
+  color: var(--text-on-inverse);
+  border: 1px solid var(--border-inverse);
+}
+.btn--secondary-on-inverse:hover { background: var(--border-inverse); }
+
+/* ---------- 지면 ---------- */
+main {
+  max-width: var(--report-max);
+  margin: 0 auto;
+  padding: var(--space-10) var(--space-10) var(--space-16);
+}
+section + section { margin-top: var(--space-8); }
+h2 {
+  margin: 0 0 var(--space-4);
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.35;
+}
+.section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+.section-head h2 { margin: 0; }
+.section-head .note { font-size: 12px; color: var(--text-tertiary); }
+
+/* ---------- 통계 카드 ---------- */
+.stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-4);
+}
+.stat {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-5);
+  box-shadow: var(--shadow-sm);
+}
+.stat__label {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--text-tertiary);
+}
+.stat__value {
+  margin: var(--space-3) 0 0;
+  font-size: 36px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1;
+}
+.stat__unit {
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0;
+  color: var(--text-tertiary);
+  margin-left: var(--space-1);
+}
+.stat__value--empty {
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  color: var(--text-tertiary);
+  padding: var(--space-3) 0 var(--space-2);
+}
+.stat__foot { margin: var(--space-3) 0 0; font-size: 12px; color: var(--text-secondary); }
+
+/* 브라스 1곳: 최고 기록 강조. 배경은 칠하지 않고 상단 규칙선 + 수치 색만. */
+.stat--accent { border-top: 3px solid var(--accent); }
+.stat--accent .stat__value { color: var(--accent-strong); }
+
+/* ---------- 패널 ---------- */
+.panels { display: grid; grid-template-columns: 1.55fr 1fr; gap: var(--space-4); }
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-6);
+  box-shadow: var(--shadow-sm);
+}
+
+/* ---------- 차트 ---------- */
+.chart { width: 100%; height: auto; display: block; }
+.chart .grid-line { stroke: var(--border-subtle); stroke-width: 1; }
+.chart .base-line { stroke: var(--border-strong); stroke-width: 1; }
+.chart .trend     { stroke: var(--text-primary); stroke-width: 2; fill: none; stroke-linecap: round; }
+.chart .node      { fill: var(--surface); stroke: var(--text-primary); stroke-width: 2; }
+.chart .node--accent { fill: var(--accent); stroke: var(--accent-strong); stroke-width: 2; }
+.chart .value     { fill: var(--text-primary); font-size: 26px; font-weight: 700; letter-spacing: -0.025em; }
+.chart .axis      { fill: var(--text-tertiary); font-size: 11px; font-weight: 500; }
+.chart .caption   { fill: var(--text-secondary); font-size: 13px; }
+/* 브라스 2곳: +29점 상승. 위 node--accent 와 한 덩어리로 1곳으로 센다. */
+.chart .delta     { fill: var(--accent-strong); font-size: 14px; font-weight: 700; }
+
+/* ---------- 등급 뱃지 (기능 계층) ---------- */
+.badge {
+  display: inline-block;
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-2);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+  border: 1px solid;
+}
+.badge--success { background: var(--fn-success-surface); border-color: var(--fn-success-border); color: var(--fn-success); }
+.badge--info    { background: var(--fn-info-surface);    border-color: var(--fn-info-border);    color: var(--fn-info); }
+.badge--warning { background: var(--fn-warning-surface); border-color: var(--fn-warning-border); color: var(--fn-warning); }
+.badge--neutral { background: var(--surface-subtle);     border-color: var(--border);            color: var(--text-secondary); }
+
+/* ---------- 등급 분포 ---------- */
+.grades { list-style: none; margin: 0; padding: 0; }
+.grades li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.grades li:last-child { border-bottom: none; }
+.grades .who { font-size: 13px; color: var(--text-secondary); }
+.grades .count { margin-left: auto; font-size: 13px; font-weight: 600; }
+.scale { width: 100%; height: auto; display: block; margin-top: var(--space-4); }
+.scale .rule { stroke: var(--border-strong); stroke-width: 1; }
+.scale .tick { stroke: var(--border); stroke-width: 1; }
+.scale .num  { fill: var(--text-tertiary); font-size: 11px; font-weight: 500; }
+.scale .mark-success { fill: var(--fn-success); }
+.scale .mark-info    { fill: var(--fn-info); }
+.scale-note { margin: var(--space-3) 0 0; font-size: 12px; color: var(--text-tertiary); }
+
+/* ---------- 표 ---------- */
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; }
+thead th {
+  background: var(--surface-subtle);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  text-align: left;
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border-strong);
+  white-space: nowrap;
+}
+tbody td {
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: 13px;
+  vertical-align: middle;
+}
+tbody tr:last-child td { border-bottom: none; }
+thead th:first-child, tbody td:first-child { padding-left: 0; }
+thead th:last-child,  tbody td:last-child  { padding-right: 0; }
+.num-col { text-align: right; }
+.exam-name { font-size: 14px; font-weight: 600; color: var(--text-primary); }
+.branch { color: var(--text-secondary); white-space: nowrap; }
+.score { font-size: 20px; font-weight: 700; letter-spacing: -0.02em; }
+.score span { font-size: 12px; font-weight: 500; color: var(--text-tertiary); }
+.delta-up { color: var(--fn-success); font-weight: 700; }
+.delta-none { color: var(--text-tertiary); }
+
+/* ---------- 맺음 ---------- */
+.summary {
+  margin: var(--space-6) 0 0;
+  padding: var(--space-5) var(--space-6);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  font-size: 15px;
+  line-height: 1.7;
+  max-width: 62ch;
+}
+.report-foot {
+  margin-top: var(--space-8);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+/* ---------- 반응형: 768px 미만 단일 컬럼 ---------- */
+@media (max-width: 767px) {
+  .report-header__inner { flex-direction: column; padding: var(--space-6) var(--space-4); gap: var(--space-4); }
+  .report-header__right { text-align: left; }
+  .controls { justify-content: flex-start; }
+  .report-header h1 { font-size: 26px; }
+  main { padding: var(--space-6) var(--space-4) var(--space-10); }
+  .stats { grid-template-columns: 1fr; }
+  .panels { grid-template-columns: 1fr; }
+  /* 표에 가로 스크롤이 생기면 첫 열 고정 (DESIGN.md 5.4) */
+  thead th:first-child, tbody td:first-child {
+    position: sticky;
+    left: 0;
+    background: var(--surface);
+    padding-left: var(--space-3);
+  }
+  thead th:first-child { background: var(--surface-subtle); }
+  table { min-width: 560px; }
+}
+
+/* ---------- 감소 모션 ---------- */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ---------- 인쇄: 토큰을 잉크/종이 값으로 교체 (DESIGN.md 10.3) ----------
+   라이트로 보든 다크로 보든 인쇄물은 동일한 흰 지면으로 나온다.
+   브라스 강조는 색이 아니라 굵기와 규칙선으로 대체된다. */
+@media print {
+  :root, [data-theme="dark"] {
+    --surface:          var(--print-paper);
+    --surface-sunken:   var(--print-paper);
+    --surface-raised:   var(--print-paper);
+    --surface-inverse:  var(--print-paper);
+    --surface-subtle:   var(--print-paper);
+
+    --text-primary:     var(--print-ink);
+    --text-secondary:   var(--print-ink);
+    --text-tertiary:    var(--print-rule);
+    --text-on-inverse:  var(--print-ink);
+    --text-on-inverse-muted: var(--print-rule);
+
+    --border:           var(--print-rule);
+    --border-strong:    var(--print-ink);
+    --border-subtle:    var(--print-rule);
+    --border-inverse:   var(--print-ink);
+
+    --accent:           var(--print-ink);
+    --accent-strong:    var(--print-ink);
+    --accent-surface:   var(--print-paper);
+
+    --fn-success:         var(--print-ink);
+    --fn-success-surface: var(--print-paper);
+    --fn-success-border:  var(--print-rule);
+    --fn-info:            var(--print-ink);
+    --fn-info-surface:    var(--print-paper);
+    --fn-info-border:     var(--print-rule);
+    --fn-warning:         var(--print-ink);
+    --fn-warning-surface: var(--print-paper);
+    --fn-warning-border:  var(--print-rule);
+
+    --shadow-sm: none;
+    --shadow-md: none;
+    --shadow-lg: none;
+  }
+
+  @page { size: A4; margin: 16mm; }
+
+  body { font-size: 11pt; }
+  .no-print { display: none; }
+
+  .report-header { border-bottom: 2px solid var(--print-ink); }
+  .report-header__inner, main { padding-left: 0; padding-right: 0; max-width: none; }
+
+  .stat, .panel, .summary { box-shadow: none; border: 1px solid var(--print-rule); }
+  /* 브라스 강조의 인쇄 대체: 색 대신 굵은 규칙선 */
+  .stat--accent { border-top: 3px solid var(--print-ink); }
+  .chart .delta { font-weight: 700; }
+
+  table, figure, .stat, .panel { break-inside: avoid; }
+  h2 { break-after: avoid; }
+  a[href]::after { content: none; }
+}
+</style>
+</head>
+<body>
+
+<header class="report-header">
+  <div class="report-header__inner">
+    <div>
+      <p class="eyebrow">학생 성취 업무 보고서</p>
+      <h1>김민수</h1>
+      <p class="meta">올가국어_둔산점 / 강남고등학교 중3</p>
+    </div>
+    <div class="report-header__right">
+      <p class="eyebrow">기준일</p>
+      <p class="date">2026년 8월 19일 (수)</p>
+      <div class="controls no-print">
+        <button type="button" class="btn btn--secondary-on-inverse" id="themeToggle">야간 모드</button>
+        <button type="button" class="btn btn--secondary-on-inverse" id="printBtn">인쇄</button>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main>
+
+  <section aria-label="요약 통계">
+    <div class="stats">
+      <div class="stat">
+        <p class="stat__label">평균 점수</p>
+        <p class="stat__value">75<span class="stat__unit">점</span></p>
+        <p class="stat__foot">2회 응시 기준</p>
+      </div>
+
+      <!-- 브라스 1곳 / 2: 최고 기록 강조 -->
+      <div class="stat stat--accent">
+        <p class="stat__label">최고 점수</p>
+        <p class="stat__value">89<span class="stat__unit">점</span></p>
+        <p class="stat__foot">재응시, 2등급</p>
+      </div>
+
+      <div class="stat">
+        <p class="stat__label">응시 횟수</p>
+        <p class="stat__value">2<span class="stat__unit">회</span></p>
+        <p class="stat__foot">올가국어 2025 2차</p>
+      </div>
+
+      <div class="stat">
+        <p class="stat__label">대기 중 시험</p>
+        <p class="stat__value stat__value--empty">배정 없음</p>
+        <p class="stat__foot">새 시험이 배정되면 표시됩니다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="panels" aria-label="성적 추이와 등급 분포">
+    <div class="panel">
+      <div class="section-head">
+        <h2>성적 추이</h2>
+        <span class="note">올가국어 2025 2차</span>
+      </div>
+      <svg class="chart" viewBox="0 0 720 320" role="img"
+           aria-label="1회차 60점에서 재응시 89점으로 29점 상승했습니다.">
+        <line class="grid-line" x1="80" y1="50"  x2="680" y2="50"></line>
+        <line class="grid-line" x1="80" y1="160" x2="680" y2="160"></line>
+        <line class="base-line" x1="80" y1="270" x2="680" y2="270"></line>
+        <g class="axis" text-anchor="end">
+          <text x="66" y="54">100</text>
+          <text x="66" y="164">50</text>
+          <text x="66" y="274">0</text>
+        </g>
+
+        <line class="trend" x1="220" y1="138" x2="500" y2="74"></line>
+        <circle class="node" cx="220" cy="138" r="6"></circle>
+        <text class="value" x="220" y="118" text-anchor="middle">60</text>
+
+        <!-- 브라스 2곳 / 2: 최고 기록 지점 + 상승폭. 한 덩어리로 1곳. -->
+        <circle class="node--accent" cx="500" cy="74" r="7"></circle>
+        <text class="value" x="524" y="78" text-anchor="start">89</text>
+        <text class="delta" x="524" y="100" text-anchor="start">+29점</text>
+
+        <text class="caption" x="220" y="298" text-anchor="middle">1회차</text>
+        <text class="caption" x="500" y="298" text-anchor="middle">재응시</text>
+      </svg>
+    </div>
+
+    <div class="panel">
+      <div class="section-head">
+        <h2>등급 분포</h2>
+      </div>
+      <ul class="grades">
+        <li>
+          <span class="badge badge--success">2등급</span>
+          <span class="who">재응시</span>
+          <span class="count">1회</span>
+        </li>
+        <li>
+          <span class="badge badge--info">4등급</span>
+          <span class="who">1회차</span>
+          <span class="count">1회</span>
+        </li>
+      </ul>
+
+      <svg class="scale" viewBox="0 0 320 90" role="img"
+           aria-label="1등급부터 9등급 척도에서 2등급 1회, 4등급 1회">
+        <line class="rule" x1="20" y1="50" x2="300" y2="50"></line>
+        <g class="tick">
+          <line x1="20"  y1="45" x2="20"  y2="55"></line>
+          <line x1="160" y1="45" x2="160" y2="55"></line>
+          <line x1="300" y1="45" x2="300" y2="55"></line>
+        </g>
+        <rect class="mark-success" x="50" y="32" width="10" height="10"></rect>
+        <rect class="mark-info"    x="120" y="32" width="10" height="10"></rect>
+        <g class="num" text-anchor="middle">
+          <text x="20"  y="72">1</text>
+          <text x="55"  y="72">2</text>
+          <text x="90"  y="72">3</text>
+          <text x="125" y="72">4</text>
+          <text x="160" y="72">5</text>
+          <text x="195" y="72">6</text>
+          <text x="230" y="72">7</text>
+          <text x="265" y="72">8</text>
+          <text x="300" y="72">9</text>
+        </g>
+      </svg>
+      <p class="scale-note">등급은 1에서 9까지이며 낮을수록 우수합니다.</p>
+    </div>
+  </section>
+
+  <section aria-label="응시 기록">
+    <div class="panel">
+      <div class="section-head">
+        <h2>응시 기록</h2>
+        <span class="note">전체 2건</span>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">시험명</th>
+              <th scope="col">지점</th>
+              <th scope="col" class="num-col">점수</th>
+              <th scope="col" class="num-col">등급</th>
+              <th scope="col" class="num-col">변동</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="exam-name">올가국어 2025 2차 1회차</span></td>
+              <td class="branch">올가국어_둔산점</td>
+              <td class="num-col"><span class="score">60<span> / 100</span></span></td>
+              <td class="num-col"><span class="badge badge--info">4등급</span></td>
+              <td class="num-col delta-none">기준</td>
+            </tr>
+            <tr>
+              <td><span class="exam-name">올가국어 2025 2차 재응시</span></td>
+              <td class="branch">올가국어_둔산점</td>
+              <td class="num-col"><span class="score">89<span> / 100</span></span></td>
+              <td class="num-col"><span class="badge badge--success">2등급</span></td>
+              <td class="num-col delta-up">+29점</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <p class="summary">
+      재응시에서 89점을 받아 1회차 대비 29점 올랐습니다. 등급은 4등급에서 2등급으로 두 단계 이동했으며,
+      두 차례 평균은 75점입니다. 현재 배정되어 대기 중인 시험은 없습니다.
+    </p>
+  </section>
+
+  <div class="report-foot">
+    <span>올가 미수등 시스템 / 올가국어_둔산점</span>
+    <span>발행일 2026년 8월 19일</span>
+  </div>
+
+</main>
+
+<script>
+  (function () {
+    var root = document.documentElement;
+    var toggle = document.getElementById('themeToggle');
+    toggle.addEventListener('click', function () {
+      var dark = root.getAttribute('data-theme') === 'dark';
+      root.setAttribute('data-theme', dark ? 'light' : 'dark');
+      toggle.textContent = dark ? '야간 모드' : '주간 모드';
+    });
+    document.getElementById('printBtn').addEventListener('click', function () {
+      window.print();
+    });
+  })();
+</script>
+
+</body>
+</html>
