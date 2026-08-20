@@ -403,6 +403,14 @@ router.post('/exam-attempts/:id/submit', requireStudent, async (req, res) => {
   try {
     const { id } = req.params;
     const { answers } = req.body;
+    const userId = req.session.user!.id;
+
+    // 현재 로그인한 학생 정보 조회
+    const [student] = await db.select().from(students).where(eq(students.userId, userId)).limit(1);
+
+    if (!student) {
+      return res.status(404).json({ message: '학생 정보를 찾을 수 없습니다.' });
+    }
 
     // Get attempt
     const [attempt] = await db.select().from(examAttempts).where(eq(examAttempts.id, id)).limit(1);
@@ -411,8 +419,30 @@ router.post('/exam-attempts/:id/submit', requireStudent, async (req, res) => {
       return res.status(404).json({ message: '시험 응시를 찾을 수 없습니다.' });
     }
 
+    // 본인의 답안인지 검증
+    if (attempt.studentId !== student.id) {
+      return res.status(403).json({ message: '본인의 답안만 제출할 수 있습니다.' });
+    }
+
     if (attempt.submittedAt) {
       return res.status(400).json({ message: '이미 제출된 시험입니다.' });
+    }
+
+    // 응시 기간 검증 (마감일 당일 23:59:59까지 허용)
+    const [distribution] = await db
+      .select()
+      .from(examDistributions)
+      .where(eq(examDistributions.id, attempt.distributionId))
+      .limit(1);
+
+    if (!distribution) {
+      return res.status(404).json({ message: '배포를 찾을 수 없습니다.' });
+    }
+
+    const deadline = new Date(distribution.endDate);
+    deadline.setHours(23, 59, 59, 999);
+    if (new Date() > deadline) {
+      return res.status(400).json({ message: '응시 기간이 종료되었습니다.' });
     }
 
     // Get exam
@@ -636,17 +666,15 @@ router.put('/exam-attempts/:id/branch-grade', requireBranchManager, async (req, 
       return res.status(404).json({ message: '시험을 찾을 수 없습니다.' });
     }
 
-    // Auto-grade
+    // 지점 수동 채점은 O/X 방식: 클라이언트가 문항별로 O=1 / X=0 을 보낸다.
+    // (정답 번호가 아니므로 correctAnswer 와 비교하지 않는다)
     let score = 0;
     let correctCount = 0;
     const questionsData = exam.questionsData as any[];
 
     for (const question of questionsData) {
       const questionNum = question.number || question.questionNumber;
-      const studentAnswer = answers[questionNum];
-      const correctAnswer = question.correctAnswer || question.answer;
-      // 학생 답안과 정답 비교
-      if (studentAnswer === correctAnswer) {
+      if (Number(answers[questionNum]) === 1) {
         score += question.points || question.score || 0;
         correctCount++;
       }
@@ -656,12 +684,15 @@ router.put('/exam-attempts/:id/branch-grade', requireBranchManager, async (req, 
     const percentage = (score / maxScore) * 100;
     const grade = calculateGrade(percentage);
 
+    // O/X 방식으로 채점되었음을 기록 (학생 온라인 제출에는 이 키가 없다)
+    const gradedAnswers = { ...answers, _gradingMode: 'ox' };
+
     // Update attempt
     const now = new Date();
     const [updatedAttempt] = await db
       .update(examAttempts)
       .set({
-        answers,
+        answers: gradedAnswers,
         score,
         maxScore,
         grade,

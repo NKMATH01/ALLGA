@@ -23,7 +23,6 @@ export function generateOlgaReportHTML(data: {
     examDate,
     score,
     maxScore,
-    percentage,
     gradeLevel,
     analysis,
     standardScore,
@@ -34,15 +33,10 @@ export function generateOlgaReportHTML(data: {
 
   // Extract AI analysis data
   const subjectAreas = analysis.subjectAreas || [];
-  const strengths = analysis.strengths || [];
-  const weaknesses = analysis.weaknesses || [];
-  const propensity = analysis.propensity || { typeTitle: '중위권 특성 (독해 지구력 보완 필요)', typeDescription: '분석 데이터 생성 중...' };
-  const olgaSummary = analysis.olgaSummary || '';
 
   // Prepare chart data
   const domainLabels = JSON.stringify(subjectAreas.map((d: any) => d.name));
   const studentPercentages = JSON.stringify(subjectAreas.map((d: any) => d.percentage));
-  const avgPercentages = JSON.stringify(subjectAreas.map((d: any) => d.avgPercentage || 65));
 
   const escapeHtml = (text: string) => {
     if (!text) return '';

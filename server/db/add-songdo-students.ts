@@ -115,8 +115,6 @@ async function addSongdoStudents() {
       const questionsData = exam.questionsData as any[];
 
       // correctCount만큼 정답(1)으로, 나머지는 오답(2~5 중 랜덤)
-      const shuffledQuestions = [...questionsData].sort(() => Math.random() - 0.5);
-
       for (let j = 0; j < questionsData.length; j++) {
         const question = questionsData[j];
         const questionNum = question.number || question.questionNumber;
@@ -133,7 +131,7 @@ async function addSongdoStudents() {
       const now = new Date();
       const startedAt = new Date(now.getTime() - Math.floor(Math.random() * 24 * 60 * 60 * 1000)); // 지난 24시간 이내
 
-      const [attempt] = await db
+      await db
         .insert(examAttempts)
         .values({
           examId: exam.id,

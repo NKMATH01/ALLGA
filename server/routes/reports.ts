@@ -1,14 +1,68 @@
 import express from 'express';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { db } from '../db/index';
-import { aiReports, examAttempts, exams, students, users } from '../db/schema';
-import { eq } from 'drizzle-orm';
+import { aiReports, examAttempts, exams, parents, studentParents, students, users } from '../db/schema';
+import { and, eq } from 'drizzle-orm';
 import { requireAuth } from '../middleware/auth';
-import { escapeHtml } from '../utils/helpers';
 import { OLGA_REPORT_META_PROMPT_V2 } from '../prompts/olga-report-meta-prompt-v2';
 import { generateReportHTML as generateNewReportHTML } from '../templates/newReportTemplate';
 
 const router = express.Router();
+
+type SessionUser = { id: string; role: string; branchId?: string };
+
+type AttemptAccess =
+  | { ok: true; attempt: typeof examAttempts.$inferSelect; student: typeof students.$inferSelect }
+  | { ok: false; status: number; message: string };
+
+/**
+ * 응시 기록(및 그에 연결된 보고서)에 접근할 수 있는지 검사한다.
+ * admin=전체, branch=자기 지점 학생, student=본인, parent=자기 자녀.
+ */
+async function checkAttemptAccess(user: SessionUser | undefined, attemptId: string): Promise<AttemptAccess> {
+  if (!user) {
+    return { ok: false, status: 401, message: '로그인이 필요합니다.' };
+  }
+
+  const [attempt] = await db.select().from(examAttempts).where(eq(examAttempts.id, attemptId)).limit(1);
+  if (!attempt) {
+    return { ok: false, status: 404, message: '시험 응시를 찾을 수 없습니다.' };
+  }
+
+  const [student] = await db.select().from(students).where(eq(students.id, attempt.studentId)).limit(1);
+  if (!student) {
+    return { ok: false, status: 404, message: '학생 정보를 찾을 수 없습니다.' };
+  }
+
+  const denied = { ok: false as const, status: 403, message: '권한이 없습니다.' };
+
+  if (user.role === 'admin') {
+    return { ok: true, attempt, student };
+  }
+
+  if (user.role === 'branch') {
+    return student.branchId === user.branchId ? { ok: true, attempt, student } : denied;
+  }
+
+  if (user.role === 'student') {
+    return student.userId === user.id ? { ok: true, attempt, student } : denied;
+  }
+
+  if (user.role === 'parent') {
+    const [parent] = await db.select().from(parents).where(eq(parents.userId, user.id)).limit(1);
+    if (!parent) return denied;
+
+    const [link] = await db
+      .select()
+      .from(studentParents)
+      .where(and(eq(studentParents.parentId, parent.id), eq(studentParents.studentId, student.id)))
+      .limit(1);
+
+    return link ? { ok: true, attempt, student } : denied;
+  }
+
+  return denied;
+}
 
 console.log('🔑 GEMINI_API_KEY 확인:', process.env.GEMINI_API_KEY ? '설정됨 ✅' : '설정 안됨 ❌');
 
@@ -26,6 +80,12 @@ console.log('🤖 Gemini 초기화:', genAI ? '성공 ✅' : '실패 ❌');
 router.post('/generate/:attemptId', requireAuth, async (req, res) => {
   try {
     const { attemptId } = req.params;
+
+    // 권한 검증 (타 학생 보고서 생성 및 Gemini 호출 남용 차단)
+    const access = await checkAttemptAccess(req.session.user, attemptId);
+    if (!access.ok) {
+      return res.status(access.status).json({ message: access.message });
+    }
 
     // Check if report already exists
     const [existingReport] = await db
@@ -74,6 +134,11 @@ router.post('/generate/:attemptId', requireAuth, async (req, res) => {
     const answers = attempt.answers as any;
     const studentUser = student.user;
 
+    // 지점 수동 채점(O/X)으로 저장된 답안은 값이 정답 번호가 아니라 O=1 / X=0 이다.
+    const isOxGraded = answers?._gradingMode === 'ox';
+    const isAnswerCorrect = (q: any, studentAnswer: any) =>
+      isOxGraded ? Number(studentAnswer) === 1 : studentAnswer === q.correctAnswer;
+
     // Calculate domain stats
     const domainMap = new Map<string, { name: string; correct: number; total: number; earnedScore: number; maxScore: number; incorrectQuestions: number[] }>();
 
@@ -81,7 +146,7 @@ router.post('/generate/:attemptId', requireAuth, async (req, res) => {
       const domain = q.domain || q.category || '독서';
       const qNum = q.number || (questionsData.indexOf(q) + 1);
       const studentAnswer = answers[qNum.toString()];
-      const isCorrect = studentAnswer === q.correctAnswer;
+      const isCorrect = isAnswerCorrect(q, studentAnswer);
       const qScore = q.score || 2;
 
       if (!domainMap.has(domain)) {
@@ -122,19 +187,15 @@ router.post('/generate/:attemptId', requireAuth, async (req, res) => {
     // Try multiple models as fallback
     // GPT-4o 사용
 
-    // 취약/강점 영역 계산
-    const weakestArea = domainStats.reduce((min, d) => d.percentage < min.percentage ? d : min, domainStats[0]);
-    const strongestArea = domainStats.reduce((max, d) => d.percentage > max.percentage ? d : max, domainStats[0]);
-
     // 전문적이고 상세한 프롬프트 - 틀린 문항 패턴 분석
     const incorrectQuestions = questionsData.filter((q: any, idx: number) => {
       const qNum = q.number || (idx + 1);
-      return answers[qNum.toString()] !== q.correctAnswer;
+      return !isAnswerCorrect(q, answers[qNum.toString()]);
     });
 
     const correctQuestions = questionsData.filter((q: any, idx: number) => {
       const qNum = q.number || (idx + 1);
-      return answers[qNum.toString()] === q.correctAnswer;
+      return isAnswerCorrect(q, answers[qNum.toString()]);
     });
 
     // 학년별 프로그램 철학
@@ -147,7 +208,9 @@ router.post('/generate/:attemptId', requireAuth, async (req, res) => {
       '고3': '올가의 고3 프로그램은 수능 최적화 전략과 킬러 문항 대응력을 완성합니다.',
     };
 
-    const philosophy = gradePhilosophy[student.student.grade] || '올가의 프로그램은 학생의 실력 향상에 집중합니다.';
+    const philosophy =
+      (student.student.grade ? gradePhilosophy[student.student.grade] : undefined) ||
+      '올가의 프로그램은 학생의 실력 향상에 집중합니다.';
 
     // ===== 새로운 구조: System Prompt + User Data 분리 =====
     // User Data: Only input data in JSON format (NO old report examples, NO old prompts)
@@ -181,7 +244,7 @@ router.post('/generate/:attemptId', requireAuth, async (req, res) => {
             유형: q.typeAnalysis || '미분류',
             소분류: q.subcategory || '미분류',
             정답: q.correctAnswer,
-            학생답안: answers[qNum?.toString()] || '무응답'
+            학생답안: isOxGraded ? 'X(오답)' : answers[qNum?.toString()] || '무응답'
           };
         }) : [],
         맞은문항: correctQuestions.length > 0 ? correctQuestions.map((q: any) => {
@@ -288,8 +351,19 @@ ${JSON.stringify(userData, null, 2)}`;
 
     // 계산된 값들 (필요한 기본 통계만)
     const percentile = Math.round(100 * (1 - (rank / completedAttempts.length)) * 10) / 10;
-    const standardScore = attempt.grade <= 2 ? 80 + (attempt.score / attempt.maxScore) * 20 :
-                          attempt.grade <= 4 ? 70 + (attempt.score / attempt.maxScore) * 10 : Math.round(60 + (attempt.score / attempt.maxScore) * 10);
+
+    // 표준점수는 채점 결과(등급·원점수·만점)가 모두 있을 때만 산출한다.
+    // 값이 없으면 임의의 숫자를 만들지 않고 null 로 둔다.
+    const hasScoreData =
+      attempt.grade !== null && attempt.score !== null && attempt.maxScore !== null && attempt.maxScore > 0;
+    const scoreRatio = hasScoreData ? attempt.score! / attempt.maxScore! : 0;
+    const standardScore = !hasScoreData
+      ? null
+      : attempt.grade! <= 2
+      ? Math.round(80 + scoreRatio * 20)
+      : attempt.grade! <= 4
+      ? Math.round(70 + scoreRatio * 10)
+      : Math.round(60 + scoreRatio * 10);
 
     // ===== OLD HARDCODED TEMPLATES REMOVED =====
     // studyPlan, learningStrategy 등 하드코딩된 템플릿 모두 제거
@@ -312,7 +386,7 @@ ${JSON.stringify(userData, null, 2)}`;
         grade: attempt.grade,
         rawScore: attempt.score,
         rawScoreMax: attempt.maxScore,
-        standardScore: typeof standardScore === 'number' ? Math.round(standardScore) : standardScore,
+        standardScore,
         percentile: percentile,
       },
       charts: {
@@ -385,27 +459,39 @@ ${JSON.stringify(userData, null, 2)}`;
 });
 
 // GET /api/reports/:reportId - AI 보고서 HTML 조회
-router.get('/:reportId', requireAuth, (req, res) => {
-  db.select()
-    .from(aiReports)
-    .where(eq(aiReports.id, req.params.reportId))
-    .limit(1)
-    .then(([report]) => {
-      if (!report) {
-        return res.status(404).send('<h1>보고서를 찾을 수 없습니다.</h1>');
-      }
-      res.setHeader('Content-Type', 'text/html; charset=utf-8');
-      res.send(report.htmlContent);
-    })
-    .catch((error) => {
-      console.error('Get report error:', error);
-      res.status(500).send('<h1>보고서 조회 중 오류가 발생했습니다.</h1>');
-    });
+router.get('/:reportId', requireAuth, async (req, res) => {
+  try {
+    const [report] = await db
+      .select()
+      .from(aiReports)
+      .where(eq(aiReports.id, req.params.reportId))
+      .limit(1);
+
+    if (!report) {
+      return res.status(404).send('<h1>보고서를 찾을 수 없습니다.</h1>');
+    }
+
+    const access = await checkAttemptAccess(req.session.user, report.attemptId);
+    if (!access.ok) {
+      return res.status(access.status).send('<h1>권한이 없습니다.</h1>');
+    }
+
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.send(report.htmlContent);
+  } catch (error) {
+    console.error('Get report error:', error);
+    res.status(500).send('<h1>보고서 조회 중 오류가 발생했습니다.</h1>');
+  }
 });
 
 // GET /api/reports/attempt/:attemptId - 응시 기록의 보고서 조회
 router.get('/attempt/:attemptId', requireAuth, async (req, res) => {
   try {
+    const access = await checkAttemptAccess(req.session.user, req.params.attemptId);
+    if (!access.ok) {
+      return res.status(access.status).json({ message: access.message });
+    }
+
     const [report] = await db
       .select()
       .from(aiReports)

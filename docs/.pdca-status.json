@@ -1,6 +1,6 @@
 {
   "version": "2.0",
-  "lastUpdated": "2026-01-31T08:30:00.000Z",
+  "lastUpdated": "2026-08-19T07:45:00.000Z",
   "activeFeatures": ["olga-system-v2"],
   "primaryFeature": "olga-system-v2",
   "features": {
@@ -8,7 +8,7 @@
       "name": "올가 미수등 시스템 v2.0",
       "description": "Next.js + Supabase 마이그레이션 및 버그/보안 수정",
       "level": "Dynamic",
-      "phase": "do",
+      "phase": "check",
       "status": "in_progress",
       "techStack": {
         "frontend": "Next.js 14 App Router",
@@ -28,20 +28,22 @@
           "docs/02-design/api-spec.md"
         ],
         "analysis": [
-          "docs/03-analysis/code-analysis-report.md"
+          "docs/03-analysis/code-analysis-report.md",
+          "docs/03-analysis/olga-system-v2.analysis.md"
         ],
         "report": null
       },
       "issues": {
         "critical": 0,
-        "warning": 8,
+        "warning": 18,
         "info": 12,
-        "qualityScore": 68
+        "qualityScore": 68,
+        "matchRate": 75
       },
       "targetQualityScore": 85,
       "estimatedDuration": "4 weeks",
       "createdAt": "2026-01-31T06:56:39.591Z",
-      "updatedAt": "2026-01-31T08:30:00.000Z"
+      "updatedAt": "2026-08-19T07:45:00.000Z"
     }
   },
   "pipeline": {
@@ -102,6 +104,49 @@
         "안전한 비밀번호 생성 (students.ts)",
         "배포 삭제 권한 검증 (distributions.ts)"
       ]
+    },
+    {
+      "action": "gap_analysis",
+      "feature": "olga-system-v2",
+      "timestamp": "2026-08-18T15:00:00.000Z",
+      "result": {
+        "matchRate": 72,
+        "criticalIssues": 7,
+        "majorIssues": 18,
+        "baseline": "v1 design docs"
+      },
+      "document": "docs/03-analysis/olga-system-v2.analysis.md"
+    },
+    {
+      "action": "act_iteration_1",
+      "feature": "olga-system-v2",
+      "timestamp": "2026-08-19T07:30:00.000Z",
+      "fixes": [
+        "C1 지점 O/X 채점 방식 서버 반영 + _gradingMode 메타키 + 틀린문항 모달 분기",
+        "C2 수동 생성 시험 정답키 입력 필드 추가 및 검증",
+        "C3 제출 API 소유권·응시기간 검증 추가",
+        "C4 보고서 생성/열람 4역할 권한 검증 (checkAttemptAccess)",
+        "C5 답안 800ms debounce 자동저장 + 재개 시 복원 + 저장 후 닫기",
+        "C6 보고서 HTML JSON 주입 이스케이프 (XSS 차단)",
+        "C7 tsc 에러 전량 수정 + start 스크립트 경로 수정 + 데드파일 exclude"
+      ],
+      "verification": "tsc --noEmit 0 errors, build:server 성공, 커밋 없음",
+      "knownIssues": [
+        "build:client 실패 — vite/rollup 네이티브 크래시(0xC0000409). 본 변경과 무관하며 HEAD 원본에서도 동일 재현, 환경/의존성 이슈",
+        "npm start 런타임 기동 실패 — 컴파일된 ESM 상대 import에 .js 확장자가 없어 ERR_MODULE_NOT_FOUND. start 경로는 수정됐으나 별도 후속 작업 필요"
+      ]
+    },
+    {
+      "action": "gap_analysis",
+      "feature": "olga-system-v2",
+      "timestamp": "2026-08-19T07:45:00.000Z",
+      "result": {
+        "matchRate": 75,
+        "iteration": 1,
+        "criticalIssues": 0,
+        "majorIssues": 18
+      },
+      "verdict": "iteration 2 needed (<90%)"
     }
   ]
 }
