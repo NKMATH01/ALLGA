@@ -2,58 +2,181 @@
 @tailwind components;
 @tailwind utilities;
 
-@layer base {
-  :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-    --primary: 210 100% 50%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 210 100% 50%;
-    --radius: 0.5rem;
-  }
+/* ============================================================================
+   올가 미수등 시스템 디자인 토큰 (DESIGN.md 2장)
+   3계층 구조: ① 브랜드 원색 -> ② 시맨틱 -> ③ 기능색(브랜드 독립)
+   컴포넌트는 ②와 ③만 참조한다. ①은 ②를 정의하기 위해서만 존재한다.
+   hex 리터럴은 이 파일의 :root / [data-theme="dark"] 블록에만 존재한다.
+   ============================================================================ */
+:root {
+  /* --- ① 브랜드: 네이비(구조와 권위) --- */
+  --navy-50:  #F4F6FA;
+  --navy-100: #E6EBF4;
+  --navy-200: #C9D4E7;
+  --navy-300: #A3B4D3;
+  --navy-400: #7189B5;
+  --navy-500: #4C6595;
+  --navy-600: #354C78;
+  --navy-700: #27395C;
+  --navy-800: #1B2942;
+  --navy-900: #131E31;
+  --navy-950: #0C1421;
 
-  .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 210 100% 50%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 210 100% 50%;
-  }
+  /* --- ① 브랜드: 브라스(성취와 강조). 화면당 최대 2곳 --- */
+  --brass-300: #E3C88E;
+  --brass-400: #D4B26A;
+  --brass-500: #C09A4E;
+  --brass-600: #A07F3B;
+  --brass-700: #7D622C;
+
+  /* --- ② 시맨틱: 면 --- */
+  --surface:          #FFFFFF;
+  --surface-sunken:   var(--navy-50);
+  --surface-raised:   #FFFFFF;
+  --surface-inverse:  var(--navy-800);
+  --surface-subtle:   var(--navy-100);
+
+  /* --- ② 시맨틱: 글자 --- */
+  --text-primary:     var(--navy-900);
+  --text-secondary:   var(--navy-600);
+  --text-tertiary:    var(--navy-400);
+  --text-on-inverse:  #FFFFFF;
+  --text-on-inverse-muted: var(--navy-200);
+  --text-accent:      var(--brass-700);
+
+  /* --- ② 시맨틱: 선 --- */
+  --border:           var(--navy-200);
+  --border-strong:    var(--navy-300);
+  --border-subtle:    var(--navy-100);
+  --border-inverse:   var(--navy-700);
+
+  /* --- ② 시맨틱: 액션 --- */
+  --action:           var(--navy-800);
+  --action-hover:     var(--navy-700);
+  --action-active:    var(--navy-900);
+  --action-text:      #FFFFFF;
+  --action-subtle:    var(--navy-100);
+  --action-subtle-hover: var(--navy-200);
+  --focus-ring:       var(--navy-500);
+
+  /* --- ② 시맨틱: 강조(브라스) --- */
+  --accent:           var(--brass-500);
+  --accent-strong:    var(--brass-700);
+  --accent-surface:   #FBF6EA;
+
+  /* --- ② 시맨틱: 그림자와 가림막(네이비 틴트, 순검정 금지) --- */
+  --shadow-sm: 0 1px 2px rgba(19, 30, 49, 0.06);
+  --shadow-md: 0 2px 8px rgba(19, 30, 49, 0.08);
+  --shadow-lg: 0 8px 24px rgba(19, 30, 49, 0.12);
+  --overlay:   rgba(19, 30, 49, 0.48);
+
+  /* --- ③ 기능색: 브랜드와 독립. 등급/상태 표시 전용 --- */
+  --fn-success:         #1D7A4C;
+  --fn-success-surface: #E8F4EE;
+  --fn-success-border:  #A8D4BE;
+  --fn-warning:         #8F5A00;
+  --fn-warning-surface: #FBF1DF;
+  --fn-warning-border:  #E0C48A;
+  --fn-error:           #B3261E;
+  --fn-error-surface:   #FCEDEC;
+  --fn-error-border:    #E9B4B0;
+  --fn-info:            #0F6E7A;
+  --fn-info-surface:    #E6F2F4;
+  --fn-info-border:     #9FCBD2;
+
+  /* --- 형태(DESIGN.md 4.3) --- */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius: var(--radius-md);
+}
+
+/* 야간 모드. data-theme 우선, 기존 .dark 클래스도 함께 지원 (DESIGN.md 6.1) */
+[data-theme='dark'],
+.dark {
+  /* 표면 사다리: 캔버스가 가장 어둡고 위로 올라올수록 밝아진다 */
+  --surface:          var(--navy-800);
+  --surface-sunken:   var(--navy-950);
+  --surface-raised:   var(--navy-700);
+  --surface-inverse:  var(--navy-900);
+  --surface-subtle:   var(--navy-700);
+
+  --text-primary:     #EEF2F8;
+  --text-secondary:   var(--navy-200);
+  --text-tertiary:    var(--navy-300);
+  --text-on-inverse:  #EEF2F8;
+  --text-on-inverse-muted: var(--navy-300);
+  --text-accent:      var(--brass-400);
+
+  --border:           var(--navy-600);
+  --border-strong:    var(--navy-500);
+  --border-subtle:    var(--navy-700);
+  --border-inverse:   var(--navy-700);
+
+  --action:           var(--navy-100);
+  --action-hover:     #FFFFFF;
+  --action-active:    var(--navy-200);
+  --action-text:      var(--navy-900);
+  --action-subtle:    var(--navy-700);
+  --action-subtle-hover: var(--navy-600);
+  --focus-ring:       var(--navy-300);
+
+  --accent:           var(--brass-400);
+  --accent-strong:    var(--brass-300);
+  --accent-surface:   #2A2314;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.6);
+  --overlay:   rgba(0, 0, 0, 0.64);
+
+  --fn-success:         #4FBF85;
+  --fn-success-surface: #12301F;
+  --fn-success-border:  #2C6E4A;
+  --fn-warning:         #D9A441;
+  --fn-warning-surface: #33270D;
+  --fn-warning-border:  #7A5C1E;
+  --fn-error:           #F0837C;
+  --fn-error-surface:   #35191A;
+  --fn-error-border:    #7E3B39;
+  --fn-info:            #4FC2CF;
+  --fn-info-surface:    #102E33;
+  --fn-info-border:     #2A6068;
 }
 
 @layer base {
   * {
     @apply border-border;
   }
+
   body {
     @apply bg-background text-foreground;
+    /* DESIGN.md 3.1 한글 우선 스택. @import 없이 로컬 설치본을 쓰고 없으면 자연 강등 */
+    font-family: 'Pretendard Variable', Pretendard, -apple-system, 'Apple SD Gothic Neo',
+      'Noto Sans KR', 'Malgun Gothic', system-ui, sans-serif;
+    /* DESIGN.md 3.3 숫자 세로 정렬 */
+    font-variant-numeric: tabular-nums;
+    /* DESIGN.md 3.4 한글 조판 */
+    word-break: keep-all;
+    overflow-wrap: anywhere;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* DESIGN.md 5.1 포커스는 링이 아니라 아웃라인으로 통일 */
+  :focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+  }
+}
+
+/* DESIGN.md 8.3 감소 모션. 자동 애니메이션이 없으므로 hover 전이만 제거된다 */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

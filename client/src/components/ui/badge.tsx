@@ -3,18 +3,24 @@ import { cva, type VariantProps } from "class-variance-authority"
 
 import { cn } from "../../lib/utils"
 
+/*
+ * DESIGN.md 5.3 뱃지 문법
+ *   구조는 항상 면(-surface) + 1px 테두리(-border) + 글자(기본색) 3종 세트.
+ *   원색 배경에 흰 글자를 쓰지 않는다. 반경은 pill 이 아니라 --radius-sm.
+ *   등급 뱃지는 기능 계층만 사용한다 (DESIGN.md 2.4).
+ */
 const badgeVariants = cva(
-  "inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
+  "inline-flex items-center rounded-sm border px-2 py-0.5 text-xs font-semibold transition-colors duration-150 ease-out",
   {
     variants: {
       variant: {
         default:
-          "border-transparent bg-primary text-primary-foreground hover:bg-primary/80",
+          "border-line bg-surface-subtle text-ink",
         secondary:
-          "border-transparent bg-secondary text-secondary-foreground hover:bg-secondary/80",
+          "border-line-subtle bg-surface-subtle text-ink-secondary",
         destructive:
-          "border-transparent bg-destructive text-destructive-foreground hover:bg-destructive/80",
-        outline: "text-foreground",
+          "border-fn-error-border bg-fn-error-surface text-fn-error",
+        outline: "border-line bg-transparent text-ink",
       },
     },
     defaultVariants: {

@@ -1,11 +1,16 @@
 import * as React from 'react';
 import { cn } from '../../lib/utils';
 
+/*
+ * DESIGN.md 4.4 표면 위계
+ *   카드는 1px 테두리로 구분하고 그림자는 거의 없게 둔다.
+ *   테두리와 그림자를 둘 다 강하게 쓰지 않는다.
+ */
 const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
   ({ className, ...props }, ref) => (
     <div
       ref={ref}
-      className={cn('rounded-lg border bg-card text-card-foreground shadow-sm', className)}
+      className={cn('rounded-md border border-line bg-surface text-ink shadow-sm', className)}
       {...props}
     />
   )
@@ -23,7 +28,7 @@ const CardTitle = React.forwardRef<HTMLParagraphElement, React.HTMLAttributes<HT
   ({ className, ...props }, ref) => (
     <h3
       ref={ref}
-      className={cn('text-2xl font-semibold leading-none tracking-tight', className)}
+      className={cn('text-xl font-semibold leading-tight tracking-[-0.01em] text-ink', className)}
       {...props}
     />
   )
@@ -34,7 +39,7 @@ const CardDescription = React.forwardRef<HTMLParagraphElement, React.HTMLAttribu
   ({ className, ...props }, ref) => (
     <p
       ref={ref}
-      className={cn('text-sm text-muted-foreground', className)}
+      className={cn('text-sm text-ink-secondary', className)}
       {...props}
     />
   )

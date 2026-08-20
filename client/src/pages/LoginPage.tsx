@@ -30,26 +30,26 @@ export default function LoginPage() {
     loginMutation.mutate({ username, password, userType: userType || undefined });
   };
 
+  /*
+   * DESIGN.md 9.2 매핑 적용 (오렌지레드 -> 네이비 체계)
+   *   배경 그라디언트와 pulse 글로우 원은 제거 (1.4 그라디언트 금지, 8.2 자동 애니메이션 금지)
+   *   로고 타일과 주 버튼은 --surface-inverse / --action 네이비로 통합
+   *   브라스 사용 0곳. 로그인 화면에는 강조할 성취가 없으므로 브라스를 쓰지 않는다 (1.2)
+   */
   return (
-    <div className="flex min-h-screen items-center justify-center p-4 bg-gradient-to-br from-orange-400 via-red-500 to-pink-500 relative overflow-hidden">
-      {/* Animated background circles */}
-      <div className="absolute top-0 left-0 w-full h-full overflow-hidden">
-        <div className="absolute -top-40 -left-40 w-80 h-80 bg-white/10 rounded-full blur-3xl animate-pulse"></div>
-        <div className="absolute -bottom-40 -right-40 w-96 h-96 bg-white/10 rounded-full blur-3xl animate-pulse delay-1000"></div>
-      </div>
-
-      <Card className="w-full max-w-md shadow-2xl border-0 relative z-10 backdrop-blur-sm bg-white/95">
+    <div className="flex min-h-[100dvh] items-center justify-center bg-surface-sunken p-4">
+      <Card className="w-full max-w-md shadow-lg">
         <CardHeader className="space-y-4 pb-8">
           <div className="flex justify-center">
-            <div className="w-20 h-20 bg-gradient-to-br from-orange-500 to-red-600 rounded-2xl flex items-center justify-center shadow-lg transform hover:scale-110 transition-transform duration-300">
-              <GraduationCap className="w-12 h-12 text-white" />
+            <div className="flex h-16 w-16 items-center justify-center rounded-md bg-surface-inverse">
+              <GraduationCap className="h-9 w-9 text-ink-inverse" strokeWidth={1.5} />
             </div>
           </div>
           <CardTitle className="text-center">
-            <div className="text-3xl font-bold bg-gradient-to-r from-orange-600 to-red-600 bg-clip-text text-transparent">
+            <div className="text-2xl font-bold tracking-[-0.02em] text-ink">
               올가 미수등 시스템
             </div>
-            <div className="mt-2 text-sm font-normal text-gray-500">
+            <div className="mt-2 text-sm font-normal text-ink-tertiary">
               ALLGA Academy Management System
             </div>
           </CardTitle>
@@ -57,31 +57,40 @@ export default function LoginPage() {
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-5">
             <div className="space-y-2">
-              <label className="text-sm font-semibold text-gray-700">아이디</label>
+              <label htmlFor="login-username" className="block text-sm font-semibold text-ink">
+                아이디
+              </label>
               <Input
+                id="login-username"
                 type="text"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 placeholder="아이디를 입력하세요"
                 required
-                className="h-11 border-gray-200 focus:border-orange-500 focus:ring-orange-500"
               />
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-semibold text-gray-700">비밀번호</label>
+              <label htmlFor="login-password" className="block text-sm font-semibold text-ink">
+                비밀번호
+              </label>
               <Input
+                id="login-password"
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="비밀번호를 입력하세요"
                 required
-                className="h-11 border-gray-200 focus:border-orange-500 focus:ring-orange-500"
               />
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-semibold text-gray-700">계정 유형 (선택사항)</label>
+              <label htmlFor="login-usertype" className="block text-sm font-semibold text-ink">
+                계정 유형 (선택)
+              </label>
+              {/* 네이티브 select 는 브라우저별 포커스 처리가 가장 불안정하므로
+                  index.css 의 전역 :focus-visible 에 기대지 않고 DESIGN.md 5.1 을 명시한다 */}
               <select
-                className="flex h-11 w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm focus:border-orange-500 focus:ring-2 focus:ring-orange-500 focus:ring-offset-0 transition-all"
+                id="login-usertype"
+                className="flex h-10 w-full rounded-sm border border-line-strong bg-surface px-3 text-sm text-ink transition-colors duration-150 ease-out focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                 value={userType}
                 onChange={(e) => setUserType(e.target.value)}
               >
@@ -92,21 +101,27 @@ export default function LoginPage() {
                 <option value="parent">학부모</option>
               </select>
             </div>
-            <Button
-              type="submit"
-              className="w-full h-11 bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700 text-white font-semibold shadow-lg hover:shadow-xl transform hover:scale-[1.02] transition-all duration-200"
-              disabled={loginMutation.isPending}
-            >
-              <LogIn className="w-4 h-4 mr-2" />
+            <Button type="submit" className="h-12 w-full" disabled={loginMutation.isPending}>
+              <LogIn className="mr-2 h-4 w-4" strokeWidth={1.5} />
               {loginMutation.isPending ? '로그인 중...' : '로그인'}
             </Button>
           </form>
           {import.meta.env.DEV && (
-            <div className="mt-8 p-4 bg-gray-50 rounded-lg border border-gray-100">
-              <p className="text-xs font-semibold text-gray-700 mb-2">테스트 계정 (개발 환경)</p>
-              <div className="space-y-1 text-xs text-gray-600">
-                <p>👨‍💼 관리자: <span className="font-mono bg-white px-2 py-0.5 rounded">allga / allga</span></p>
-                <p>🏢 지점장: <span className="font-mono bg-white px-2 py-0.5 rounded">allga1 / allga1</span></p>
+            <div className="mt-8 rounded-md border border-line bg-surface-subtle p-4">
+              <p className="mb-2 text-xs font-semibold text-ink">테스트 계정 (개발 환경)</p>
+              <div className="space-y-1.5 text-xs text-ink-secondary">
+                <p>
+                  관리자
+                  <span className="ml-2 rounded-sm border border-line bg-surface px-2 py-0.5 font-mono text-ink">
+                    allga / allga
+                  </span>
+                </p>
+                <p>
+                  지점장
+                  <span className="ml-2 rounded-sm border border-line bg-surface px-2 py-0.5 font-mono text-ink">
+                    allga1 / allga1
+                  </span>
+                </p>
               </div>
             </div>
           )}

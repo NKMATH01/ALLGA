@@ -16,6 +16,17 @@ interface User {
 
 type MenuSection = 'dashboard' | 'students' | 'classes' | 'exams' | 'distributions' | 'reports';
 
+// DESIGN.md 2.4 등급 매핑. 1-2 우수 / 3-4 양호 / 5-6 보통 / 7-9 보완 필요.
+// 등급은 시스템 오류가 아니므로 낮은 등급에도 --fn-error 를 쓰지 않는다.
+const gradeBadgeClass = (grade?: number | string | null): string => {
+  const g = Number(grade);
+  if (!g || Number.isNaN(g)) return 'border-line bg-surface-subtle text-ink-secondary';
+  if (g <= 2) return 'border-fn-success-border bg-fn-success-surface text-fn-success';
+  if (g <= 4) return 'border-fn-info-border bg-fn-info-surface text-fn-info';
+  if (g <= 6) return 'border-line bg-surface-subtle text-ink-secondary';
+  return 'border-fn-warning-border bg-fn-warning-surface text-fn-warning';
+};
+
 export default function BranchDashboard({ user }: { user: User }) {
   const queryClient = useQueryClient();
   const [activeSection, setActiveSection] = useState<MenuSection>('dashboard');
@@ -408,120 +419,101 @@ export default function BranchDashboard({ user }: { user: User }) {
 
   const renderDashboard = () => (
     <>
-      {/* Stats Cards */}
-      <div className="grid gap-6 md:grid-cols-5 mb-8">
+      {/*
+        통계 카드: DESIGN.md 5.2. 아이콘 타일과 장식 원을 제거하고 라벨 / 수치 / 각주 3단으로.
+        선택 상태는 확대(scale)가 아니라 테두리와 면으로 표시한다 (8.2 자동 애니메이션 금지).
+        카드가 4개이므로 그리드도 4열로 맞춘다 (기존 5열은 빈 칸이 남았다).
+        브라스 0곳: 관리 화면에는 강조할 성취 요소가 없다 (DESIGN.md 1.2).
+      */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-8">
         <Card
-          className={`border-0 shadow-lg hover:shadow-xl transition-all duration-300 bg-gradient-to-br from-blue-500 to-indigo-600 text-white overflow-hidden relative group cursor-pointer ${
-            selectedDashboardView === 'students' ? 'ring-4 ring-blue-300 scale-105' : ''
+          className={`cursor-pointer transition-colors duration-150 ease-out hover:border-line-strong ${
+            selectedDashboardView === 'students' ? 'border-line-strong bg-surface-subtle' : ''
           }`}
           onClick={() => setSelectedDashboardView(selectedDashboardView === 'students' ? null : 'students')}
         >
-          <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-full -mr-12 -mt-12 group-hover:scale-150 transition-transform duration-500"></div>
-          <CardHeader className="pb-2">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-sm font-medium text-blue-100">총 학생 수</CardTitle>
-              <Users className="w-8 h-8 text-white/80" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-4xl font-bold">{students?.length || 0}</div>
-            <p className="text-xs text-blue-100 mt-2">등록된 학생 • 클릭하여 보기</p>
+          <CardContent className="p-5 pt-5">
+            <p className="text-xs font-semibold tracking-[0.08em] text-ink-tertiary">총 학생 수</p>
+            <div className="mt-3 text-4xl font-bold leading-none tracking-[-0.03em] text-ink">{students?.length || 0}</div>
+            <p className="text-xs text-ink-secondary mt-3">등록된 학생. 눌러서 목록 보기</p>
           </CardContent>
         </Card>
 
-        <Card className="border-0 shadow-lg hover:shadow-xl transition-all duration-300 bg-gradient-to-br from-purple-500 to-pink-600 text-white overflow-hidden relative group cursor-pointer">
-          <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-full -mr-12 -mt-12 group-hover:scale-150 transition-transform duration-500"></div>
-          <CardHeader className="pb-2">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-sm font-medium text-purple-100">보고서 완료</CardTitle>
-              <Sparkles className="w-8 h-8 text-white/80" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-4xl font-bold">
+        <Card>
+          <CardContent className="p-5 pt-5">
+            <p className="text-xs font-semibold tracking-[0.08em] text-ink-tertiary">보고서 완료</p>
+            <div className="mt-3 text-4xl font-bold leading-none tracking-[-0.03em] text-ink">
               {allDistributionStudents?.reduce((total: number, distData: any) => {
                 const studentsWithReports = distData.students?.filter((s: any) => s.hasReport) || [];
                 return total + studentsWithReports.length;
               }, 0) || 0}
             </div>
-            <p className="text-xs text-purple-100 mt-2">AI 분석 완료 학생</p>
+            <p className="text-xs text-ink-secondary mt-3">AI 분석 완료 학생</p>
           </CardContent>
         </Card>
 
         <Card
-          className={`border-0 shadow-lg hover:shadow-xl transition-all duration-300 bg-gradient-to-br from-green-500 to-emerald-600 text-white overflow-hidden relative group cursor-pointer ${
-            selectedDashboardView === 'classes' ? 'ring-4 ring-green-300 scale-105' : ''
+          className={`cursor-pointer transition-colors duration-150 ease-out hover:border-line-strong ${
+            selectedDashboardView === 'classes' ? 'border-line-strong bg-surface-subtle' : ''
           }`}
           onClick={() => setSelectedDashboardView(selectedDashboardView === 'classes' ? null : 'classes')}
         >
-          <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-full -mr-12 -mt-12 group-hover:scale-150 transition-transform duration-500"></div>
-          <CardHeader className="pb-2">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-sm font-medium text-green-100">총 반 수</CardTitle>
-              <Home className="w-8 h-8 text-white/80" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-4xl font-bold">{classes?.length || 0}</div>
-            <p className="text-xs text-green-100 mt-2">운영 중인 반 • 클릭하여 보기</p>
+          <CardContent className="p-5 pt-5">
+            <p className="text-xs font-semibold tracking-[0.08em] text-ink-tertiary">총 반 수</p>
+            <div className="mt-3 text-4xl font-bold leading-none tracking-[-0.03em] text-ink">{classes?.length || 0}</div>
+            <p className="text-xs text-ink-secondary mt-3">운영 중인 반. 눌러서 목록 보기</p>
           </CardContent>
         </Card>
 
         <Card
-          className={`border-0 shadow-lg hover:shadow-xl transition-all duration-300 bg-gradient-to-br from-teal-500 to-cyan-600 text-white overflow-hidden relative group cursor-pointer ${
-            selectedDashboardView === 'exam-attempts' ? 'ring-4 ring-teal-300 scale-105' : ''
+          className={`cursor-pointer transition-colors duration-150 ease-out hover:border-line-strong ${
+            selectedDashboardView === 'exam-attempts' ? 'border-line-strong bg-surface-subtle' : ''
           }`}
           onClick={() => setSelectedDashboardView(selectedDashboardView === 'exam-attempts' ? null : 'exam-attempts')}
         >
-          <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-full -mr-12 -mt-12 group-hover:scale-150 transition-transform duration-500"></div>
-          <CardHeader className="pb-2">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-sm font-medium text-teal-100">시험</CardTitle>
-              <BarChart3 className="w-8 h-8 text-white/80" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-4xl font-bold">
+          <CardContent className="p-5 pt-5">
+            <p className="text-xs font-semibold tracking-[0.08em] text-ink-tertiary">시험</p>
+            <div className="mt-3 text-4xl font-bold leading-none tracking-[-0.03em] text-ink">
               {allDistributionStudents?.reduce((total: number, distData: any) => {
                 const studentsWithAttempts = distData.students?.filter((s: any) => s.hasAttempt) || [];
                 return total + studentsWithAttempts.length;
               }, 0) || 0}
             </div>
-            <p className="text-xs text-teal-100 mt-2">응시/채점 학생 • 클릭하여 보기</p>
+            <p className="text-xs text-ink-secondary mt-3">응시와 채점 학생. 눌러서 목록 보기</p>
           </CardContent>
         </Card>
       </div>
 
       {/* 상세 정보 표 */}
       {selectedDashboardView === 'students' && (
-        <Card className="border-0 shadow-xl bg-white/90 backdrop-blur-sm mb-8">
-          <CardHeader className="border-b border-gray-100 bg-gradient-to-r from-blue-50 to-indigo-50">
-            <CardTitle className="text-xl font-bold text-gray-800 flex items-center gap-2">
-              <Users className="w-5 h-5 text-blue-600" />
+        <Card className="border-0 shadow-xl bg-surface mb-8">
+          <CardHeader className="border-b border-line-subtle bg-surface-subtle">
+            <CardTitle className="text-xl font-bold text-ink flex items-center gap-2">
+              <Users className="w-5 h-5 text-ink-secondary" />
               학생 목록
             </CardTitle>
           </CardHeader>
           <CardContent className="p-6">
             {students && students.length > 0 ? (
               <div className="overflow-x-auto">
-                <table className="w-full">
+                <table className="w-full min-w-[640px] text-sm [&_td]:whitespace-nowrap [&_thead_th:first-child]:sticky [&_thead_th:first-child]:left-0 [&_thead_th:first-child]:z-10 [&_tbody_td:first-child]:sticky [&_tbody_td:first-child]:left-0 [&_tbody_td:first-child]:bg-surface">
                   <thead>
-                    <tr className="border-b-2 border-blue-200">
-                      <th className="text-left p-3 text-sm font-semibold text-gray-700">이름</th>
-                      <th className="text-left p-3 text-sm font-semibold text-gray-700">학년</th>
-                      <th className="text-left p-3 text-sm font-semibold text-gray-700">학교</th>
-                      <th className="text-left p-3 text-sm font-semibold text-gray-700">연락처</th>
-                      <th className="text-left p-3 text-sm font-semibold text-gray-700">학부모 연락처</th>
+                    <tr className="border-b border-line-strong">
+                      <th className="text-left px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">이름</th>
+                      <th className="text-left px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">학년</th>
+                      <th className="text-left px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">학교</th>
+                      <th className="text-left px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">연락처</th>
+                      <th className="text-left px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">학부모 연락처</th>
                     </tr>
                   </thead>
                   <tbody>
                     {students.map((student: any) => (
-                      <tr key={student.id} className="border-b border-gray-100 hover:bg-blue-50 transition-colors">
-                        <td className="p-3 font-medium text-gray-900">{student.user?.name}</td>
-                        <td className="p-3 text-gray-700">{student.grade || '-'}</td>
-                        <td className="p-3 text-gray-700">{student.school || '-'}</td>
-                        <td className="p-3 text-gray-700">{student.user?.phone || '-'}</td>
-                        <td className="p-3 text-gray-700">{student.parentPhone || '-'}</td>
+                      <tr key={student.id} className="border-b border-line-subtle hover:bg-surface-subtle transition-colors duration-150 ease-out">
+                        <td className="px-4 py-3 font-medium text-ink">{student.user?.name}</td>
+                        <td className="px-4 py-3 text-ink">{student.grade || '-'}</td>
+                        <td className="px-4 py-3 text-ink">{student.school || '-'}</td>
+                        <td className="px-4 py-3 text-ink">{student.user?.phone || '-'}</td>
+                        <td className="px-4 py-3 text-ink">{student.parentPhone || '-'}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -529,8 +521,8 @@ export default function BranchDashboard({ user }: { user: User }) {
               </div>
             ) : (
               <div className="text-center py-12">
-                <Users className="w-16 h-16 mx-auto text-gray-300 mb-4" />
-                <p className="text-gray-500">등록된 학생이 없습니다.</p>
+                <Users className="w-16 h-16 mx-auto text-ink-tertiary mb-4" />
+                <p className="text-ink-secondary">등록된 학생이 없습니다.</p>
               </div>
             )}
           </CardContent>
@@ -538,32 +530,32 @@ export default function BranchDashboard({ user }: { user: User }) {
       )}
 
       {selectedDashboardView === 'classes' && (
-        <Card className="border-0 shadow-xl bg-white/90 backdrop-blur-sm mb-8">
-          <CardHeader className="border-b border-gray-100 bg-gradient-to-r from-green-50 to-emerald-50">
-            <CardTitle className="text-xl font-bold text-gray-800 flex items-center gap-2">
-              <Home className="w-5 h-5 text-green-600" />
+        <Card className="border-0 shadow-xl bg-surface mb-8">
+          <CardHeader className="border-b border-line-subtle bg-surface-subtle">
+            <CardTitle className="text-xl font-bold text-ink flex items-center gap-2">
+              <Home className="w-5 h-5 text-fn-success" />
               반 목록
             </CardTitle>
           </CardHeader>
           <CardContent className="p-6">
             {classes && classes.length > 0 ? (
               <div className="overflow-x-auto">
-                <table className="w-full">
+                <table className="w-full min-w-[640px] text-sm [&_td]:whitespace-nowrap [&_thead_th:first-child]:sticky [&_thead_th:first-child]:left-0 [&_thead_th:first-child]:z-10 [&_tbody_td:first-child]:sticky [&_tbody_td:first-child]:left-0 [&_tbody_td:first-child]:bg-surface">
                   <thead>
-                    <tr className="border-b-2 border-green-200">
-                      <th className="text-left p-3 text-sm font-semibold text-gray-700">반 이름</th>
-                      <th className="text-left p-3 text-sm font-semibold text-gray-700">학년</th>
-                      <th className="text-left p-3 text-sm font-semibold text-gray-700">설명</th>
-                      <th className="text-left p-3 text-sm font-semibold text-gray-700">생성일</th>
+                    <tr className="border-b border-line-strong">
+                      <th className="text-left px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">반 이름</th>
+                      <th className="text-left px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">학년</th>
+                      <th className="text-left px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">설명</th>
+                      <th className="text-left px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">생성일</th>
                     </tr>
                   </thead>
                   <tbody>
                     {classes.map((cls: any) => (
-                      <tr key={cls.id} className="border-b border-gray-100 hover:bg-green-50 transition-colors">
-                        <td className="p-3 font-medium text-gray-900">{cls.name}</td>
-                        <td className="p-3 text-gray-700">{cls.grade || '-'}</td>
-                        <td className="p-3 text-gray-700">{cls.description || '-'}</td>
-                        <td className="p-3 text-gray-700">{new Date(cls.createdAt).toLocaleDateString('ko-KR')}</td>
+                      <tr key={cls.id} className="border-b border-line-subtle hover:bg-surface-subtle transition-colors duration-150 ease-out">
+                        <td className="px-4 py-3 font-medium text-ink">{cls.name}</td>
+                        <td className="px-4 py-3 text-ink">{cls.grade || '-'}</td>
+                        <td className="px-4 py-3 text-ink">{cls.description || '-'}</td>
+                        <td className="px-4 py-3 text-ink">{new Date(cls.createdAt).toLocaleDateString('ko-KR')}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -571,8 +563,8 @@ export default function BranchDashboard({ user }: { user: User }) {
               </div>
             ) : (
               <div className="text-center py-12">
-                <Home className="w-16 h-16 mx-auto text-gray-300 mb-4" />
-                <p className="text-gray-500">등록된 반이 없습니다.</p>
+                <Home className="w-16 h-16 mx-auto text-ink-tertiary mb-4" />
+                <p className="text-ink-secondary">등록된 반이 없습니다.</p>
               </div>
             )}
           </CardContent>
@@ -580,10 +572,10 @@ export default function BranchDashboard({ user }: { user: User }) {
       )}
 
       {selectedDashboardView === 'exam-attempts' && (
-        <Card className="border-0 shadow-xl bg-white/90 backdrop-blur-sm mb-8">
-          <CardHeader className="border-b border-gray-100 bg-gradient-to-r from-teal-50 to-cyan-50">
-            <CardTitle className="text-xl font-bold text-gray-800 flex items-center gap-2">
-              <BarChart3 className="w-5 h-5 text-teal-600" />
+        <Card className="border-0 shadow-xl bg-surface mb-8">
+          <CardHeader className="border-b border-line-subtle bg-surface-subtle">
+            <CardTitle className="text-xl font-bold text-ink flex items-center gap-2">
+              <BarChart3 className="w-5 h-5 text-fn-info" />
               시험 응시 및 채점 학생
             </CardTitle>
           </CardHeader>
@@ -598,65 +590,65 @@ export default function BranchDashboard({ user }: { user: User }) {
                   if (allStudents.length === 0) return null;
 
                   return (
-                    <div key={distData.distribution.id} className="border-2 border-teal-100 rounded-lg p-4">
+                    <div key={distData.distribution.id} className="border border-line rounded-md p-4">
                       <div className="flex items-center justify-between mb-4">
                         <div>
-                          <h3 className="text-lg font-bold text-gray-800">{distData.exam?.title}</h3>
-                          <p className="text-sm text-gray-600">
+                          <h3 className="text-lg font-bold text-ink">{distData.exam?.title}</h3>
+                          <p className="text-sm text-ink-secondary">
                             {distData.exam?.subject} • {distData.exam?.totalQuestions}문항 • {distData.exam?.totalScore}점
                           </p>
                         </div>
                         <div className="text-right">
-                          <span className="text-sm text-gray-500">배부 학생</span>
-                          <div className="text-2xl font-bold text-teal-600">{allStudents.length}명</div>
+                          <span className="text-sm text-ink-secondary">배부 학생</span>
+                          <div className="text-2xl font-bold text-fn-info">{allStudents.length}명</div>
                         </div>
                       </div>
 
                       <div className="overflow-x-auto">
-                        <table className="w-full">
+                        <table className="w-full min-w-[640px] text-sm [&_td]:whitespace-nowrap [&_thead_th:first-child]:sticky [&_thead_th:first-child]:left-0 [&_thead_th:first-child]:z-10 [&_tbody_td:first-child]:sticky [&_tbody_td:first-child]:left-0 [&_tbody_td:first-child]:bg-surface">
                           <thead>
-                            <tr className="border-b border-teal-200">
-                              <th className="text-left p-2 text-sm font-semibold text-gray-700">학생</th>
-                              <th className="text-center p-2 text-sm font-semibold text-gray-700">점수</th>
-                              <th className="text-center p-2 text-sm font-semibold text-gray-700">등급</th>
-                              <th className="text-center p-2 text-sm font-semibold text-gray-700">상태</th>
-                              <th className="text-center p-2 text-sm font-semibold text-gray-700">작업</th>
+                            <tr className="border-b border-line-subtle">
+                              <th className="text-left px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">학생</th>
+                              <th className="text-center px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">점수</th>
+                              <th className="text-center px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">등급</th>
+                              <th className="text-center px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">상태</th>
+                              <th className="text-center px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">작업</th>
                             </tr>
                           </thead>
                           <tbody>
                             {allStudents.map((student: any) => (
-                              <tr key={student.studentId} className="border-b border-gray-100 hover:bg-teal-50 transition-colors">
-                                <td className="p-2 font-medium text-gray-900">{student.studentName}</td>
-                                <td className="p-2 text-center text-gray-700">
+                              <tr key={student.studentId} className="border-b border-line-subtle hover:bg-surface-subtle transition-colors duration-150 ease-out">
+                                <td className="px-4 py-3 font-medium text-ink">{student.studentName}</td>
+                                <td className="px-4 py-3 text-center text-ink">
                                   {student.hasAttempt ? `${student.score || 0} / ${student.maxScore || 0}` : '- / -'}
                                 </td>
-                                <td className="p-2 text-center">
+                                <td className="px-4 py-3 text-center">
                                   {student.hasAttempt && student.grade ? (
-                                    <span className="inline-block px-2 py-1 bg-teal-100 text-teal-700 rounded text-sm font-medium">
+                                    <span className={`inline-block rounded-sm border px-2 py-0.5 text-xs font-semibold ${gradeBadgeClass(student.grade)}`}>
                                       {student.grade}등급
                                     </span>
                                   ) : (
                                     '-'
                                   )}
                                 </td>
-                                <td className="p-2 text-center">
+                                <td className="px-4 py-3 text-center">
                                   {student.hasAttempt ? (
                                     student.isSubmitted ? (
-                                      <span className="inline-block px-2 py-1 bg-green-100 text-green-700 rounded text-xs font-medium">
+                                      <span className="inline-block px-2 py-1 bg-fn-success-surface text-fn-success rounded text-xs font-medium">
                                         제출 완료
                                       </span>
                                     ) : (
-                                      <span className="inline-block px-2 py-1 bg-orange-100 text-orange-700 rounded text-xs font-medium">
+                                      <span className="inline-block px-2 py-1 bg-fn-warning-surface text-fn-warning rounded text-xs font-medium">
                                         작성 중
                                       </span>
                                     )
                                   ) : (
-                                    <span className="inline-block px-2 py-1 bg-gray-100 text-gray-600 rounded text-xs font-medium">
+                                    <span className="inline-block px-2 py-1 bg-surface-subtle text-ink-secondary rounded text-xs font-medium">
                                       미응시
                                     </span>
                                   )}
                                 </td>
-                                <td className="p-2">
+                                <td className="px-4 py-3">
                                   <div className="flex gap-1 justify-center flex-wrap">
                                     {student.hasAttempt ? (
                                       <>
@@ -687,7 +679,7 @@ export default function BranchDashboard({ user }: { user: User }) {
                                               alert(error.response?.data?.message || '답안 정보를 불러오는데 실패했습니다.');
                                             }
                                           }}
-                                          className="border-blue-300 text-blue-600 hover:bg-blue-50"
+                                          className="border-line text-ink-secondary hover:bg-surface-subtle"
                                         >
                                           <Edit className="w-3 h-3 mr-1" />
                                           수정
@@ -711,7 +703,7 @@ export default function BranchDashboard({ user }: { user: User }) {
                                                 });
                                             }
                                           }}
-                                          className="border-red-300 text-red-600 hover:bg-red-50"
+                                          className="border-fn-error-border text-fn-error hover:bg-fn-error-surface"
                                         >
                                           <Trash2 className="w-3 h-3 mr-1" />
                                           삭제
@@ -737,8 +729,8 @@ export default function BranchDashboard({ user }: { user: User }) {
                                           disabled={generateReportMutation.isPending}
                                           className={
                                             student.hasReport
-                                              ? 'border-purple-300 text-purple-600 hover:bg-purple-50'
-                                              : 'border-indigo-300 text-indigo-600 hover:bg-indigo-50'
+                                              ? 'border-line text-ink-secondary hover:bg-surface-subtle'
+                                              : 'border-line text-ink-secondary hover:bg-surface-subtle'
                                           }
                                         >
                                           <Sparkles className="w-3 h-3 mr-1" />
@@ -771,7 +763,7 @@ export default function BranchDashboard({ user }: { user: User }) {
 
                                             console.log('모달 열림 상태 설정 완료');
                                           }}
-                                          className="border-green-300 text-green-600 hover:bg-green-50"
+                                          className="border-line-strong text-ink hover:bg-surface-subtle"
                                         >
                                           <Plus className="w-3 h-3 mr-1" />
                                           답안 입력
@@ -791,8 +783,8 @@ export default function BranchDashboard({ user }: { user: User }) {
               </div>
             ) : (
               <div className="text-center py-12">
-                <BarChart3 className="w-16 h-16 mx-auto text-gray-300 mb-4" />
-                <p className="text-gray-500">배부된 시험이 없습니다.</p>
+                <BarChart3 className="w-16 h-16 mx-auto text-ink-tertiary mb-4" />
+                <p className="text-ink-secondary">배부된 시험이 없습니다.</p>
               </div>
             )}
           </CardContent>
@@ -801,10 +793,10 @@ export default function BranchDashboard({ user }: { user: User }) {
 
       {/* 최근 활동 - 시험 응시 학생 */}
       {!selectedDashboardView && (
-        <Card className="border-0 shadow-xl bg-white/90 backdrop-blur-sm">
-          <CardHeader className="border-b border-gray-100 bg-gradient-to-r from-blue-50 to-indigo-50">
-            <CardTitle className="text-xl font-bold text-gray-800 flex items-center gap-2">
-              <BarChart3 className="w-5 h-5 text-blue-600" />
+        <Card className="border-0 shadow-xl bg-surface">
+          <CardHeader className="border-b border-line-subtle bg-surface-subtle">
+            <CardTitle className="text-xl font-bold text-ink flex items-center gap-2">
+              <BarChart3 className="w-5 h-5 text-ink-secondary" />
               시험 응시 학생
             </CardTitle>
           </CardHeader>
@@ -817,59 +809,59 @@ export default function BranchDashboard({ user }: { user: User }) {
                   if (studentsWithAttempts.length === 0) return null;
 
                   return (
-                    <div key={distData.distribution.id} className="border-2 border-indigo-100 rounded-lg p-4">
+                    <div key={distData.distribution.id} className="border-2 border-line rounded-lg p-4">
                       <div className="flex items-center justify-between mb-4">
                         <div>
-                          <h3 className="text-lg font-bold text-gray-800">{distData.exam?.title}</h3>
-                          <p className="text-sm text-gray-600">
+                          <h3 className="text-lg font-bold text-ink">{distData.exam?.title}</h3>
+                          <p className="text-sm text-ink-secondary">
                             {distData.exam?.subject} • {distData.exam?.totalQuestions}문항 • {distData.exam?.totalScore}점
                           </p>
                         </div>
                         <div className="text-right">
-                          <span className="text-sm text-gray-500">응시 학생</span>
-                          <div className="text-2xl font-bold text-indigo-600">{studentsWithAttempts.length}명</div>
+                          <span className="text-sm text-ink-secondary">응시 학생</span>
+                          <div className="text-2xl font-bold text-ink-secondary">{studentsWithAttempts.length}명</div>
                         </div>
                       </div>
 
                       <div className="overflow-x-auto">
-                        <table className="w-full">
+                        <table className="w-full min-w-[640px] text-sm [&_td]:whitespace-nowrap [&_thead_th:first-child]:sticky [&_thead_th:first-child]:left-0 [&_thead_th:first-child]:z-10 [&_tbody_td:first-child]:sticky [&_tbody_td:first-child]:left-0 [&_tbody_td:first-child]:bg-surface">
                           <thead>
-                            <tr className="border-b border-indigo-200">
-                              <th className="text-left p-2 text-sm font-semibold text-gray-700">학생</th>
-                              <th className="text-center p-2 text-sm font-semibold text-gray-700">점수</th>
-                              <th className="text-center p-2 text-sm font-semibold text-gray-700">등급</th>
-                              <th className="text-center p-2 text-sm font-semibold text-gray-700">상태</th>
-                              <th className="text-center p-2 text-sm font-semibold text-gray-700">작업</th>
+                            <tr className="border-b border-line">
+                              <th className="text-left px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">학생</th>
+                              <th className="text-center px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">점수</th>
+                              <th className="text-center px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">등급</th>
+                              <th className="text-center px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">상태</th>
+                              <th className="text-center px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">작업</th>
                             </tr>
                           </thead>
                           <tbody>
                             {studentsWithAttempts.map((student: any) => (
-                              <tr key={student.studentId} className="border-b border-gray-100 hover:bg-indigo-50 transition-colors">
-                                <td className="p-2 font-medium text-gray-900">{student.studentName}</td>
-                                <td className="p-2 text-center text-gray-700">
+                              <tr key={student.studentId} className="border-b border-line-subtle hover:bg-surface-subtle transition-colors duration-150 ease-out">
+                                <td className="px-4 py-3 font-medium text-ink">{student.studentName}</td>
+                                <td className="px-4 py-3 text-center text-ink">
                                   {student.score || 0} / {student.maxScore || 0}
                                 </td>
-                                <td className="p-2 text-center">
+                                <td className="px-4 py-3 text-center">
                                   {student.grade ? (
-                                    <span className="inline-block px-2 py-1 bg-indigo-100 text-indigo-700 rounded text-sm font-medium">
+                                    <span className={`inline-block rounded-sm border px-2 py-0.5 text-xs font-semibold ${gradeBadgeClass(student.grade)}`}>
                                       {student.grade}등급
                                     </span>
                                   ) : (
                                     '-'
                                   )}
                                 </td>
-                                <td className="p-2 text-center">
+                                <td className="px-4 py-3 text-center">
                                   {student.isSubmitted ? (
-                                    <span className="inline-block px-2 py-1 bg-green-100 text-green-700 rounded text-xs font-medium">
+                                    <span className="inline-block px-2 py-1 bg-fn-success-surface text-fn-success rounded text-xs font-medium">
                                       제출 완료
                                     </span>
                                   ) : (
-                                    <span className="inline-block px-2 py-1 bg-orange-100 text-orange-700 rounded text-xs font-medium">
+                                    <span className="inline-block px-2 py-1 bg-fn-warning-surface text-fn-warning rounded text-xs font-medium">
                                       작성 중
                                     </span>
                                   )}
                                 </td>
-                                <td className="p-2">
+                                <td className="px-4 py-3">
                                   <div className="flex gap-1 justify-center flex-wrap">
                                     {/* 수정 버튼 */}
                                     <Button
@@ -897,7 +889,7 @@ export default function BranchDashboard({ user }: { user: User }) {
                                           alert(error.response?.data?.message || '답안 정보를 불러오는데 실패했습니다.');
                                         }
                                       }}
-                                      className="border-blue-300 text-blue-600 hover:bg-blue-50"
+                                      className="border-line text-ink-secondary hover:bg-surface-subtle"
                                     >
                                       <Edit className="w-3 h-3 mr-1" />
                                       수정
@@ -921,7 +913,7 @@ export default function BranchDashboard({ user }: { user: User }) {
                                             });
                                         }
                                       }}
-                                      className="border-red-300 text-red-600 hover:bg-red-50"
+                                      className="border-fn-error-border text-fn-error hover:bg-fn-error-surface"
                                     >
                                       <Trash2 className="w-3 h-3 mr-1" />
                                       삭제
@@ -947,8 +939,8 @@ export default function BranchDashboard({ user }: { user: User }) {
                                       disabled={generateReportMutation.isPending}
                                       className={
                                         student.hasReport
-                                          ? 'border-purple-300 text-purple-600 hover:bg-purple-50'
-                                          : 'border-indigo-300 text-indigo-600 hover:bg-indigo-50'
+                                          ? 'border-line text-ink-secondary hover:bg-surface-subtle'
+                                          : 'border-line text-ink-secondary hover:bg-surface-subtle'
                                       }
                                     >
                                       <Sparkles className="w-3 h-3 mr-1" />
@@ -967,9 +959,9 @@ export default function BranchDashboard({ user }: { user: User }) {
               </div>
             ) : (
               <div className="text-center py-12">
-                <BarChart3 className="w-16 h-16 mx-auto text-gray-300 mb-4" />
-                <p className="text-gray-500">시험을 응시한 학생이 없습니다.</p>
-                <p className="text-sm text-gray-400 mt-2">위의 카드를 클릭하여 상세 정보를 확인하세요.</p>
+                <BarChart3 className="w-16 h-16 mx-auto text-ink-tertiary mb-4" />
+                <p className="text-ink-secondary">시험을 응시한 학생이 없습니다.</p>
+                <p className="text-sm text-ink-tertiary mt-2">위의 카드를 클릭하여 상세 정보를 확인하세요.</p>
               </div>
             )}
           </CardContent>
@@ -980,11 +972,11 @@ export default function BranchDashboard({ user }: { user: User }) {
 
   const renderStudents = () => (
     <>
-      <Card className="border-0 shadow-xl bg-white/90 backdrop-blur-sm">
-        <CardHeader className="border-b border-gray-100 bg-gradient-to-r from-blue-50 to-indigo-50">
+      <Card className="border-0 shadow-xl bg-surface">
+        <CardHeader className="border-b border-line-subtle bg-surface-subtle">
           <div className="flex justify-between items-center">
-            <CardTitle className="text-xl font-bold text-gray-800 flex items-center gap-2">
-              <Users className="w-5 h-5 text-blue-600" />
+            <CardTitle className="text-xl font-bold text-ink flex items-center gap-2">
+              <Users className="w-5 h-5 text-ink-secondary" />
               학생 관리
             </CardTitle>
             <Button
@@ -992,7 +984,7 @@ export default function BranchDashboard({ user }: { user: User }) {
                 setEditingStudent(null);
                 setShowStudentModal(true);
               }}
-              className="bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700"
+              className="bg-action hover:bg-action-hover"
             >
               <Plus className="w-4 h-4 mr-2" />
               학생 추가
@@ -1002,26 +994,26 @@ export default function BranchDashboard({ user }: { user: User }) {
         <CardContent className="p-6">
           {students && students.length > 0 ? (
             <div className="overflow-x-auto">
-              <table className="w-full">
+              <table className="w-full min-w-[640px] text-sm [&_td]:whitespace-nowrap [&_thead_th:first-child]:sticky [&_thead_th:first-child]:left-0 [&_thead_th:first-child]:z-10 [&_tbody_td:first-child]:sticky [&_tbody_td:first-child]:left-0 [&_tbody_td:first-child]:bg-surface">
                 <thead>
-                  <tr className="border-b-2 border-blue-200">
-                    <th className="text-left p-3 text-sm font-semibold text-gray-700">이름</th>
-                    <th className="text-left p-3 text-sm font-semibold text-gray-700">학년</th>
-                    <th className="text-left p-3 text-sm font-semibold text-gray-700">학교</th>
-                    <th className="text-left p-3 text-sm font-semibold text-gray-700">아이디</th>
-                    <th className="text-left p-3 text-sm font-semibold text-gray-700">연락처</th>
-                    <th className="text-center p-3 text-sm font-semibold text-gray-700">작업</th>
+                  <tr className="border-b border-line-strong">
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">이름</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">학년</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">학교</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">아이디</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">연락처</th>
+                    <th className="text-center px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">작업</th>
                   </tr>
                 </thead>
                 <tbody>
                   {students.map((student: any) => (
-                    <tr key={student.id} className="border-b border-gray-100 hover:bg-blue-50 transition-colors">
-                      <td className="p-3 font-medium text-gray-900">{student.user?.name}</td>
-                      <td className="p-3 text-gray-700">{student.grade || '-'}</td>
-                      <td className="p-3 text-gray-700">{student.school || '-'}</td>
-                      <td className="p-3 text-gray-700">{student.user?.username}</td>
-                      <td className="p-3 text-gray-700">{student.user?.phone || '-'}</td>
-                      <td className="p-3">
+                    <tr key={student.id} className="border-b border-line-subtle hover:bg-surface-subtle transition-colors duration-150 ease-out">
+                      <td className="px-4 py-3 font-medium text-ink">{student.user?.name}</td>
+                      <td className="px-4 py-3 text-ink">{student.grade || '-'}</td>
+                      <td className="px-4 py-3 text-ink">{student.school || '-'}</td>
+                      <td className="px-4 py-3 text-ink">{student.user?.username}</td>
+                      <td className="px-4 py-3 text-ink">{student.user?.phone || '-'}</td>
+                      <td className="px-4 py-3">
                         <div className="flex gap-2 justify-center">
                           <Button
                             variant="outline"
@@ -1031,7 +1023,7 @@ export default function BranchDashboard({ user }: { user: User }) {
                                 loginAsStudentMutation.mutate(student.id);
                               }
                             }}
-                            className="border-green-300 text-green-600 hover:bg-green-50"
+                            className="border-line-strong text-ink hover:bg-surface-subtle"
                           >
                             <LogIn className="w-4 h-4 mr-1" />
                             로그인
@@ -1043,7 +1035,7 @@ export default function BranchDashboard({ user }: { user: User }) {
                               setEditingStudent(student);
                               setShowStudentModal(true);
                             }}
-                            className="border-blue-300 text-blue-600 hover:bg-blue-50"
+                            className="border-line text-ink-secondary hover:bg-surface-subtle"
                           >
                             수정
                           </Button>
@@ -1056,8 +1048,8 @@ export default function BranchDashboard({ user }: { user: User }) {
             </div>
           ) : (
             <div className="text-center py-12">
-              <Users className="w-16 h-16 mx-auto text-gray-300 mb-4" />
-              <p className="text-gray-500">등록된 학생이 없습니다.</p>
+              <Users className="w-16 h-16 mx-auto text-ink-tertiary mb-4" />
+              <p className="text-ink-secondary">등록된 학생이 없습니다.</p>
             </div>
           )}
         </CardContent>
@@ -1065,11 +1057,11 @@ export default function BranchDashboard({ user }: { user: User }) {
 
       {/* 학생 추가/수정 모달 */}
       {showStudentModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <Card className="w-full max-w-2xl mx-4">
-            <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50">
+        <div className="fixed inset-0 bg-[var(--overlay)] flex items-center justify-center z-50">
+          <Card className="w-full max-w-2xl mx-4 rounded-lg border-0 bg-surface-raised shadow-lg">
+            <CardHeader className="border-b border-line bg-surface-subtle">
               <CardTitle className="flex items-center gap-2">
-                <Users className="w-5 h-5 text-blue-600" />
+                <Users className="w-5 h-5 text-ink-secondary" />
                 {editingStudent ? '학생 수정' : '학생 추가'}
               </CardTitle>
             </CardHeader>
@@ -1077,21 +1069,21 @@ export default function BranchDashboard({ user }: { user: User }) {
               <form onSubmit={handleStudentSubmit} className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="text-sm font-semibold text-gray-700">이름 *</label>
+                    <label className="text-sm font-semibold text-ink">이름 *</label>
                     <Input name="name" defaultValue={editingStudent?.user?.name} required className="mt-1" />
                   </div>
                   <div>
-                    <label className="text-sm font-semibold text-gray-700">학년</label>
+                    <label className="text-sm font-semibold text-ink">학년</label>
                     <Input name="grade" defaultValue={editingStudent?.grade} className="mt-1" placeholder="예: 중3" />
                   </div>
                 </div>
                 <div>
-                  <label className="text-sm font-semibold text-gray-700">학교</label>
+                  <label className="text-sm font-semibold text-ink">학교</label>
                   <Input name="school" defaultValue={editingStudent?.school} className="mt-1" />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="text-sm font-semibold text-gray-700">학생 연락처 * (로그인 아이디)</label>
+                    <label className="text-sm font-semibold text-ink">학생 연락처 * (로그인 아이디)</label>
                     <Input
                       name="phone"
                       defaultValue={editingStudent?.user?.phone}
@@ -1101,11 +1093,11 @@ export default function BranchDashboard({ user }: { user: User }) {
                       disabled={!!editingStudent}
                     />
                     {!editingStudent && (
-                      <p className="text-xs text-gray-500 mt-1">※ 연락처가 로그인 아이디가 되며, 비밀번호는 끝 4자리로 자동 설정됩니다.</p>
+                      <p className="text-xs text-ink-secondary mt-1">※ 연락처가 로그인 아이디가 되며, 비밀번호는 끝 4자리로 자동 설정됩니다.</p>
                     )}
                   </div>
                   <div>
-                    <label className="text-sm font-semibold text-gray-700">학부모 연락처 (로그인 아이디)</label>
+                    <label className="text-sm font-semibold text-ink">학부모 연락처 (로그인 아이디)</label>
                     <Input
                       name="parentPhone"
                       defaultValue={editingStudent?.parentPhone}
@@ -1116,18 +1108,18 @@ export default function BranchDashboard({ user }: { user: User }) {
                 </div>
                 {editingStudent && (
                   <div>
-                    <label className="text-sm font-semibold text-gray-700">새 비밀번호 (선택)</label>
+                    <label className="text-sm font-semibold text-ink">새 비밀번호 (선택)</label>
                     <Input
                       type="password"
                       name="password"
                       className="mt-1"
                       placeholder="변경하지 않으려면 비워두세요"
                     />
-                    <p className="text-xs text-gray-500 mt-1">※ 비밀번호를 입력하면 새 비밀번호로 변경됩니다.</p>
+                    <p className="text-xs text-ink-secondary mt-1">※ 비밀번호를 입력하면 새 비밀번호로 변경됩니다.</p>
                   </div>
                 )}
                 <div className="flex gap-2 pt-4">
-                  <Button type="submit" className="flex-1 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700">
+                  <Button type="submit" className="flex-1 bg-action hover:bg-action-hover">
                     {editingStudent ? '수정' : '추가'}
                   </Button>
                   <Button
@@ -1152,11 +1144,11 @@ export default function BranchDashboard({ user }: { user: User }) {
 
   const renderClasses = () => (
     <>
-      <Card className="border-0 shadow-xl bg-white/90 backdrop-blur-sm">
-        <CardHeader className="border-b border-gray-100 bg-gradient-to-r from-green-50 to-emerald-50">
+      <Card className="border-0 shadow-xl bg-surface">
+        <CardHeader className="border-b border-line-subtle bg-surface-subtle">
           <div className="flex justify-between items-center">
-            <CardTitle className="text-xl font-bold text-gray-800 flex items-center gap-2">
-              <Home className="w-5 h-5 text-green-600" />
+            <CardTitle className="text-xl font-bold text-ink flex items-center gap-2">
+              <Home className="w-5 h-5 text-fn-success" />
               반 관리
             </CardTitle>
             <Button
@@ -1166,7 +1158,7 @@ export default function BranchDashboard({ user }: { user: User }) {
                 setGradeFilter('');
                 setShowClassModal(true);
               }}
-              className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700"
+              className="bg-action hover:bg-action-hover"
             >
               <Plus className="w-4 h-4 mr-2" />
               반 추가
@@ -1177,12 +1169,12 @@ export default function BranchDashboard({ user }: { user: User }) {
           {classes && classes.length > 0 ? (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {classes.map((cls: any) => (
-                <Card key={cls.id} className="border-2 border-green-100 hover:border-green-300 transition-colors">
-                  <CardHeader className="bg-gradient-to-r from-green-50 to-emerald-50">
+                <Card key={cls.id} className="transition-colors duration-150 ease-out hover:border-line-strong">
+                  <CardHeader className="border-b border-line bg-surface-subtle">
                     <div className="flex justify-between items-start">
                       <div>
                         <CardTitle className="text-lg">{cls.name}</CardTitle>
-                        <p className="text-sm text-gray-600 mt-1">{cls.grade || '-'}</p>
+                        <p className="text-sm text-ink-secondary mt-1">{cls.grade || '-'}</p>
                       </div>
                       <Button
                         variant="outline"
@@ -1200,22 +1192,22 @@ export default function BranchDashboard({ user }: { user: User }) {
                           }
                           setShowClassModal(true);
                         }}
-                        className="border-green-300 text-green-600 hover:bg-green-50"
+                        className="border-line-strong text-ink hover:bg-surface-subtle"
                       >
                         수정
                       </Button>
                     </div>
                   </CardHeader>
                   <CardContent className="pt-4">
-                    <p className="text-sm text-gray-600">{cls.description || '설명 없음'}</p>
+                    <p className="text-sm text-ink-secondary">{cls.description || '설명 없음'}</p>
                   </CardContent>
                 </Card>
               ))}
             </div>
           ) : (
             <div className="text-center py-12">
-              <Home className="w-16 h-16 mx-auto text-gray-300 mb-4" />
-              <p className="text-gray-500">등록된 반이 없습니다.</p>
+              <Home className="w-16 h-16 mx-auto text-ink-tertiary mb-4" />
+              <p className="text-ink-secondary">등록된 반이 없습니다.</p>
             </div>
           )}
         </CardContent>
@@ -1223,30 +1215,30 @@ export default function BranchDashboard({ user }: { user: User }) {
 
       {/* 반 추가/수정 모달 */}
       {showClassModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <Card className="w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
-            <CardHeader className="bg-gradient-to-r from-green-50 to-emerald-50">
+        <div className="fixed inset-0 bg-[var(--overlay)] flex items-center justify-center z-50 p-4">
+          <Card className="w-full max-w-2xl mx-4 max-h-[90dvh] overflow-y-auto rounded-lg border-0 bg-surface-raised shadow-lg">
+            <CardHeader className="border-b border-line bg-surface-subtle">
               <CardTitle className="flex items-center gap-2">
-                <Home className="w-5 h-5 text-green-600" />
+                <Home className="w-5 h-5 text-fn-success" />
                 {editingClass ? '반 수정' : '반 추가'}
               </CardTitle>
             </CardHeader>
             <CardContent className="p-6">
               <form onSubmit={handleClassSubmit} className="space-y-4">
                 <div>
-                  <label className="text-sm font-semibold text-gray-700">반 이름 *</label>
+                  <label className="text-sm font-semibold text-ink">반 이름 *</label>
                   <Input name="name" defaultValue={editingClass?.name} required className="mt-1" />
                 </div>
                 <div>
-                  <label className="text-sm font-semibold text-gray-700">학년</label>
+                  <label className="text-sm font-semibold text-ink">학년</label>
                   <Input name="grade" defaultValue={editingClass?.grade} className="mt-1" placeholder="예: 중3" />
                 </div>
                 <div>
-                  <label className="text-sm font-semibold text-gray-700">설명</label>
+                  <label className="text-sm font-semibold text-ink">설명</label>
                   <textarea
                     name="description"
                     defaultValue={editingClass?.description}
-                    className="mt-1 w-full rounded-md border border-gray-200 p-2 text-sm"
+                    className="mt-1 w-full rounded-md border border-line p-2 text-sm"
                     rows={3}
                   />
                 </div>
@@ -1254,11 +1246,11 @@ export default function BranchDashboard({ user }: { user: User }) {
                 {/* 학생 선택 섹션 */}
                 <div className="border-t pt-4">
                   <div className="flex justify-between items-center mb-3">
-                    <label className="text-sm font-semibold text-gray-700">학생 선택</label>
+                    <label className="text-sm font-semibold text-ink">학생 선택</label>
                     <select
                       value={gradeFilter}
                       onChange={(e) => setGradeFilter(e.target.value)}
-                      className="text-sm border border-gray-200 rounded-md px-3 py-1"
+                      className="text-sm border border-line rounded-md px-3 py-1"
                     >
                       <option value="">전체 학년</option>
                       <option value="중1">중1</option>
@@ -1269,12 +1261,12 @@ export default function BranchDashboard({ user }: { user: User }) {
                       <option value="고3">고3</option>
                     </select>
                   </div>
-                  <div className="border border-gray-200 rounded-md p-3 max-h-60 overflow-y-auto bg-gray-50">
+                  <div className="border border-line rounded-md p-3 max-h-60 overflow-y-auto bg-surface-sunken">
                     {students && students.length > 0 ? (
                       students
                         .filter((student: any) => !gradeFilter || student.grade === gradeFilter)
                         .map((student: any) => (
-                          <label key={student.id} className="flex items-center gap-2 p-2 hover:bg-white cursor-pointer rounded transition-colors">
+                          <label key={student.id} className="flex items-center gap-2 p-2 hover:bg-surface cursor-pointer rounded transition-colors">
                             <input
                               type="checkbox"
                               checked={selectedClassStudents.includes(student.id)}
@@ -1285,25 +1277,25 @@ export default function BranchDashboard({ user }: { user: User }) {
                                   setSelectedClassStudents(selectedClassStudents.filter(id => id !== student.id));
                                 }
                               }}
-                              className="w-4 h-4 text-green-600"
+                              className="w-4 h-4 text-fn-success"
                             />
                             <span className="text-sm">
                               {student.user?.name}
-                              <span className="text-gray-500 ml-2">({student.grade || '미지정'})</span>
+                              <span className="text-ink-secondary ml-2">({student.grade || '미지정'})</span>
                             </span>
                           </label>
                         ))
                     ) : (
-                      <p className="text-sm text-gray-500 text-center py-4">등록된 학생이 없습니다.</p>
+                      <p className="text-sm text-ink-secondary text-center py-4">등록된 학생이 없습니다.</p>
                     )}
                   </div>
-                  <p className="text-xs text-gray-500 mt-2">
+                  <p className="text-xs text-ink-secondary mt-2">
                     {selectedClassStudents.length}명 선택됨
                   </p>
                 </div>
 
                 <div className="flex gap-2 pt-4">
-                  <Button type="submit" className="flex-1 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700">
+                  <Button type="submit" className="flex-1 bg-action hover:bg-action-hover">
                     {editingClass ? '수정' : '추가'}
                   </Button>
                   <Button
@@ -1330,48 +1322,48 @@ export default function BranchDashboard({ user }: { user: User }) {
 
   const renderExams = () => (
     <>
-      <Card className="border-0 shadow-xl bg-white/90 backdrop-blur-sm">
-        <CardHeader className="border-b border-gray-100 bg-gradient-to-r from-orange-50 to-red-50">
-          <CardTitle className="text-xl font-bold text-gray-800 flex items-center gap-2">
-            <FileText className="w-5 h-5 text-orange-600" />
+      <Card className="border-0 shadow-xl bg-surface">
+        <CardHeader className="border-b border-line-subtle bg-surface-subtle">
+          <CardTitle className="text-xl font-bold text-ink flex items-center gap-2">
+            <FileText className="w-5 h-5 text-fn-warning" />
             배포된 시험
           </CardTitle>
         </CardHeader>
         <CardContent className="p-6">
           {distributions && distributions.length > 0 ? (
             <div className="overflow-x-auto">
-              <table className="w-full">
+              <table className="w-full min-w-[640px] text-sm [&_td]:whitespace-nowrap [&_thead_th:first-child]:sticky [&_thead_th:first-child]:left-0 [&_thead_th:first-child]:z-10 [&_tbody_td:first-child]:sticky [&_tbody_td:first-child]:left-0 [&_tbody_td:first-child]:bg-surface">
                 <thead>
-                  <tr className="border-b-2 border-orange-200">
-                    <th className="text-left p-3 text-sm font-semibold text-gray-700">시험명</th>
-                    <th className="text-left p-3 text-sm font-semibold text-gray-700">시작일</th>
-                    <th className="text-left p-3 text-sm font-semibold text-gray-700">종료일</th>
-                    <th className="text-left p-3 text-sm font-semibold text-gray-700">총괄 배포일</th>
-                    <th className="text-left p-3 text-sm font-semibold text-gray-700">지점 배포일</th>
-                    <th className="text-center p-3 text-sm font-semibold text-gray-700">작업</th>
+                  <tr className="border-b border-line-strong">
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">시험명</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">시작일</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">종료일</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">총괄 배포일</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">지점 배포일</th>
+                    <th className="text-center px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">작업</th>
                   </tr>
                 </thead>
                 <tbody>
                   {distributions.map((dist: any) => (
-                    <tr key={dist.id} className="border-b border-gray-100 hover:bg-orange-50 transition-colors">
-                      <td className="p-3 font-medium text-gray-900">{dist.exam?.title || '-'}</td>
-                      <td className="p-3 text-gray-700">
+                    <tr key={dist.id} className="border-b border-line-subtle hover:bg-surface-subtle transition-colors duration-150 ease-out">
+                      <td className="px-4 py-3 font-medium text-ink">{dist.exam?.title || '-'}</td>
+                      <td className="px-4 py-3 text-ink">
                         {new Date(dist.startDate).toLocaleDateString('ko-KR')}
                       </td>
-                      <td className="p-3 text-gray-700">
+                      <td className="px-4 py-3 text-ink">
                         {new Date(dist.endDate).toLocaleDateString('ko-KR')}
                       </td>
-                      <td className="p-3 text-gray-700">
+                      <td className="px-4 py-3 text-ink">
                         {dist.parentDistribution
                           ? new Date(dist.parentDistribution.createdAt).toLocaleDateString('ko-KR')
                           : new Date(dist.createdAt).toLocaleDateString('ko-KR')}
                       </td>
-                      <td className="p-3 text-gray-700">
+                      <td className="px-4 py-3 text-ink">
                         {dist.parentDistribution
                           ? new Date(dist.createdAt).toLocaleDateString('ko-KR')
                           : '-'}
                       </td>
-                      <td className="p-3">
+                      <td className="px-4 py-3">
                         <div className="flex gap-2 justify-center">
                           <Button
                             variant="outline"
@@ -1383,7 +1375,7 @@ export default function BranchDashboard({ user }: { user: User }) {
                               setSelectedClassId('');
                               setSelectedStudentIds([]);
                             }}
-                            className="border-orange-300 text-orange-600 hover:bg-orange-50"
+                            className="border-line-strong text-ink hover:bg-surface-subtle"
                           >
                             지점내 배포
                           </Button>
@@ -1396,8 +1388,8 @@ export default function BranchDashboard({ user }: { user: User }) {
             </div>
           ) : (
             <div className="text-center py-12">
-              <FileText className="w-16 h-16 mx-auto text-gray-300 mb-4" />
-              <p className="text-gray-500">배포된 시험이 없습니다.</p>
+              <FileText className="w-16 h-16 mx-auto text-ink-tertiary mb-4" />
+              <p className="text-ink-secondary">배포된 시험이 없습니다.</p>
             </div>
           )}
         </CardContent>
@@ -1405,11 +1397,11 @@ export default function BranchDashboard({ user }: { user: User }) {
 
       {/* 지점내 배포 모달 */}
       {showRedistributeModal && selectedDistribution && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <Card className="w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
-            <CardHeader className="bg-gradient-to-r from-orange-50 to-red-50">
+        <div className="fixed inset-0 bg-[var(--overlay)] flex items-center justify-center z-50">
+          <Card className="w-full max-w-2xl mx-4 max-h-[90dvh] overflow-y-auto rounded-lg border-0 bg-surface-raised shadow-lg">
+            <CardHeader className="border-b border-line bg-surface-subtle">
               <CardTitle className="flex items-center gap-2">
-                <FileText className="w-5 h-5 text-orange-600" />
+                <FileText className="w-5 h-5 text-fn-warning" />
                 지점내 배포: {selectedDistribution.exam?.title}
               </CardTitle>
             </CardHeader>
@@ -1417,7 +1409,7 @@ export default function BranchDashboard({ user }: { user: User }) {
               <form onSubmit={handleRedistributeSubmit} className="space-y-4">
                 {/* 배포 유형 선택 */}
                 <div>
-                  <label className="text-sm font-semibold text-gray-700">배포 유형 *</label>
+                  <label className="text-sm font-semibold text-ink">배포 유형 *</label>
                   <div className="flex gap-4 mt-2">
                     <label className="flex items-center gap-2 cursor-pointer">
                       <input
@@ -1426,7 +1418,7 @@ export default function BranchDashboard({ user }: { user: User }) {
                         value="class"
                         checked={redistributeType === 'class'}
                         onChange={(e) => setRedistributeType(e.target.value as 'class' | 'student')}
-                        className="w-4 h-4 text-orange-600"
+                        className="w-4 h-4 text-fn-warning"
                       />
                       <span>반별 배포</span>
                     </label>
@@ -1437,7 +1429,7 @@ export default function BranchDashboard({ user }: { user: User }) {
                         value="student"
                         checked={redistributeType === 'student'}
                         onChange={(e) => setRedistributeType(e.target.value as 'class' | 'student')}
-                        className="w-4 h-4 text-orange-600"
+                        className="w-4 h-4 text-fn-warning"
                       />
                       <span>학생별 배포</span>
                     </label>
@@ -1447,11 +1439,11 @@ export default function BranchDashboard({ user }: { user: User }) {
                 {/* 반 선택 */}
                 {redistributeType === 'class' && (
                   <div>
-                    <label className="text-sm font-semibold text-gray-700">반 선택 *</label>
+                    <label className="text-sm font-semibold text-ink">반 선택 *</label>
                     <select
                       value={selectedClassId}
                       onChange={(e) => setSelectedClassId(e.target.value)}
-                      className="mt-1 w-full rounded-md border border-gray-200 p-2 text-sm"
+                      className="mt-1 w-full rounded-md border border-line p-2 text-sm"
                       required
                     >
                       <option value="">반을 선택하세요</option>
@@ -1467,11 +1459,11 @@ export default function BranchDashboard({ user }: { user: User }) {
                 {/* 학생 선택 */}
                 {redistributeType === 'student' && (
                   <div>
-                    <label className="text-sm font-semibold text-gray-700">학생 선택 * (복수 선택 가능)</label>
-                    <div className="mt-2 border border-gray-200 rounded-md p-3 max-h-60 overflow-y-auto">
+                    <label className="text-sm font-semibold text-ink">학생 선택 * (복수 선택 가능)</label>
+                    <div className="mt-2 border border-line rounded-md p-3 max-h-60 overflow-y-auto">
                       {students && students.length > 0 ? (
                         students.map((student: any) => (
-                          <label key={student.id} className="flex items-center gap-2 p-2 hover:bg-gray-50 cursor-pointer rounded">
+                          <label key={student.id} className="flex items-center gap-2 p-2 hover:bg-surface-sunken cursor-pointer rounded">
                             <input
                               type="checkbox"
                               checked={selectedStudentIds.includes(student.id)}
@@ -1482,13 +1474,13 @@ export default function BranchDashboard({ user }: { user: User }) {
                                   setSelectedStudentIds(selectedStudentIds.filter(id => id !== student.id));
                                 }
                               }}
-                              className="w-4 h-4 text-orange-600"
+                              className="w-4 h-4 text-fn-warning"
                             />
                             <span>{student.user?.name} ({student.grade || '-'})</span>
                           </label>
                         ))
                       ) : (
-                        <p className="text-sm text-gray-500">등록된 학생이 없습니다.</p>
+                        <p className="text-sm text-ink-secondary">등록된 학생이 없습니다.</p>
                       )}
                     </div>
                   </div>
@@ -1497,7 +1489,7 @@ export default function BranchDashboard({ user }: { user: User }) {
                 {/* 시험 기간 */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="text-sm font-semibold text-gray-700">시작일 *</label>
+                    <label className="text-sm font-semibold text-ink">시작일 *</label>
                     <Input
                       type="datetime-local"
                       name="startDate"
@@ -1507,7 +1499,7 @@ export default function BranchDashboard({ user }: { user: User }) {
                     />
                   </div>
                   <div>
-                    <label className="text-sm font-semibold text-gray-700">종료일 *</label>
+                    <label className="text-sm font-semibold text-ink">종료일 *</label>
                     <Input
                       type="datetime-local"
                       name="endDate"
@@ -1521,7 +1513,7 @@ export default function BranchDashboard({ user }: { user: User }) {
                 <div className="flex gap-2 pt-4">
                   <Button
                     type="submit"
-                    className="flex-1 bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700"
+                    className="flex-1 bg-action hover:bg-action-hover"
                     disabled={redistributeMutation.isPending}
                   >
                     {redistributeMutation.isPending ? '배포 중...' : '지점내 배포'}
@@ -1550,33 +1542,32 @@ export default function BranchDashboard({ user }: { user: User }) {
 
   const renderDistributions = () => (
     <>
-      <Card className="border-0 shadow-xl bg-white/90 backdrop-blur-sm">
-        <CardHeader className="border-b border-gray-100 bg-gradient-to-r from-orange-50 to-red-50">
-          <CardTitle className="text-xl font-bold text-gray-800 flex items-center gap-2">
-            <FileText className="w-5 h-5 text-orange-600" />
+      <Card className="border-0 shadow-xl bg-surface">
+        <CardHeader className="border-b border-line-subtle bg-surface-subtle">
+          <CardTitle className="text-xl font-bold text-ink flex items-center gap-2">
+            <FileText className="w-5 h-5 text-fn-warning" />
             배포된 시험 목록
           </CardTitle>
         </CardHeader>
         <CardContent className="p-6">
           {distributions && distributions.length > 0 ? (
             <div className="overflow-x-auto">
-              <table className="w-full">
+              <table className="w-full min-w-[640px] text-sm [&_td]:whitespace-nowrap [&_thead_th:first-child]:sticky [&_thead_th:first-child]:left-0 [&_thead_th:first-child]:z-10 [&_tbody_td:first-child]:sticky [&_tbody_td:first-child]:left-0 [&_tbody_td:first-child]:bg-surface">
                 <thead>
-                  <tr className="border-b-2 border-orange-200">
-                    <th className="text-left p-3 text-sm font-semibold text-gray-700">시험명</th>
-                    <th className="text-left p-3 text-sm font-semibold text-gray-700">과목</th>
-                    <th className="text-center p-3 text-sm font-semibold text-gray-700">문항 수</th>
-                    <th className="text-center p-3 text-sm font-semibold text-gray-700">총점</th>
-                    <th className="text-left p-3 text-sm font-semibold text-gray-700">시작일</th>
-                    <th className="text-left p-3 text-sm font-semibold text-gray-700">종료일</th>
-                    <th className="text-center p-3 text-sm font-semibold text-gray-700">작업</th>
+                  <tr className="border-b border-line-strong">
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">시험명</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">과목</th>
+                    <th className="text-center px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">문항 수</th>
+                    <th className="text-center px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">총점</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">시작일</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">종료일</th>
+                    <th className="text-center px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">작업</th>
                   </tr>
                 </thead>
                 <tbody>
                   {distributions.map((dist: any) => (
-                    <tr key={dist.id} className="border-b border-gray-100 hover:bg-orange-50 transition-colors">
-                      <td
-                        className="p-3 font-medium text-gray-900 cursor-pointer hover:text-orange-600 hover:underline"
+                    <tr key={dist.id} className="border-b border-line-subtle hover:bg-surface-subtle transition-colors duration-150 ease-out">
+                      <td className="px-4 py-3 font-medium text-ink cursor-pointer hover:text-fn-warning hover:underline"
                         onClick={() => {
                           setSelectedDistributionId(dist.id);
                           setActiveSection('dashboard');
@@ -1585,12 +1576,12 @@ export default function BranchDashboard({ user }: { user: User }) {
                       >
                         {dist.exam?.title || '-'}
                       </td>
-                      <td className="p-3 text-gray-700">{dist.exam?.subject || '-'}</td>
-                      <td className="p-3 text-center text-gray-700">{dist.exam?.totalQuestions || 0}</td>
-                      <td className="p-3 text-center text-gray-700">{dist.exam?.totalScore || 0}</td>
-                      <td className="p-3 text-gray-700">{new Date(dist.startDate).toLocaleDateString('ko-KR')}</td>
-                      <td className="p-3 text-gray-700">{new Date(dist.endDate).toLocaleDateString('ko-KR')}</td>
-                      <td className="p-3 text-center">
+                      <td className="px-4 py-3 text-ink">{dist.exam?.subject || '-'}</td>
+                      <td className="px-4 py-3 text-center text-ink">{dist.exam?.totalQuestions || 0}</td>
+                      <td className="px-4 py-3 text-center text-ink">{dist.exam?.totalScore || 0}</td>
+                      <td className="px-4 py-3 text-ink">{new Date(dist.startDate).toLocaleDateString('ko-KR')}</td>
+                      <td className="px-4 py-3 text-ink">{new Date(dist.endDate).toLocaleDateString('ko-KR')}</td>
+                      <td className="px-4 py-3 text-center">
                         <button
                           onClick={async () => {
                             if (confirm('이 배포를 삭제하시겠습니까?')) {
@@ -1603,7 +1594,7 @@ export default function BranchDashboard({ user }: { user: User }) {
                               }
                             }
                           }}
-                          className="px-3 py-1 bg-red-500 hover:bg-red-600 text-white text-sm rounded transition-colors"
+                          className="px-3 py-1.5 border border-fn-error-border bg-surface text-fn-error text-sm font-semibold rounded-sm transition-colors duration-150 ease-out hover:bg-fn-error-surface active:scale-[0.98]"
                         >
                           삭제
                         </button>
@@ -1615,8 +1606,8 @@ export default function BranchDashboard({ user }: { user: User }) {
             </div>
           ) : (
             <div className="text-center py-12">
-              <FileText className="w-16 h-16 mx-auto text-gray-300 mb-4" />
-              <p className="text-gray-500">배포된 시험이 없습니다.</p>
+              <FileText className="w-16 h-16 mx-auto text-ink-tertiary mb-4" />
+              <p className="text-ink-secondary">배포된 시험이 없습니다.</p>
             </div>
           )}
         </CardContent>
@@ -1628,10 +1619,10 @@ export default function BranchDashboard({ user }: { user: User }) {
     if (!selectedReportDistribution) {
       // Show list of distributions
       return (
-        <Card className="border-0 shadow-xl bg-white/90 backdrop-blur-sm">
-          <CardHeader className="border-b border-gray-100 bg-gradient-to-r from-indigo-50 to-purple-50">
-            <CardTitle className="text-xl font-bold text-gray-800 flex items-center gap-2">
-              <BarChart3 className="w-5 h-5 text-indigo-600" />
+        <Card className="border-0 shadow-xl bg-surface">
+          <CardHeader className="border-b border-line-subtle bg-surface-subtle">
+            <CardTitle className="text-xl font-bold text-ink flex items-center gap-2">
+              <BarChart3 className="w-5 h-5 text-ink-secondary" />
               보고서 및 성적 관리
             </CardTitle>
           </CardHeader>
@@ -1641,19 +1632,19 @@ export default function BranchDashboard({ user }: { user: User }) {
                 {distributions.map((dist: any) => (
                   <Card
                     key={dist.id}
-                    className="border-2 border-indigo-100 hover:border-indigo-300 transition-all cursor-pointer hover:shadow-lg"
+                    className="border-2 border-line hover:border-line transition-all cursor-pointer hover:shadow-lg"
                     onClick={() => setSelectedReportDistribution(dist)}
                   >
-                    <CardHeader className="bg-gradient-to-r from-indigo-50 to-purple-50">
+                    <CardHeader className="border-b border-line bg-surface-subtle">
                       <div className="flex justify-between items-start">
                         <div className="flex-1">
                           <CardTitle className="text-lg">{dist.exam?.title || '-'}</CardTitle>
-                          <div className="flex gap-4 mt-2 text-sm text-gray-600">
+                          <div className="flex gap-4 mt-2 text-sm text-ink-secondary">
                             <span>과목: {dist.exam?.subject || '-'}</span>
                             <span>문항: {dist.exam?.totalQuestions || 0}개</span>
                             <span>배점: {dist.exam?.totalScore || 0}점</span>
                           </div>
-                          <div className="flex gap-4 mt-1 text-xs text-gray-500">
+                          <div className="flex gap-4 mt-1 text-xs text-ink-secondary">
                             <span>시작: {new Date(dist.startDate).toLocaleDateString('ko-KR')}</span>
                             <span>종료: {new Date(dist.endDate).toLocaleDateString('ko-KR')}</span>
                           </div>
@@ -1667,7 +1658,7 @@ export default function BranchDashboard({ user }: { user: User }) {
                               deleteDistributionMutation.mutate(dist.id);
                             }
                           }}
-                          className="border-red-300 text-red-600 hover:bg-red-50"
+                          className="border-fn-error-border text-fn-error hover:bg-fn-error-surface"
                         >
                           <Trash2 className="w-4 h-4" />
                         </Button>
@@ -1678,8 +1669,8 @@ export default function BranchDashboard({ user }: { user: User }) {
               </div>
             ) : (
               <div className="text-center py-12">
-                <BarChart3 className="w-16 h-16 mx-auto text-gray-300 mb-4" />
-                <p className="text-gray-500">배포된 시험이 없습니다.</p>
+                <BarChart3 className="w-16 h-16 mx-auto text-ink-tertiary mb-4" />
+                <p className="text-ink-secondary">배포된 시험이 없습니다.</p>
               </div>
             )}
           </CardContent>
@@ -1690,24 +1681,24 @@ export default function BranchDashboard({ user }: { user: User }) {
     // Show student list for selected distribution
     return (
       <>
-        <Card className="border-0 shadow-xl bg-white/90 backdrop-blur-sm">
-          <CardHeader className="border-b border-gray-100 bg-gradient-to-r from-indigo-50 to-purple-50">
+        <Card className="border-0 shadow-xl bg-surface">
+          <CardHeader className="border-b border-line-subtle bg-surface-subtle">
             <div className="flex items-center gap-4">
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => setSelectedReportDistribution(null)}
-                className="border-indigo-300 text-indigo-600 hover:bg-indigo-50"
+                className="border-line text-ink-secondary hover:bg-surface-subtle"
               >
                 <ArrowLeft className="w-4 h-4 mr-1" />
                 뒤로
               </Button>
               <div className="flex-1">
-                <CardTitle className="text-xl font-bold text-gray-800 flex items-center gap-2">
-                  <FileText className="w-5 h-5 text-indigo-600" />
+                <CardTitle className="text-xl font-bold text-ink flex items-center gap-2">
+                  <FileText className="w-5 h-5 text-ink-secondary" />
                   {selectedReportDistribution.exam?.title}
                 </CardTitle>
-                <p className="text-sm text-gray-600 mt-1">
+                <p className="text-sm text-ink-secondary mt-1">
                   {selectedReportDistribution.exam?.subject} • 총 {selectedReportDistribution.exam?.totalQuestions}문항 • {selectedReportDistribution.exam?.totalScore}점
                 </p>
               </div>
@@ -1716,55 +1707,55 @@ export default function BranchDashboard({ user }: { user: User }) {
           <CardContent className="p-6">
             {distributionStudents && distributionStudents.students && distributionStudents.students.length > 0 ? (
               <div className="overflow-x-auto">
-                <table className="w-full">
+                <table className="w-full min-w-[640px] text-sm [&_td]:whitespace-nowrap [&_thead_th:first-child]:sticky [&_thead_th:first-child]:left-0 [&_thead_th:first-child]:z-10 [&_tbody_td:first-child]:sticky [&_tbody_td:first-child]:left-0 [&_tbody_td:first-child]:bg-surface">
                   <thead>
-                    <tr className="border-b-2 border-indigo-200">
-                      <th className="text-left p-3 text-sm font-semibold text-gray-700">학생</th>
-                      <th className="text-left p-3 text-sm font-semibold text-gray-700">연락처</th>
-                      <th className="text-center p-3 text-sm font-semibold text-gray-700">응시 상태</th>
-                      <th className="text-center p-3 text-sm font-semibold text-gray-700">점수</th>
-                      <th className="text-center p-3 text-sm font-semibold text-gray-700">등급</th>
-                      <th className="text-center p-3 text-sm font-semibold text-gray-700">작업</th>
+                    <tr className="border-b border-line-strong">
+                      <th className="text-left px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">학생</th>
+                      <th className="text-left px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">연락처</th>
+                      <th className="text-center px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">응시 상태</th>
+                      <th className="text-center px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">점수</th>
+                      <th className="text-center px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">등급</th>
+                      <th className="text-center px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">작업</th>
                     </tr>
                   </thead>
                   <tbody>
                     {distributionStudents.students.map((student: any) => (
-                      <tr key={student.studentId} className="border-b border-gray-100 hover:bg-indigo-50 transition-colors">
-                        <td className="p-3 font-medium text-gray-900">{student.studentName}</td>
-                        <td className="p-3 text-gray-700">{student.studentPhone || '-'}</td>
-                        <td className="p-3">
+                      <tr key={student.studentId} className="border-b border-line-subtle hover:bg-surface-subtle transition-colors duration-150 ease-out">
+                        <td className="px-4 py-3 font-medium text-ink">{student.studentName}</td>
+                        <td className="px-4 py-3 text-ink">{student.studentPhone || '-'}</td>
+                        <td className="px-4 py-3">
                           <div className="flex items-center justify-center gap-1">
                             {student.isSubmitted ? (
                               <>
-                                <CheckCircle className="w-5 h-5 text-green-600" />
-                                <span className="text-sm text-green-600 font-medium">제출 완료</span>
+                                <CheckCircle className="w-5 h-5 text-fn-success" />
+                                <span className="text-sm text-fn-success font-medium">제출 완료</span>
                               </>
                             ) : student.hasAttempt ? (
                               <>
-                                <XCircle className="w-5 h-5 text-orange-500" />
-                                <span className="text-sm text-orange-500 font-medium">작성 중</span>
+                                <XCircle className="w-5 h-5 text-fn-warning" />
+                                <span className="text-sm text-fn-warning font-medium">작성 중</span>
                               </>
                             ) : (
                               <>
-                                <XCircle className="w-5 h-5 text-gray-400" />
-                                <span className="text-sm text-gray-500">미응시</span>
+                                <XCircle className="w-5 h-5 text-ink-tertiary" />
+                                <span className="text-sm text-ink-secondary">미응시</span>
                               </>
                             )}
                           </div>
                         </td>
-                        <td className="p-3 text-center text-gray-700">
+                        <td className="px-4 py-3 text-center text-ink">
                           {student.isSubmitted ? `${student.score || 0} / ${student.maxScore || 0}` : '-'}
                         </td>
-                        <td className="p-3 text-center">
+                        <td className="px-4 py-3 text-center">
                           {student.grade ? (
-                            <span className="inline-block px-2 py-1 bg-indigo-100 text-indigo-700 rounded text-sm font-medium">
-                              {student.grade}
+                            <span className={`inline-block rounded-sm border px-2 py-0.5 text-xs font-semibold ${gradeBadgeClass(student.grade)}`}>
+                              {student.grade}등급
                             </span>
                           ) : (
                             '-'
                           )}
                         </td>
-                        <td className="p-3">
+                        <td className="px-4 py-3">
                           <div className="flex gap-2 justify-center">
                             {/* 답안 입력/수정 버튼 */}
                             <Button
@@ -1810,7 +1801,7 @@ export default function BranchDashboard({ user }: { user: User }) {
                                   setShowAnswerModal(true);
                                 }
                               }}
-                              className="border-blue-300 text-blue-600 hover:bg-blue-50"
+                              className="border-line text-ink-secondary hover:bg-surface-subtle"
                             >
                               <Edit className="w-4 h-4 mr-1" />
                               {student.hasAttempt ? '수정' : '입력'}
@@ -1835,7 +1826,7 @@ export default function BranchDashboard({ user }: { user: User }) {
                                       });
                                   }
                                 }}
-                                className="border-red-300 text-red-600 hover:bg-red-50"
+                                className="border-fn-error-border text-fn-error hover:bg-fn-error-surface"
                               >
                                 <Trash2 className="w-3 h-3 mr-1" />
                                 삭제
@@ -1862,8 +1853,8 @@ export default function BranchDashboard({ user }: { user: User }) {
                                 disabled={generateReportMutation.isPending}
                                 className={
                                   student.hasReport
-                                    ? 'border-purple-300 text-purple-600 hover:bg-purple-50'
-                                    : 'border-indigo-300 text-indigo-600 hover:bg-indigo-50'
+                                    ? 'border-line text-ink-secondary hover:bg-surface-subtle'
+                                    : 'border-line text-ink-secondary hover:bg-surface-subtle'
                                 }
                               >
                                 <Sparkles className="w-4 h-4 mr-1" />
@@ -1879,8 +1870,8 @@ export default function BranchDashboard({ user }: { user: User }) {
               </div>
             ) : (
               <div className="text-center py-12">
-                <Users className="w-16 h-16 mx-auto text-gray-300 mb-4" />
-                <p className="text-gray-500">배포된 학생이 없습니다.</p>
+                <Users className="w-16 h-16 mx-auto text-ink-tertiary mb-4" />
+                <p className="text-ink-secondary">배포된 학생이 없습니다.</p>
               </div>
             )}
           </CardContent>
@@ -1890,32 +1881,46 @@ export default function BranchDashboard({ user }: { user: User }) {
   };
 
   return (
-    <div className="flex min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
-      {/* Dark Sidebar */}
+    <div className="flex min-h-[100dvh] bg-surface-sunken">
+      {/*
+        DESIGN.md 7.2 사이드바
+          >= 768px : 문서 흐름 안 고정 기둥 (펼침 264px / 접힘 72px, 기존 동작 유지)
+          <  768px : 흐름에서 제거하고 오버레이 드로어. 본문은 항상 100% 폭.
+        기존 sidebarOpen 상태를 그대로 재사용한다.
+      */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 z-30 bg-[var(--overlay)] md:hidden"
+          onClick={() => setSidebarOpen(false)}
+          aria-hidden="true"
+        />
+      )}
       <aside
-        className={`${
-          sidebarOpen ? 'w-64' : 'w-20'
-        } bg-gray-900 shadow-2xl border-r border-gray-800 transition-all duration-300 flex flex-col`}
+        className={`fixed inset-y-0 left-0 z-40 w-[264px] flex flex-col bg-surface-inverse border-r border-line-inverse transition-transform duration-200 ease-out ${
+          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+        } md:static md:z-auto md:translate-x-0 md:transition-[width] ${
+          sidebarOpen ? 'md:w-[264px]' : 'md:w-[72px]'
+        }`}
       >
         {/* Logo Section */}
-        <div className="p-4 border-b border-gray-800">
+        <div className="p-4 border-b border-line-inverse">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
-              <GraduationCap className="w-7 h-7 text-white" />
+            <div className="w-10 h-10 border border-line-inverse rounded-sm flex items-center justify-center flex-shrink-0">
+              <GraduationCap className="w-5 h-5 text-ink-inverse" strokeWidth={1.5} />
             </div>
             {sidebarOpen && (
               <div className="overflow-hidden">
-                <h2 className="font-bold text-lg text-white whitespace-nowrap">
+                <h2 className="font-semibold tracking-[-0.01em] text-ink-inverse whitespace-nowrap">
                   지점 관리
                 </h2>
-                <p className="text-xs text-gray-400 truncate">{user.name}</p>
+                <p className="text-xs text-ink-inverse-muted truncate">{user.name}</p>
               </div>
             )}
           </div>
         </div>
 
         {/* Menu Items */}
-        <nav className="flex-1 p-4 space-y-2">
+        <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
           {menuItems.map((item) => {
             const Icon = item.icon;
             const isActive = activeSection === item.id;
@@ -1923,15 +1928,15 @@ export default function BranchDashboard({ user }: { user: User }) {
               <button
                 key={item.id}
                 onClick={() => setActiveSection(item.id)}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 ${
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-md text-sm transition-colors duration-150 ease-out ${
                   isActive
-                    ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg shadow-blue-500/50'
-                    : 'text-gray-400 hover:bg-gray-800 hover:text-white'
+                    ? 'bg-surface text-ink font-semibold'
+                    : 'text-ink-inverse-muted hover:bg-line-inverse hover:text-ink-inverse'
                 }`}
               >
-                <Icon className={`w-5 h-5 flex-shrink-0 ${isActive ? 'text-white' : 'text-gray-400'}`} />
+                <Icon className="w-4 h-4 flex-shrink-0" strokeWidth={1.5} />
                 {sidebarOpen && (
-                  <span className="font-medium whitespace-nowrap">{item.label}</span>
+                  <span className="whitespace-nowrap">{item.label}</span>
                 )}
               </button>
             );
@@ -1939,35 +1944,44 @@ export default function BranchDashboard({ user }: { user: User }) {
         </nav>
 
         {/* Logout Button */}
-        <div className="p-4 border-t border-gray-800">
+        <div className="p-4 border-t border-line-inverse">
           <button
             onClick={() => logoutMutation.mutate()}
-            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-400 hover:bg-red-900/50 hover:text-red-400 transition-all"
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-md text-sm text-ink-inverse-muted transition-colors duration-150 ease-out hover:bg-line-inverse hover:text-ink-inverse"
           >
-            <LogOut className="w-5 h-5 flex-shrink-0" />
-            {sidebarOpen && <span className="font-medium">로그아웃</span>}
+            <LogOut className="w-4 h-4 flex-shrink-0" strokeWidth={1.5} />
+            {sidebarOpen && <span>로그아웃</span>}
           </button>
         </div>
 
-        {/* Toggle Button */}
+        {/* Toggle Button (데스크톱 전용. 모바일에서는 드로어가 화면 밖으로 나가므로 헤더 토글을 쓴다) */}
         <button
           onClick={() => setSidebarOpen(!sidebarOpen)}
-          className="absolute -right-3 top-20 w-6 h-6 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full shadow-lg flex items-center justify-center text-white hover:scale-110 transition-transform"
+          aria-label={sidebarOpen ? '메뉴 접기' : '메뉴 펼치기'}
+          className="hidden md:flex absolute -right-3 top-20 w-6 h-6 bg-surface border border-line-strong rounded-full items-center justify-center text-ink-secondary transition-colors duration-150 ease-out hover:bg-surface-subtle hover:text-ink"
         >
-          {sidebarOpen ? <X className="w-3 h-3" /> : <Menu className="w-3 h-3" />}
+          {sidebarOpen ? <X className="w-3 h-3" strokeWidth={1.5} /> : <Menu className="w-3 h-3" strokeWidth={1.5} />}
         </button>
       </aside>
 
       {/* Main Content */}
-      <div className="flex-1 overflow-auto">
+      <div className="flex-1 min-w-0 overflow-auto">
         {/* Header */}
-        <header className="bg-white/80 backdrop-blur-md shadow-md border-b border-blue-100 sticky top-0 z-10">
-          <div className="px-8 py-5">
-            <div>
-              <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
+        <header className="bg-surface border-b border-line sticky top-0 z-10">
+          <div className="flex items-center gap-3 px-4 py-3 md:px-8 md:py-5">
+            {/* 모바일 전용 드로어 토글. 기존 sidebarOpen 상태를 그대로 쓴다 */}
+            <button
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              aria-label="메뉴 열기"
+              className="md:hidden h-11 w-11 flex-shrink-0 flex items-center justify-center rounded-md text-ink-secondary transition-colors duration-150 ease-out hover:bg-surface-subtle hover:text-ink"
+            >
+              <Menu className="w-5 h-5" strokeWidth={1.5} />
+            </button>
+            <div className="min-w-0">
+              <h1 className="text-xl font-semibold tracking-[-0.015em] text-ink md:text-2xl">
                 {menuItems.find((item) => item.id === activeSection)?.label}
               </h1>
-              <p className="text-sm text-gray-600 mt-1">
+              <p className="text-xs text-ink-tertiary mt-1 md:text-sm">
                 {user.name}님 환영합니다
               </p>
             </div>
@@ -1975,7 +1989,7 @@ export default function BranchDashboard({ user }: { user: User }) {
         </header>
 
         {/* Content */}
-        <main className="p-8">
+        <main className="p-4 md:p-8">
           {activeSection === 'dashboard' && renderDashboard()}
           {activeSection === 'students' && renderStudents()}
           {activeSection === 'classes' && renderClasses()}
@@ -1994,27 +2008,27 @@ export default function BranchDashboard({ user }: { user: User }) {
         }
         console.log('모달 렌더링 중!');
         return (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="w-full max-w-2xl bg-white rounded-xl shadow-lg overflow-hidden max-h-[90vh] flex flex-col">
+          <div className="fixed inset-0 bg-[var(--overlay)] flex items-center justify-center z-50 p-4">
+            <div className="w-full max-w-2xl bg-surface-raised rounded-lg shadow-lg overflow-hidden max-h-[90dvh] flex flex-col">
               {/* 상단 헤더: 학생 정보 및 점수 */}
-              <div className="p-6 border-b border-gray-200 flex justify-between items-center flex-shrink-0">
+              <div className="p-6 border-b border-line flex justify-between items-center flex-shrink-0">
                 <div>
-                  <h3 className="text-xl font-bold text-gray-800">{selectedAttempt.studentName}</h3>
-                  <p className="text-sm text-gray-500 mt-1">
+                  <h3 className="text-xl font-bold text-ink">{selectedAttempt.studentName}</h3>
+                  <p className="text-sm text-ink-secondary mt-1">
                     {selectedAttempt.isSubmitted && selectedAttempt.submittedAt
                       ? `${new Date(selectedAttempt.submittedAt).toLocaleString('ko-KR')} 제출`
                       : '답안 입력 중'}
                   </p>
                 </div>
                 {selectedAttempt.score !== undefined && selectedAttempt.score !== null && (
-                  <div className="bg-gray-100 rounded-lg px-4 py-2">
-                    <span className="text-2xl font-bold text-gray-800">{selectedAttempt.score}점</span>
+                  <div className="bg-surface-subtle rounded-lg px-4 py-2">
+                    <span className="text-2xl font-bold text-ink">{selectedAttempt.score}점</span>
                   </div>
                 )}
               </div>
 
               {/* 중단: 필터 버튼 */}
-              <div className="p-4 bg-gray-50 border-b border-gray-200 flex-shrink-0">
+              <div className="p-4 bg-surface-sunken border-b border-line flex-shrink-0">
                 <div className="grid grid-cols-3 gap-3">
                   <button
                     type="button"
@@ -2039,7 +2053,7 @@ export default function BranchDashboard({ user }: { user: User }) {
                         }
                       }
                     }}
-                    className="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg text-sm font-medium transition-colors"
+                    className="px-4 py-2 h-10 border border-line-strong bg-surface text-ink rounded-md text-sm font-semibold transition-colors duration-150 ease-out hover:bg-surface-subtle active:scale-[0.98]"
                   >
                     전체 취소
                   </button>
@@ -2066,7 +2080,7 @@ export default function BranchDashboard({ user }: { user: User }) {
                         }
                       }
                     }}
-                    className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-sm font-medium transition-colors"
+                    className="px-4 py-2 h-10 border border-fn-success-border bg-fn-success-surface text-fn-success rounded-md text-sm font-semibold transition-colors duration-150 ease-out hover:border-fn-success active:scale-[0.98]"
                   >
                     전체 정답
                   </button>
@@ -2093,7 +2107,7 @@ export default function BranchDashboard({ user }: { user: User }) {
                         }
                       }
                     }}
-                    className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg text-sm font-medium transition-colors"
+                    className="px-4 py-2 h-10 border border-fn-error-border bg-fn-error-surface text-fn-error rounded-md text-sm font-semibold transition-colors duration-150 ease-out hover:border-fn-error active:scale-[0.98]"
                   >
                     전체 오답
                   </button>
@@ -2103,7 +2117,7 @@ export default function BranchDashboard({ user }: { user: User }) {
               {/* 메인: 채점 목록 (스크롤 가능) */}
               <div className="flex-1 overflow-y-auto">
                 <form id="answer-form" onSubmit={handleAnswerSubmit}>
-                  <div className="divide-y divide-gray-200">
+                  <div className="divide-y divide-line-subtle">
                     {(() => {
                       let totalQuestions = 30;
                       if (distributionStudents?.exam?.totalQuestions) {
@@ -2135,12 +2149,12 @@ export default function BranchDashboard({ user }: { user: User }) {
                         const correctAnswer = questionData?.correctAnswer;
 
                         return (
-                          <div key={qNum} className="grading-item group flex items-center transition-colors duration-150 hover:bg-gray-50">
+                          <div key={qNum} className="grading-item group flex items-center transition-colors duration-150 hover:bg-surface-sunken">
                             {/* 문항 번호 + 정답 표시 */}
                             <div className="flex-1 p-4 flex items-center gap-6">
-                              <span className="text-sm font-medium text-gray-500 w-10">{qNum}번</span>
+                              <span className="text-sm font-medium text-ink-secondary w-10">{qNum}번</span>
                               {correctAnswer && (
-                                <span className="text-xs font-semibold text-green-600 bg-green-50 px-2 py-1 rounded">
+                                <span className="text-xs font-semibold text-fn-success bg-fn-success-surface px-2 py-1 rounded">
                                   정답: {correctAnswer}
                                 </span>
                               )}
@@ -2158,11 +2172,12 @@ export default function BranchDashboard({ user }: { user: User }) {
                                   defaultChecked={currentAnswer === 1}
                                   className="peer absolute inset-0 opacity-0 cursor-pointer"
                                 />
+                                {/* O = 정답. DESIGN.md 기능 계층 success (라디오 value="1" 불변) */}
                                 <label
                                   htmlFor={`q${qNum}-correct`}
-                                  className="flex items-center justify-center w-20 h-20 border-l border-gray-200 cursor-pointer text-gray-400 hover:text-blue-500 peer-checked:text-blue-600 peer-checked:bg-blue-50 transition-colors"
+                                  className="flex items-center justify-center w-20 h-20 border-l border-line cursor-pointer text-ink-tertiary transition-colors duration-150 ease-out hover:text-fn-success peer-checked:text-fn-success peer-checked:bg-fn-success-surface"
                                 >
-                                  <CheckCircle className="w-9 h-9" />
+                                  <CheckCircle className="w-9 h-9" strokeWidth={1.5} />
                                 </label>
                               </div>
                               {/* X (오답) 버튼 */}
@@ -2175,11 +2190,12 @@ export default function BranchDashboard({ user }: { user: User }) {
                                   defaultChecked={currentAnswer === 0}
                                   className="peer absolute inset-0 opacity-0 cursor-pointer"
                                 />
+                                {/* X = 오답. DESIGN.md 기능 계층 error (라디오 value="0" 불변) */}
                                 <label
                                   htmlFor={`q${qNum}-incorrect`}
-                                  className="flex items-center justify-center w-20 h-20 border-l border-gray-200 cursor-pointer text-gray-400 hover:text-red-500 peer-checked:text-red-600 peer-checked:bg-red-50 transition-colors"
+                                  className="flex items-center justify-center w-20 h-20 border-l border-line cursor-pointer text-ink-tertiary transition-colors duration-150 ease-out hover:text-fn-error peer-checked:text-fn-error peer-checked:bg-fn-error-surface"
                                 >
-                                  <XCircle className="w-9 h-9" />
+                                  <XCircle className="w-9 h-9" strokeWidth={1.5} />
                                 </label>
                               </div>
                             </div>
@@ -2190,10 +2206,10 @@ export default function BranchDashboard({ user }: { user: User }) {
                   </div>
 
                   {/* 하단: 제출 버튼 */}
-                  <div className="p-4 bg-gray-50 border-t border-gray-200 flex gap-2">
+                  <div className="p-4 bg-surface-sunken border-t border-line flex gap-2">
                     <Button
                       type="submit"
-                      className="flex-1 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700"
+                      className="flex-1 bg-action hover:bg-action-hover"
                       disabled={createAttemptMutation.isPending || gradeAttemptMutation.isPending}
                     >
                       {createAttemptMutation.isPending || gradeAttemptMutation.isPending
