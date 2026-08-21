@@ -1,0 +1,1995 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>올가국어 분석 보고서 - 김민수</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700;900&family=Noto+Serif+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* ==========================================================
+           올가 미수등 디자인 토큰 (DESIGN.md 2장 3계층)
+           hex 리터럴은 이 :root 블록에만 존재한다. 이하 모든 규칙은 var() 참조.
+           ========================================================== */
+        :root {
+            /* 1계층 브랜드: 네이비(구조) / 브라스(성취) */
+            --navy-50:#F4F6FA; --navy-100:#E6EBF4; --navy-200:#C9D4E7; --navy-300:#A3B4D3;
+            --navy-400:#7189B5; --navy-500:#4C6595; --navy-600:#354C78; --navy-700:#27395C;
+            --navy-800:#1B2942; --navy-900:#131E31; --navy-950:#0C1421;
+            --brass-300:#E3C88E; --brass-400:#D4B26A; --brass-500:#C09A4E;
+            --brass-600:#A07F3B; --brass-700:#7D622C;
+
+            /* 인쇄 잉크 */
+            --print-paper:#FFFFFF; --print-ink:#000000; --print-rule:#999999;
+
+            /* 2계층 시맨틱 */
+            --surface:#FFFFFF;
+            --surface-sunken:var(--navy-50);
+            --surface-subtle:var(--navy-100);
+            --surface-inverse:var(--navy-800);
+            --text-primary:var(--navy-900);
+            --text-secondary:var(--navy-600);
+            --text-tertiary:var(--navy-400);
+            --text-on-inverse:#FFFFFF;
+            --border:var(--navy-200);
+            --border-strong:var(--navy-300);
+            --border-subtle:var(--navy-100);
+            --action:var(--navy-800);
+            --accent:var(--brass-500);
+            --accent-strong:var(--brass-700);
+            --shadow-page:0 1px 3px rgba(19,30,49,0.10), 0 12px 32px rgba(19,30,49,0.06);
+            --overlay:rgba(19,30,49,0.48);
+            --selection:rgba(192,154,78,0.22);
+
+            /* 지면 괘선 체계 (보고서 전용) */
+            --rule-heavy:var(--navy-900);
+            --rule-mid:var(--navy-300);
+            --rule-hair:var(--navy-200);
+            --rule-faint:var(--navy-100);
+
+            /* 3계층 기능색: 브랜드와 독립. 상태/성취 구간 전용 */
+            --fn-success:#1D7A4C; --fn-success-surface:#E8F4EE; --fn-success-border:#A8D4BE;
+            --fn-warning:#8F5A00; --fn-warning-surface:#FBF1DF; --fn-warning-border:#E0C48A;
+            --fn-error:#B3261E;   --fn-error-surface:#FCEDEC;   --fn-error-border:#E9B4B0;
+            --fn-info:#0F6E7A;    --fn-info-surface:#E6F2F4;    --fn-info-border:#9FCBD2;
+
+            /* ===== 보고서 지면 데이터 시각화 팔레트 (DESIGN.md 10.5) =====
+               앱 UI 로 반입하지 않는다. 브라스 2곳 예산과는 별개 계층이다. */
+            --cat-1:#1B2942; --cat-2:#146B72; --cat-3:#2C6B4F;
+            --cat-4:#B07A1E; --cat-5:#8C2F39; --cat-6:#5A6B87;
+            --diff-hi:var(--cat-5); --diff-mid:var(--cat-4); --diff-lo:var(--cat-3);
+            --heat-1:#F6DCDE; --heat-2:#FAE7D2; --heat-3:#F3F0DF; --heat-4:#E4F0E2; --heat-5:#D3E7D8;
+            --heat-ink-1:#7A2731; --heat-ink-2:#8A5A12; --heat-ink-3:#6B6535;
+            --heat-ink-4:#2F5F41; --heat-ink-5:#1F5233;
+
+            /* 계열 색: 영역처럼 '상태가 아닌 범주'를 구분할 때만 쓰는 중립 램프. */
+            --series-1:var(--navy-800); --series-2:var(--navy-600); --series-3:var(--navy-400);
+            --series-4:var(--navy-300); --series-5:var(--navy-200); --series-6:var(--navy-100);
+
+            /* 서체: 지면 제목은 세리프, 본문과 수치는 산세리프 (DESIGN.md 10.4) */
+            --font-serif:'MaruBuri','Noto Serif KR','Nanum Myeongjo','Apple SD Gothic Neo',serif;
+            --font-sans:'Pretendard Variable',Pretendard,'Noto Sans KR','Apple SD Gothic Neo','Malgun Gothic',system-ui,sans-serif;
+
+            /* v3 리포트 캔버스 토큰 */
+            --app-bg:#EEF1F7; --card-line:#DDE3EE;
+            --accent-blue:#2F5FD0; --accent-gold:#E7B84B; --accent-gold-ink:#8A6410;
+            --hero-muted:#A9B7D0; --hero-tile:rgba(255,255,255,.09); --hero-tile-line:rgba(255,255,255,.16);
+            --insight-bg:#F5F8FE; --insight-line:#DCE6FA;
+        }
+
+        /* ==========================================================
+           지면 골격 (DESIGN.md 10장)
+           ========================================================== */
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            font-family: var(--font-sans);
+            background: var(--surface-sunken);
+            color: var(--text-primary);
+            font-variant-numeric: tabular-nums;
+            word-break: keep-all;
+            overflow-wrap: anywhere;
+            -webkit-font-smoothing: antialiased;
+            text-rendering: optimizeLegibility;
+        }
+        ::selection { background: var(--selection); }
+        :focus-visible { outline: 2px solid var(--action); outline-offset: 3px; }
+
+        .a4-page {
+            width: 794px;
+            min-height: 1123px;
+            background: var(--surface);
+            margin: 24px auto;
+            padding: 64px 72px 88px;
+            position: relative;
+            box-shadow: var(--shadow-page);
+            page-break-after: always;
+        }
+
+        /* --- 섹션 제목: 세리프 + 전폭 헤어라인 (색 테두리 대신 괘선) --- */
+        .section-title-report {
+            font-family: var(--font-serif);
+            font-size: 15px;
+            font-weight: 600;
+            letter-spacing: -0.01em;
+            color: var(--text-primary);
+            margin: 0 0 18px;
+            padding: 0 0 9px;
+            border-bottom: 1px solid var(--rule-mid);
+        }
+
+        /* --- 1쪽 표제 --- */
+        .rpt-header { padding-bottom: 22px; border-bottom: 2px solid var(--rule-heavy); }
+        .rpt-title {
+            margin: 0;
+            font-family: var(--font-serif);
+            font-size: 35px;
+            font-weight: 600;
+            letter-spacing: -0.03em;
+            line-height: 1.22;
+            color: var(--text-primary);
+        }
+        .rpt-rule { width: 52px; height: 1px; background: var(--rule-heavy); margin: 16px 0 10px; }
+        .rpt-org { margin: 0; font-size: 10.5px; font-weight: 600; letter-spacing: 0.18em; color: var(--text-tertiary); }
+
+        /* --- 서지 메타 --- */
+        .meta-strip {
+            display: grid; grid-template-columns: repeat(4, 1fr); gap: 24px;
+            margin: 0 0 28px; padding: 14px 0 15px;
+            border-bottom: 1px solid var(--rule-hair);
+        }
+        .meta-label {
+            display: block; margin-bottom: 6px;
+            font-size: 9.5px; font-weight: 600; letter-spacing: 0.14em; color: var(--text-tertiary);
+        }
+        .meta-value { font-size: 13.5px; font-weight: 600; letter-spacing: -0.01em; color: var(--text-primary); }
+
+        .section { margin-bottom: 24px; }
+        .section-tight { margin-bottom: 20px; }
+        .chart-frame { position: relative; }
+        .h-52 { height: 168px; }
+        .h-44 { height: 138px; }
+        .h-64 { height: 262px; }
+        .panel { padding: 4px 0 0; }
+
+        /* --- 성적 총괄: 등급이 지면의 주인공 --- */
+        .summary-box {
+            display: flex; align-items: flex-end; gap: 44px;
+            padding: 4px 0 20px; border-bottom: 1px solid var(--rule-hair);
+        }
+        .grade-block { flex-shrink: 0; }
+        .grade-label { margin: 0 0 4px; font-size: 9.5px; font-weight: 600; letter-spacing: 0.14em; color: var(--text-tertiary); }
+        /* 브라스 1/2 (1쪽): 종합 등급은 이 지면의 핵심 성취 수치다 */
+        .grade-value {
+            margin: 0;
+            font-family: var(--font-serif);
+            font-size: 92px; font-weight: 600; line-height: 0.86;
+            letter-spacing: -0.05em; color: var(--accent-strong);
+        }
+        .grade-unit { font-family: var(--font-sans); font-size: 16px; font-weight: 500; letter-spacing: 0; color: var(--text-tertiary); }
+        .summary-divider { width: 1px; align-self: stretch; margin: 6px 0 4px; background: var(--rule-hair); }
+        .summary-grid { flex: 1; display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
+        .cell-label { margin: 0 0 6px; font-size: 9.5px; font-weight: 600; letter-spacing: 0.14em; color: var(--text-tertiary); }
+        .cell-value { margin: 0; font-size: 23px; font-weight: 700; letter-spacing: -0.03em; line-height: 1; color: var(--text-primary); }
+        .cell-unit { font-size: 12px; font-weight: 500; letter-spacing: 0; color: var(--text-tertiary); }
+
+        /* --- 범례 --- */
+        .legend-row { display: flex; justify-content: center; gap: 20px; margin-top: 14px; font-size: 10px; letter-spacing: 0.02em; }
+        .legend-item { display: flex; align-items: center; gap: 6px; color: var(--text-secondary); }
+        .legend-swatch { width: 8px; height: 8px; }
+        .sw-excellent { background: var(--fn-success); }
+        .sw-good { background: var(--fn-info); }
+        .sw-fair { background: var(--text-tertiary); }
+        .sw-weak { background: var(--fn-warning); }
+
+        /* --- 지면 꼬리 --- */
+        .page-foot {
+            position: absolute; bottom: 44px; left: 72px; right: 72px;
+            padding-top: 12px; border-top: 1px solid var(--rule-faint);
+            text-align: center; font-size: 9.5px; letter-spacing: 0.1em; color: var(--text-tertiary);
+        }
+
+        /* --- 2-5쪽 러닝헤드 --- */
+        .page-head {
+            display: flex; align-items: baseline; justify-content: space-between;
+            margin-bottom: 34px; padding-bottom: 11px;
+            border-bottom: 2px solid var(--rule-heavy);
+        }
+        .page-head-title {
+            margin: 0; font-family: var(--font-serif);
+            font-size: 23px; font-weight: 600; letter-spacing: -0.025em; color: var(--text-primary);
+        }
+        .page-head-num { font-size: 9.5px; font-weight: 600; letter-spacing: 0.16em; color: var(--text-tertiary); }
+
+        .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 22px 34px; }
+
+        /* --- 영역별 상세: 카드 대신 괘선 --- */
+        .subject-item { border-top: 1px solid var(--rule-mid); padding-top: 14px; }
+        .subject-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+        .subject-name { margin: 0; font-family: var(--font-serif); font-size: 14.5px; font-weight: 600; letter-spacing: -0.01em; color: var(--text-primary); }
+        .subject-score { font-size: 23px; font-weight: 700; letter-spacing: -0.035em; line-height: 1; }
+        .subject-scoretext { margin: 5px 0 10px; font-size: 10.5px; letter-spacing: 0.01em; color: var(--text-tertiary); }
+        .meter { width: 100%; height: 3px; background: var(--rule-faint); margin-bottom: 12px; }
+        .meter-fill { height: 3px; }
+        .subject-body { font-size: 11px; line-height: 1.75; color: var(--text-secondary); }
+
+        /* 성취 구간별 기능색 (DESIGN.md 2.3 / 2.4). 성적이므로 error 는 쓰지 않는다 */
+        .is-excellent .subject-score { color: var(--fn-success); }
+        .is-excellent .meter-fill { background: var(--fn-success); }
+        .is-good .subject-score { color: var(--fn-info); }
+        .is-good .meter-fill { background: var(--fn-info); }
+        .is-fair .subject-score { color: var(--text-secondary); }
+        .is-fair .meter-fill { background: var(--text-tertiary); }
+        .is-weak .subject-score { color: var(--fn-warning); }
+        .is-weak .meter-fill { background: var(--fn-warning); }
+
+        .analysis-label { margin: 0 0 6px; font-size: 10px; font-weight: 700; letter-spacing: 0.02em; color: var(--fn-success); }
+        .is-weak-label { color: var(--fn-warning); }
+        .is-neutral-label { color: var(--text-tertiary); }
+        .analysis-text { margin: 0; font-size: 11px; line-height: 1.75; color: var(--text-secondary); white-space: pre-line; }
+
+        /* --- 강점 / 보완 --- */
+        .sw-col-title {
+            margin: 0 0 14px; padding-bottom: 7px;
+            font-family: var(--font-serif); font-size: 13px; font-weight: 600; letter-spacing: 0.01em;
+            color: var(--fn-success); border-bottom: 1px solid var(--fn-success-border);
+        }
+        .sw-col-title.is-weak-title { color: var(--fn-warning); border-bottom-color: var(--fn-warning-border); }
+        .sw-stack > * + * { margin-top: 14px; }
+        .sw-item { border-top: 1px solid var(--rule-faint); padding-top: 12px; }
+        .sw-item:first-child { border-top: none; padding-top: 0; }
+        .sw-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 8px; }
+        .sw-name { margin: 0; font-size: 12.5px; font-weight: 700; letter-spacing: -0.01em; color: var(--text-primary); }
+        .sw-score { font-size: 18px; font-weight: 700; letter-spacing: -0.03em; color: var(--fn-success); }
+        .sw-score.is-weak-score { color: var(--fn-warning); }
+        .sw-body { font-size: 10.5px; line-height: 1.7; color: var(--text-secondary); }
+        .empty-note { margin: 0; font-size: 11px; color: var(--text-tertiary); }
+
+        /* --- 총평 / 성향 --- */
+        .callout {
+            border-top: 1px solid var(--rule-mid);
+            padding: 20px 0 0; display: flex; align-items: flex-start; gap: 22px;
+        }
+        .callout-icon { width: 34px; height: 34px; flex-shrink: 0; color: var(--rule-mid); }
+        .callout-body { flex: 1; max-width: 62ch; }
+        .callout-title { margin: 0 0 8px; font-family: var(--font-serif); font-size: 16px; font-weight: 600; letter-spacing: -0.015em; color: var(--text-primary); }
+        .callout-text { margin: 0; font-size: 12px; line-height: 1.75; color: var(--text-secondary); white-space: pre-line; }
+
+        /* --- 로드맵: 번호는 순서 정보를 담으므로 유지, 원형 배지는 제거 --- */
+        .roadmap-stack > * + * { margin-top: 0; }
+        .roadmap-item {
+            border-top: 1px solid var(--rule-faint);
+            padding: 13px 0; display: flex; align-items: flex-start; gap: 16px;
+        }
+        .roadmap-item:first-child { border-top: 1px solid var(--rule-mid); }
+        .roadmap-num {
+            flex-shrink: 0; width: 22px;
+            font-family: var(--font-serif); font-size: 17px; font-weight: 600; line-height: 1.15;
+            color: var(--text-tertiary);
+        }
+        .roadmap-title { margin: 0 0 4px; font-size: 12px; font-weight: 700; letter-spacing: -0.01em; color: var(--text-primary); }
+        .roadmap-text { margin: 0; font-size: 10.5px; line-height: 1.75; color: var(--text-secondary); }
+
+        /* --- 표: 성적표 괘선 체계 --- */
+        .rpt-table { width: 100%; border-collapse: collapse; font-size: 10.5px; text-align: left; }
+        .rpt-table thead th {
+            padding: 9px 10px; font-weight: 600; font-size: 9.5px; letter-spacing: 0.12em;
+            color: var(--text-tertiary); background: var(--surface-subtle);
+            border-top: 2px solid var(--rule-heavy); border-bottom: 1px solid var(--rule-mid);
+            white-space: nowrap;
+        }
+        .rpt-table tbody td { padding: 10px; color: var(--text-secondary); border-bottom: 1px solid var(--rule-faint); vertical-align: top; line-height: 1.7; }
+        .rpt-table tbody tr:last-child td { border-bottom: 1px solid var(--rule-mid); }
+        .rpt-table .cell-strong { font-weight: 700; color: var(--text-primary); }
+        .col-step { width: 62px; }
+        .col-outcome { width: 92px; text-align: right; }
+        .rpt-table td.col-outcome { text-align: right; font-variant-numeric: tabular-nums; }
+
+        /* --- 마무리 --- */
+        .outcome-banner { border-top: 2px solid var(--rule-heavy); border-bottom: 1px solid var(--rule-hair); padding: 22px 0; text-align: center; }
+        .outcome-title { margin: 0 0 8px; font-family: var(--font-serif); font-size: 16px; font-weight: 600; letter-spacing: -0.01em; color: var(--text-primary); }
+        /* 브라스 1/1 (5쪽): 목표 달성 가능성 판정이 이 지면의 핵심 성취 문구다 */
+        .outcome-accent { color: var(--accent-strong); }
+        .outcome-text { margin: 0; font-size: 11px; line-height: 1.75; color: var(--text-secondary); }
+        .figure-note { margin: 14px 0 0; font-size: 10.5px; line-height: 1.7; color: var(--text-tertiary); text-align: center; }
+
+        /* --- PDF 다운로드 버튼 (DESIGN.md 5.1) --- */
+        .pdf-download-button {
+            position: fixed; bottom: 32px; right: 32px; z-index: 50;
+            display: inline-flex; align-items: center; gap: 8px;
+            height: 46px; padding: 0 22px; border: none; border-radius: 999px;
+            background: var(--action); color: var(--text-on-inverse);
+            font-family: inherit; font-size: 13.5px; font-weight: 600; letter-spacing: -0.01em; cursor: pointer;
+            box-shadow: 0 2px 8px rgba(19,30,49,0.24);
+            transition: background-color 150ms ease-out;
+        }
+        .pdf-download-button:hover { background: var(--navy-700); }
+        .pdf-download-button:active { transform: scale(0.98); }
+        .pdf-download-button svg { width: 18px; height: 18px; }
+
+        #pdf-loading-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: var(--overlay);
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            z-index: 2000; color: var(--text-on-inverse); text-align: center;
+        }
+        #pdf-loading-overlay p { margin-top: 20px; font-size: 13.5px; color: var(--text-on-inverse); }
+        .spinner {
+            border: 5px solid var(--navy-600); border-top: 5px solid var(--navy-100);
+            border-radius: 50%; width: 44px; height: 44px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        @media (prefers-reduced-motion: reduce) {
+            .spinner { animation-duration: 0.01ms; }
+            .pdf-download-button { transition-duration: 0.01ms; }
+        }
+
+        /* ==========================================================
+           인쇄 (DESIGN.md 10.3) - 토큰을 잉크/종이 값으로 교체한다.
+           브라스 강조는 색이 아니라 굵기와 밑줄로 대체된다.
+           ========================================================== */
+        @media print {
+            :root {
+                --surface: var(--print-paper);
+                --surface-sunken: var(--print-paper);
+                --surface-subtle: var(--print-paper);
+                --surface-inverse: var(--print-paper);
+                --text-primary: var(--print-ink);
+                --text-secondary: var(--print-ink);
+                --text-tertiary: var(--print-rule);
+                --border: var(--print-rule);
+                --border-strong: var(--print-ink);
+                --border-subtle: var(--print-rule);
+                --rule-heavy: var(--print-ink);
+                --rule-mid: var(--print-ink);
+                --rule-hair: var(--print-rule);
+                --rule-faint: var(--print-rule);
+                --action: var(--print-ink);
+                --accent: var(--print-ink);
+                --accent-strong: var(--print-ink);
+                --shadow-page: none;
+            }
+            /* 10.5.6 시각화 색은 정보이므로 인쇄에서도 유지한다 */
+            .omr-cell, .cat-chip, .catbar-fill, .cat-dot, .qtable td.c-rate,
+            .disc-panel, .gg-track, .heat-legend i, canvas {
+                print-color-adjust: exact; -webkit-print-color-adjust: exact;
+            }
+            @page { size: A4; margin: 14mm; }
+            body { background: var(--print-paper); }
+            .a4-page {
+                width: auto; min-height: 0; margin: 0; padding: 0;
+                box-shadow: none; break-inside: avoid; page-break-after: always;
+            }
+            .a4-page:last-child { page-break-after: auto; }
+            .pdf-download-button, #pdf-loading-overlay { display: none; }
+            .page-foot { position: static; left: auto; right: auto; margin-top: 28px; }
+            /* 색이 빠지는 지면에서 성취 강조는 밑줄로 살린다 */
+            .outcome-accent { text-decoration: underline; text-underline-offset: 3px; }
+            .grade-value { font-weight: 700; }
+            .rpt-table, .subject-item, .sw-item, .callout, .roadmap-item, .outcome-banner { break-inside: avoid; }
+            .section-title-report, .page-head-title, .sw-col-title { break-after: avoid; }
+            a[href]::after { content: none; }
+        }
+
+        /* ===== 시험 분석지 전용 ===== */
+        .info-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; padding: 4px 0 22px; border-bottom: 1px solid var(--rule-hair); }
+        .info-label { margin: 0 0 5px; font-size: 9.5px; font-weight: 600; letter-spacing: 0.14em; color: var(--text-tertiary); }
+        .info-value { margin: 0; font-size: 20px; font-weight: 700; letter-spacing: -0.03em; line-height: 1; color: var(--text-primary); }
+        .info-unit { font-size: 11px; font-weight: 500; letter-spacing: 0; color: var(--text-tertiary); }
+
+        .trend-item { border-top: 1px solid var(--rule-faint); padding: 11px 0; }
+        .trend-item:first-child { border-top: 1px solid var(--rule-mid); }
+        .trend-q { margin: 0 0 4px; font-size: 11px; font-weight: 700; letter-spacing: 0.02em; color: var(--text-primary); }
+        .trend-d { margin: 0; font-size: 10.5px; line-height: 1.75; color: var(--text-secondary); }
+        .review-text { margin: 0; font-size: 10.5px; line-height: 1.8; color: var(--text-secondary); white-space: pre-line; max-width: 68ch; }
+        .review-body { max-width: 68ch; }
+        .review-head { margin: 14px 0 6px; font-family: var(--font-serif); font-size: 12px; font-weight: 600; letter-spacing: -0.01em; color: var(--text-primary); }
+        .review-head:first-child { margin-top: 0; }
+        .review-para { margin: 0 0 7px; font-size: 10.5px; line-height: 1.8; color: var(--text-secondary); }
+
+        /* 문항 표 */
+        .qtable { width: 100%; border-collapse: collapse; font-size: 9.5px; }
+        .qtable thead th {
+            padding: 6px 5px; font-weight: 600; font-size: 8.5px; letter-spacing: 0.08em;
+            color: var(--text-tertiary); background: var(--surface-subtle);
+            border-top: 2px solid var(--rule-heavy); border-bottom: 1px solid var(--rule-mid);
+            text-align: left; white-space: nowrap;
+        }
+        .qtable tbody td { padding: 4px 5px; border-bottom: 1px solid var(--rule-faint); color: var(--text-secondary); vertical-align: middle; }
+        .qtable tbody tr:last-child td { border-bottom: 1px solid var(--rule-mid); }
+        .qtable .c-num { text-align: right; width: 30px; font-variant-numeric: tabular-nums; color: var(--text-primary); font-weight: 600; }
+        .qtable .c-rate { text-align: right; width: 38px; font-variant-numeric: tabular-nums; }
+        .qtable .c-mid { text-align: center; width: 34px; }
+        .qtable .c-type { color: var(--text-tertiary); }
+        .qtable tbody td:nth-child(2) { white-space: nowrap; color: var(--text-primary); }
+        .qtable thead .c-num, .qtable thead .c-rate { text-align: right; }
+        .qtable thead .c-mid { text-align: center; }
+
+        .ox { display: inline-block; width: 15px; line-height: 15px; font-size: 9px; font-weight: 700; text-align: center; }
+        .ox-o { color: var(--fn-success); }
+        .ox-x { color: var(--fn-warning); }
+        .diff { display: inline-block; font-size: 8.5px; font-weight: 700; }
+        .diff-hi { color: var(--fn-warning); }
+        .diff-mid { color: var(--text-secondary); }
+        .diff-lo { color: var(--fn-success); }
+
+        .qtable-split { display: grid; grid-template-columns: 1fr 1fr; gap: 0 26px; }
+
+        /* 변별 목록 */
+        .disc-list { list-style: none; margin: 0; padding: 0; }
+        .disc-item { display: flex; align-items: baseline; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--rule-faint); font-size: 10.5px; }
+        .disc-item:first-child { border-top: 1px solid var(--rule-mid); }
+        .disc-num { flex-shrink: 0; width: 34px; font-weight: 700; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+        .disc-meta { flex: 1; color: var(--text-secondary); }
+        .disc-rate { flex-shrink: 0; color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
+        .disc-item.miss .disc-num { color: var(--fn-warning); }
+        .disc-item.won .disc-num { color: var(--fn-success); }
+
+        /* 틀린 문항 해설 */
+        .wrong-item { border-top: 1px solid var(--rule-faint); padding: 6px 0; break-inside: avoid; }
+        .wrong-item:first-child { border-top: 1px solid var(--rule-mid); }
+        .wrong-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 4px; }
+        .wrong-num { flex-shrink: 0; font-size: 12px; font-weight: 700; color: var(--fn-warning); font-variant-numeric: tabular-nums; }
+        .wrong-meta { flex: 1; font-size: 9.5px; color: var(--text-tertiary); }
+        .wrong-rate { flex-shrink: 0; font-size: 9.5px; color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
+        .wrong-answer { margin: 0 0 3px; font-size: 9.5px; font-weight: 600; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+        .wrong-text { margin: 0; font-size: 9.5px; line-height: 1.6; color: var(--text-secondary); }
+        .wrong-grid { column-count: 2; column-gap: 26px; }
+        .h-40 { height: 160px; }
+        .h-72 { height: 290px; }
+
+        /* ===== 10.5 데이터 시각화 ===== */
+        .section-title-report::before {
+            content: ''; display: inline-block; width: 4px; height: 13px;
+            background: var(--cat-1); margin-right: 9px; vertical-align: -1px;
+        }
+
+        /* 등급 게이지 */
+        .grade-gauge { margin: 22px 0 0; }
+        .gg-track { position: relative; height: 12px; border-radius: 2px; overflow: hidden;
+            background: linear-gradient(90deg, var(--cat-3) 0%, var(--cat-3) 22%, var(--cat-4) 45%, var(--cat-4) 62%, var(--cat-5) 85%, var(--cat-5) 100%); }
+        .gg-ticks { position: relative; height: 14px; margin-top: 4px; }
+        .gg-tick { position: absolute; transform: translateX(-50%); font-size: 8.5px; color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
+        .gg-marker { position: absolute; top: -4px; transform: translateX(-50%);
+            width: 3px; height: 20px; background: var(--text-primary); }
+        .gg-flag { position: absolute; top: -22px; transform: translateX(-50%);
+            font-size: 9px; font-weight: 700; color: var(--text-primary); white-space: nowrap; }
+        .gg-wrap { position: relative; }
+        .gg-caption { margin: 6px 0 0; font-size: 9.5px; color: var(--text-tertiary); letter-spacing: 0.02em; }
+
+        /* 정오 히트맵 (OMR 격자) */
+        .omr { display: grid; grid-template-columns: repeat(9, 1fr); gap: 5px; }
+        .omr-cell { position: relative; border: 1.5px solid var(--rule-mid); border-radius: 2px;
+            padding: 5px 2px 4px; text-align: center; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+        .omr-num { display: block; font-size: 8px; color: var(--text-tertiary); font-variant-numeric: tabular-nums; line-height: 1; }
+        .omr-mark { display: block; margin-top: 2px; font-size: 13px; font-weight: 700; line-height: 1; }
+        .omr-o { background: var(--heat-5); }
+        .omr-o .omr-mark { color: var(--heat-ink-5); }
+        .omr-x { background: var(--heat-1); }
+        .omr-x .omr-mark { color: var(--heat-ink-1); }
+        .omr-legend { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 12px; font-size: 9.5px; color: var(--text-secondary); }
+        .omr-legend span.key { display: inline-block; width: 9px; height: 9px; margin-right: 5px; vertical-align: -1px; border: 1.5px solid var(--rule-mid); }
+
+        /* 영역별 성취 바 */
+        .catbars > * + * { margin-top: 13px; }
+        .catbar-head { display: flex; align-items: baseline; gap: 7px; margin-bottom: 5px; font-size: 10.5px; }
+        .cat-chip { width: 9px; height: 9px; flex-shrink: 0; border-radius: 1px; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+        .catbar-name { font-weight: 700; color: var(--text-primary); }
+        .catbar-meta { flex: 1; color: var(--text-tertiary); font-size: 9.5px; }
+        .catbar-val { font-weight: 700; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+        .catbar-track { position: relative; height: 9px; background: var(--rule-faint); border-radius: 1px; }
+        .catbar-fill { height: 9px; border-radius: 1px; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+        .catbar-avg { position: absolute; top: -3px; width: 2px; height: 15px; background: var(--text-primary); transform: translateX(-1px); }
+        .catbar-note { margin: 12px 0 0; font-size: 9.5px; color: var(--text-tertiary); }
+        .catbar-note .avgkey { display: inline-block; width: 2px; height: 10px; background: var(--text-primary); vertical-align: -1px; margin-right: 5px; }
+
+        /* 문항표 색 */
+        .qtable .c-cat { white-space: nowrap; color: var(--text-primary); }
+        .cat-dot { display: inline-block; width: 7px; height: 7px; border-radius: 1px; margin-right: 4px; vertical-align: 0; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+        .dbadge { display: inline-block; min-width: 15px; padding: 0 3px; border: 1px solid; border-radius: 2px; font-size: 8px; font-weight: 700; line-height: 13px; }
+        .qtable tbody tr:nth-child(even) { background: var(--surface-sunken); }
+        .qtable td.c-rate { font-weight: 600; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+        .heat-1 { background: var(--heat-1) !important; color: var(--heat-ink-1); }
+        .heat-2 { background: var(--heat-2) !important; color: var(--heat-ink-2); }
+        .heat-3 { background: var(--heat-3) !important; color: var(--heat-ink-3); }
+        .heat-4 { background: var(--heat-4) !important; color: var(--heat-ink-4); }
+        .heat-5 { background: var(--heat-5) !important; color: var(--heat-ink-5); }
+        .heat-na { color: var(--text-tertiary); }
+        .ox-o { color: var(--heat-ink-5); font-weight: 700; }
+        .ox-x { color: var(--heat-ink-1); font-weight: 700; }
+
+        /* 변별 패널 색 블록 */
+        .disc-panel { border: 1px solid var(--rule-hair); border-top: 3px solid var(--cat-5); padding: 14px 16px; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+        .disc-panel.is-won { border-top-color: var(--cat-3); }
+        .disc-panel .disc-item:first-child { border-top: none; padding-top: 0; }
+        .disc-panel .disc-item { border-bottom: 1px solid var(--rule-faint); border-top: none; }
+        .disc-panel .disc-item:last-child { border-bottom: none; }
+
+        /* 히트 스케일 범례 */
+        .heat-legend { display: flex; align-items: center; gap: 0; margin-top: 12px; font-size: 9px; }
+        .heat-legend i { display: block; width: 34px; height: 9px; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+        .heat-legend .lab { margin: 0 8px; color: var(--text-tertiary); }
+
+        /* ==========================================================
+           v3 시각 세계: 모던 데이터 리포트 (dashboard x knolling)
+           지면은 '종이'가 아니라 '리포트 캔버스'. 구획은 괘선이 아니라 카드.
+           ========================================================== */
+        body { background: var(--app-bg); }
+
+        .a4-page {
+            background: var(--app-bg);
+            border-radius: 18px;
+            box-shadow: 0 1px 2px rgba(19,30,49,.06), 0 18px 44px rgba(19,30,49,.10);
+            padding: 30px;
+            overflow: hidden;
+        }
+
+        /* --- 섹션 = 카드 (knolling: 90도 정렬, 균등 간격, 겹침 없음) --- */
+        .section, .section-tight {
+            background: var(--surface);
+            border: 1px solid var(--card-line);
+            border-radius: 14px;
+            padding: 20px 22px 22px;
+            box-shadow: 0 1px 2px rgba(19,30,49,.04);
+        }
+        .section { margin-bottom: 14px; }
+        .section-tight { margin-bottom: 14px; }
+
+        /* --- 카드 헤더: 컬러 액센트 + 마이크로 라벨 --- */
+        .section-title-report {
+            display: flex; align-items: center; gap: 9px;
+            font-family: var(--font-sans);
+            font-size: 12px; font-weight: 800; letter-spacing: 0.02em;
+            color: var(--text-primary);
+            margin: 0 0 16px; padding: 0 0 12px;
+            border-bottom: 1px solid var(--card-line);
+        }
+        .section-title-report::before {
+            content: ''; width: 5px; height: 5px; border-radius: 50%;
+            background: var(--accent-blue); flex-shrink: 0;
+        }
+
+        /* --- 히어로 밴드 --- */
+        .hero {
+            background: linear-gradient(135deg, var(--navy-900) 0%, var(--navy-800) 55%, var(--navy-700) 100%);
+            border-radius: 14px; padding: 26px 26px 22px; margin-bottom: 14px;
+            color: var(--text-on-inverse); position: relative; overflow: hidden;
+            print-color-adjust: exact; -webkit-print-color-adjust: exact;
+        }
+        .hero-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
+        .hero-eyebrow { margin: 0 0 8px; font-size: 9.5px; font-weight: 800; letter-spacing: 0.22em; color: var(--accent-gold); }
+        .hero-name { margin: 0; font-size: 30px; font-weight: 800; letter-spacing: -0.035em; line-height: 1.1; }
+        .hero-sub { margin: 8px 0 0; font-size: 11.5px; color: var(--hero-muted); line-height: 1.6; }
+        .hero-gradebox { text-align: right; flex-shrink: 0; }
+        .hero-gradelabel { margin: 0; font-size: 9px; font-weight: 700; letter-spacing: 0.18em; color: var(--hero-muted); }
+        .hero-grade { margin: 2px 0 0; font-size: 62px; font-weight: 800; line-height: .9; letter-spacing: -0.06em; color: var(--accent-gold); }
+        .hero-gradeunit { font-size: 15px; font-weight: 700; letter-spacing: 0; color: var(--hero-muted); }
+
+        /* 히어로 스탯 카드 행 */
+        .statrow { display: grid; grid-template-columns: repeat(4, 1fr); gap: 9px; margin-top: 20px; }
+        .stat {
+            background: var(--hero-tile); border: 1px solid var(--hero-tile-line);
+            border-radius: 10px; padding: 11px 12px 12px;
+            print-color-adjust: exact; -webkit-print-color-adjust: exact;
+        }
+        .stat-k { margin: 0 0 6px; font-size: 8.5px; font-weight: 700; letter-spacing: 0.14em; color: var(--hero-muted); }
+        .stat-v { margin: 0; font-size: 22px; font-weight: 800; letter-spacing: -0.035em; line-height: 1; }
+        .stat-u { font-size: 10px; font-weight: 600; letter-spacing: 0; color: var(--hero-muted); margin-left: 2px; }
+
+        /* --- 인사이트 한 줄 (데이터 스토리텔링) --- */
+        .insight {
+            display: flex; align-items: flex-start; gap: 12px;
+            background: var(--insight-bg); border: 1px solid var(--insight-line);
+            border-radius: 11px; padding: 14px 16px; margin: 0 0 16px;
+        }
+        .insight-mark {
+            flex-shrink: 0; width: 4px; align-self: stretch; border-radius: 2px;
+            background: var(--accent-blue); print-color-adjust: exact; -webkit-print-color-adjust: exact;
+        }
+        .insight-text { margin: 0; font-size: 14px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.5; color: var(--text-primary); }
+        .insight-text em { font-style: normal; color: var(--accent-blue); }
+        .insight-text b { color: var(--accent-gold-ink); }
+        .insight-sub { margin: 5px 0 0; font-size: 10.5px; font-weight: 500; color: var(--text-secondary); line-height: 1.6; }
+
+        /* --- 러닝헤드 --- */
+        .page-head {
+            display: flex; align-items: center; justify-content: space-between;
+            margin-bottom: 14px; padding: 0 4px 0 2px; border-bottom: none;
+        }
+        .page-head-title {
+            margin: 0; font-family: var(--font-sans);
+            font-size: 19px; font-weight: 800; letter-spacing: -0.03em; color: var(--text-primary);
+        }
+        .page-head-num {
+            font-size: 9px; font-weight: 800; letter-spacing: 0.14em; color: var(--text-tertiary);
+            background: var(--surface); border: 1px solid var(--card-line);
+            border-radius: 999px; padding: 4px 10px;
+        }
+
+        /* --- 지면 꼬리 --- */
+        .page-foot {
+            position: absolute; bottom: 14px; left: 30px; right: 30px;
+            padding-top: 0; border-top: none;
+            text-align: center; font-size: 8.5px; letter-spacing: 0.1em; color: var(--text-tertiary);
+        }
+    </style>
+</head>
+<body>
+<!-- 데모 고지 배너: 이 파일은 가상 데이터 미리보기용 정적 산출물이다. -->
+<div role="note" style="position:sticky;top:0;z-index:9999;background:#FBF1DF;border-bottom:2px solid #E0C48A;color:#8F5A00;font-family:Pretendard,'Malgun Gothic',system-ui,sans-serif;font-size:13px;font-weight:700;line-height:1.5;text-align:center;padding:10px 16px;letter-spacing:-0.01em;-webkit-print-color-adjust:exact;print-color-adjust:exact;">⚠ 데모 미리보기 - 가상 응시자 15명 시뮬레이션 데이터입니다. 실제 학생 성적이 아닙니다.</div>
+    <div id="pdf-loading-overlay" style="display: none;">
+        <div class="spinner"></div>
+        <p>PDF 파일을 생성 중입니다. 잠시만 기다려주세요...</p>
+    </div>
+
+    <button id="pdf-download-btn" class="pdf-download-button">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+        </svg>
+        PDF 다운로드
+    </button>
+
+    <section id="report-content">
+        <!-- Page 1: 종합 현황 -->
+        <div class="a4-page">
+            <div class="hero">
+                <div class="hero-top">
+                    <div>
+                        <p class="hero-eyebrow">올가국어 종합 분석 결과</p>
+                        <h1 class="hero-name">김민수</h1>
+                        <p class="hero-sub">강남고등학교 · 중3 · 2025. 11. 18. 응시<br>올가교육 수능연구소</p>
+                    </div>
+                    <div class="hero-gradebox">
+                        <p class="hero-gradelabel">종합 등급</p>
+                        <p class="hero-grade">4<span class="hero-gradeunit">등급</span></p>
+                    </div>
+                </div>
+                <div class="statrow">
+                    <div class="stat"><p class="stat-k">원점수</p><p class="stat-v">61<span class="stat-u">/100</span></p></div>
+                    <div class="stat"><p class="stat-k">표준점수</p><p class="stat-v">128</p></div>
+                    <div class="stat"><p class="stat-k">백분위</p><p class="stat-v">61<span class="stat-u">%</span></p></div>
+                    <div class="stat"><p class="stat-k">학년</p><p class="stat-v">중3</p></div>
+                </div>
+            </div>
+
+            <section class="section">
+                <h2 class="section-title-report">성적 총괄 현황</h2>
+                <div class="insight"><div class="insight-mark"></div><div><p class="insight-text"><em>작문</em> 영역이 80%로 가장 높고, <em>화법</em> 영역이 20%로 가장 낮습니다.</p><p class="insight-sub">전체 45문항 중 27문항 정답 · 응시자 15명 중 14위</p></div></div>
+
+                <div class="grade-gauge">
+                    <div class="gg-wrap">
+                        <div class="gg-track"></div>
+                        <div class="gg-marker" style="left:38.88888888888889%"></div>
+                        <div class="gg-flag" style="left:38.88888888888889%">4등급</div>
+                    </div>
+                    <div class="gg-ticks">
+                        <span class="gg-tick" style="left:5.555555555555555%">1</span><span class="gg-tick" style="left:16.666666666666664%">2</span><span class="gg-tick" style="left:27.77777777777778%">3</span><span class="gg-tick" style="left:38.88888888888889%">4</span><span class="gg-tick" style="left:50%">5</span><span class="gg-tick" style="left:61.111111111111114%">6</span><span class="gg-tick" style="left:72.22222222222221%">7</span><span class="gg-tick" style="left:83.33333333333334%">8</span><span class="gg-tick" style="left:94.44444444444444%">9</span>
+                    </div>
+                    <p class="gg-caption">1등급에 가까울수록 상위입니다.</p>
+                </div>
+            </section>
+
+            <section class="section">
+                <h2 class="section-title-report">영역별 점수 현황</h2>
+                <div class="panel">
+                    <div class="chart-frame h-52">
+                        <canvas id="scoreChart"></canvas>
+                    </div>
+                    <div class="legend-row">
+                        <div class="legend-item"><div class="legend-swatch sw-excellent"></div><span>우수 (80% 이상)</span></div>
+                        <div class="legend-item"><div class="legend-swatch sw-good"></div><span>양호 (70-79%)</span></div>
+                        <div class="legend-item"><div class="legend-swatch sw-fair"></div><span>보통 (60-69%)</span></div>
+                        <div class="legend-item"><div class="legend-swatch sw-weak"></div><span>미흡 (60% 미만)</span></div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="section-tight">
+                <h2 class="section-title-report">백분위 분포도</h2>
+                <div class="panel">
+                    <div class="chart-frame h-44">
+                        <canvas id="percentileChart"></canvas>
+                    </div>
+                </div>
+            </section>
+
+            <div class="page-foot">
+                © 2025 올가교육 수능연구소 | Page 1 / 12
+            </div>
+        </div>
+
+
+        <!-- Page 2: 시험지 개요 (신규) -->
+        
+        <div class="a4-page">
+            <div class="page-head">
+                <h2 class="page-head-title">시험지 개요</h2>
+                <span class="page-head-num">Page 2</span>
+            </div>
+
+            <section class="section">
+                <h2 class="section-title-report">시험 정보</h2>
+                <div class="info-grid">
+                    <div><p class="info-label">총 문항</p><p class="info-value">45<span class="info-unit">문항</span></p></div>
+                    <div><p class="info-label">총점</p><p class="info-value">100<span class="info-unit">점</span></p></div>
+                    <div><p class="info-label">응시자</p><p class="info-value">15<span class="info-unit">명</span></p></div>
+                    <div><p class="info-label">출제 영역</p><p class="info-value">5<span class="info-unit">개</span></p></div>
+                </div>
+            </section>
+
+            <section class="section">
+                <h2 class="section-title-report">영역별 배점 구성</h2>
+                <div class="grid-2">
+                    <div class="chart-frame h-64"><canvas id="categoryDonut"></canvas></div>
+                    <div>
+                        <div class="catbars"><div class="catbar"><div class="catbar-head"><span class="cat-chip" style="background: var(--cat-1)"></span><span class="catbar-name">화법</span><span class="catbar-meta">5문항 · 11점</span><span class="catbar-val">20%</span></div><div class="catbar-track"><div class="catbar-fill" style="width:20%; background: var(--cat-1)"></div><div class="catbar-avg" style="left:77%" title="전체 평균"></div></div></div><div class="catbar"><div class="catbar-head"><span class="cat-chip" style="background: var(--cat-2)"></span><span class="catbar-name">작문</span><span class="catbar-meta">5문항 · 11점</span><span class="catbar-val">80%</span></div><div class="catbar-track"><div class="catbar-fill" style="width:80%; background: var(--cat-2)"></div><div class="catbar-avg" style="left:95%" title="전체 평균"></div></div></div><div class="catbar"><div class="catbar-head"><span class="cat-chip" style="background: var(--cat-6)"></span><span class="catbar-name">문법</span><span class="catbar-meta">5문항 · 11점</span><span class="catbar-val">60%</span></div><div class="catbar-track"><div class="catbar-fill" style="width:60%; background: var(--cat-6)"></div><div class="catbar-avg" style="left:77%" title="전체 평균"></div></div></div><div class="catbar"><div class="catbar-head"><span class="cat-chip" style="background: var(--cat-3)"></span><span class="catbar-name">수능독서</span><span class="catbar-meta">15문항 · 33점</span><span class="catbar-val">60%</span></div><div class="catbar-track"><div class="catbar-fill" style="width:60%; background: var(--cat-3)"></div><div class="catbar-avg" style="left:86%" title="전체 평균"></div></div></div><div class="catbar"><div class="catbar-head"><span class="cat-chip" style="background: var(--cat-4)"></span><span class="catbar-name">문학</span><span class="catbar-meta">15문항 · 34점</span><span class="catbar-val">67%</span></div><div class="catbar-track"><div class="catbar-fill" style="width:67%; background: var(--cat-4)"></div><div class="catbar-avg" style="left:66%" title="전체 평균"></div></div></div></div>
+                        <p class="catbar-note"><span class="avgkey"></span>세로 눈금은 응시자 15명의 영역별 평균 정답률입니다.</p>
+                    </div>
+                </div>
+            </section>
+
+            <section class="section">
+                <h2 class="section-title-report">난이도 구성</h2>
+                <div class="panel">
+                    <div class="chart-frame h-40"><canvas id="difficultyBar"></canvas></div>
+                </div>
+            </section>
+
+            <div class="page-foot">© 2025 올가교육 수능연구소 | Page 2 / 12</div>
+        </div>
+
+        <!-- Page 3: 출제 경향과 총평 (신규) -->
+        
+        <div class="a4-page">
+            <div class="page-head">
+                <h2 class="page-head-title">출제 경향과 총평</h2>
+                <span class="page-head-num">Page 3</span>
+            </div>
+
+            <section class="section">
+                <h2 class="section-title-report">난이도 상위 문항의 출제 경향</h2>
+                <div class="trend-item"><p class="trend-q">7번, 20번, 24번, 30번</p><p class="trend-d">복합 정보의 해석을 요구하는 문항들로, 본문 내용뿐만 아니라 &lt;보기&gt;에 제시된 추가 자료(그래프, 통계, 우화, 그림 등)를 정확히 해석하고 이를 본문의 정보와 결합하여 새로운 결론을 도출해야 하는 문제들이 어렵게 출제되었습니다. 단순히 내용을 찾는 것을 넘어, 정보를 가공하고 적용하는 능력을 요구합니다.</p></div><div class="trend-item"><p class="trend-q">12번, 14번</p><p class="trend-d">문법의 기본 개념을 넘어, 특수한 조건에서만 성립하는 예외적인 규정이나 용법을 정확히 알고 있는지를 물었습니다.(`안절부절못하다`처럼 부정어와만 결합하는 용언, `-었-`의 미래 표현 용법 등) 암기만으로는 부족하며, 개념에 대한 깊이 있는 이해가 필요합니다.</p></div><div class="trend-item"><p class="trend-q">33번, 36번</p><p class="trend-d">&lt;보기&gt;에 제시된 시대적 배경, 사회 비평적 관점, 작가 정보 등 외적 준거를 바탕으로 작품을 깊이 있게 감상하고 비판하는 능력을 요구했습니다. 작품 내적인 요소뿐만 아니라 외부 정보와의 연결고리를 찾아 해석해야 하므로 종합적인 사고력이 필요합니다.</p></div>
+            </section>
+
+            <section>
+                <h2 class="section-title-report">출제자 총평</h2>
+                <div class="review-body"><p class="review-para">이번 미.수.등에서는 하나의 지문에 여러 문항이 연결된 세트형 문항이 주를 이루었으며, 실제 수능의 형식과 구성을 충실히 반영하여 종합적인 학생의 국어 능력과 잠재력을 측정하고자 한 시험입니다.문제 유형에서는 &lt;보기&gt;를 활용하여 구체적 상황에 적용하거나 다른 관점과 비교·분석하는 수능형 고난도 문제가 다수 포함되어 변별력을 높였습니다.이번 미.수.등을 바탕으로 좋은 성적을 얻기 위해서는, 평소에 다양한 분야의 독서(비문학)를 통해 배경지식을 넓히고, 문학 작품을 감상할 때 내적 요소와 외적 준거를 연결하는 연습을 꾸준히 해야 합니다. 문법은 기본 개념을 암기하는 데서 그치지 않고, 실제 예문에 적용하며 예외적인 경우까지 파악하는 심화 학습이 필요합니다. 또한, 실제 시험처럼 시간을 정해두고 문제를 푸는 연습을 통해 시간 관리 능력을 기르는 것이 중요합니다.</p><h4 class="review-head">상/최상 난이도 문항 출제 경향 - 추론과 비판적 사고 요구</h4><h4 class="review-head">복합 정보의 해석 요구 (7번, 20번, 24번, 30번)</h4><p class="review-para">복합 정보의 해석을 요구하는 문항들로, 본문 내용뿐만 아니라 &lt;보기&gt;에 제시된 추가 자료(그래프, 통계, 우화, 그림 등)를 정확히 해석하고 이를 본문의 정보와 결합하여 새로운 결론을 도출해야 하는 문제들이 어렵게 출제되었습니다. 단순히 내용을 찾는 것을 넘어, 정보를 가공하고 적용하는 능력을 요구합니다.</p><h4 class="review-head">문법의 예외적 규정 (12번, 14번)</h4><p class="review-para">문법의 기본 개념을 넘어, 특수한 조건에서만 성립하는 예외적인 규정이나 용법을 정확히 알고 있는지를 물었습니다. (&#039;안절부절못하다&#039;처럼 부정어와만 결합하는 용언, &#039;-었-&#039;의 미래 표현 용법 등) 암기만으로는 부족하며, 개념에 대한 깊이 있는 이해가 필요합니다.</p><h4 class="review-head">외적 준거를 활용한 감상 (33번, 36번)</h4><p class="review-para">&lt;보기&gt;에 제시된 시대적 배경, 사회 비평적 관점, 작가 정보 등 외적 준거를 바탕으로 작품을 깊이 있게 감상하고 비판하는 능력을 요구했습니다. 작품 내적인 요소뿐만 아니라 외부 정보와의 연결고리를 찾아 해석해야 하므로 종합적인 사고력이 필요합니다.</p></div>
+            </section>
+
+            <div class="page-foot">© 2025 올가교육 수능연구소 | Page 3 / 12</div>
+        </div>
+
+        <!-- Page 4: 영역별 상세 분석 -->
+        <div class="a4-page">
+            <div class="page-head">
+                <h2 class="page-head-title">영역별 상세 분석</h2>
+                <span class="page-head-num">Page 4</span>
+            </div>
+
+            <section class="section">
+                <h2 class="section-title-report">영역별 성취도 상세</h2>
+                <div class="grid-2">
+                    <div class="subject-item is-weak"><div class="subject-head"><h3 class="subject-name">화법</h3><span class="subject-score">20%</span></div><p class="subject-scoretext">취득 2점 / 만점 11점 (1/5문항 정답)</p><div class="meter"><div class="meter-fill" style="width: 20%"></div></div><div class="subject-body"><p class="analysis-label is-neutral-label">📋 전문가 분석</p><p class="analysis-text">김민수 학생은 화법 영역에서 전체 평균 65%에 크게 못 미치는 20%의 정답률을 기록하며 매우 취약한 모습을 보였습니다. 특히 &#039;듣기의 과정-주요 내용과 의도 파악&#039;, &#039;상황에 따른 화법-공손한 표현 사용&#039;, &#039;표현 전략-자료 활용&#039; 등 기본적인 화법 원리 및 전략 이해에 어려움을 겪는 것으로 분석됩니다. 화법의 기초 개념부터 다시 학습해야 합니다.</p></div></div><div class="subject-item is-excellent"><div class="subject-head"><h3 class="subject-name">작문</h3><span class="subject-score">80%</span></div><p class="subject-scoretext">취득 9점 / 만점 11점 (4/5문항 정답)</p><div class="meter"><div class="meter-fill" style="width: 80%"></div></div><div class="subject-body"><p class="analysis-label is-neutral-label">📋 전문가 분석</p><p class="analysis-text">작문 영역에서는 평균 65%를 상회하는 80%의 높은 정답률을 달성하며 뛰어난 이해도를 입증했습니다. 이는 작문의 과정 전반에 걸쳐 탄탄한 실력을 갖추고 있음을 보여줍니다. 다만 &#039;작문의 과정-고쳐쓰기&#039; 소분류에서 한 문항을 틀려 아쉬움을 남겼으므로, 해당 부분만 보완한다면 완벽한 성취가 가능할 것입니다.</p></div></div><div class="subject-item is-good"><div class="subject-head"><h3 class="subject-name">문법</h3><span class="subject-score">60%</span></div><p class="subject-scoretext">취득 7점 / 만점 11점 (3/5문항 정답)</p><div class="meter"><div class="meter-fill" style="width: 60%"></div></div><div class="subject-body"><p class="analysis-label is-neutral-label">📋 전문가 분석</p><p class="analysis-text">문법 영역은 평균 65%에 근접한 60%의 정답률을 기록하며 보통 수준의 이해도를 나타냈습니다. &#039;음운의 개념-모음의 분류&#039;, &#039;품사-품사 변별 및 활용 형태&#039;에서 오답이 발생하여 이 부분에 대한 개념이 다소 흔들리는 것으로 판단됩니다. 명확한 개념 정립과 유형별 문제 풀이를 통해 정확도를 높여야 합니다.</p></div></div><div class="subject-item is-good"><div class="subject-head"><h3 class="subject-name">수능독서</h3><span class="subject-score">60%</span></div><p class="subject-scoretext">취득 21점 / 만점 33점 (9/15문항 정답)</p><div class="meter"><div class="meter-fill" style="width: 60%"></div></div><div class="subject-body"><p class="analysis-label is-neutral-label">📋 전문가 분석</p><p class="analysis-text">수능독서 영역에서는 평균 65%와 유사한 60%의 정답률을 보였습니다. &#039;자료 해석-자료의 종합적 이해&#039;, &#039;언어논리 이해와 표현-대상의 특징&#039;, &#039;글의 논리 구조-시간과 변천, 논증&#039;, &#039;사실적 이해-대상의 특징&#039; 등 다양한 유형에서 오답이 확인되어 특정 유형보다는 전반적인 독해력 강화가 필요합니다. 지문 분석 연습이 중요합니다.</p></div></div><div class="subject-item is-good"><div class="subject-head"><h3 class="subject-name">문학</h3><span class="subject-score">67%</span></div><p class="subject-scoretext">취득 22점 / 만점 34점 (10/15문항 정답)</p><div class="meter"><div class="meter-fill" style="width: 67%"></div></div><div class="subject-body"><p class="analysis-label is-neutral-label">📋 전문가 분석</p><p class="analysis-text">문학 영역은 평균 65%를 소폭 상회하는 67%의 정답률을 기록하며 비교적 안정적인 실력을 보였습니다. &#039;문학사적 맥락 이해-작품에 나타난 시공간의 의미&#039;, &#039;내용 이해와 해석-작품의 내용&#039;, &#039;인물 및 화자의 태도 파악-인물의 심리 및 태도&#039;, &#039;표현 방식과 구조 이해-서술상의 특징&#039; 등에서 오답이 나왔습니다. 다양한 작품을 접하며 해석 능력을 심화해야 합니다.</p></div></div>
+                </div>
+            </section>
+
+            <div class="page-foot">
+                © 2025 올가교육 수능연구소 | Page 4 / 12
+            </div>
+        </div>
+
+
+        <!-- Page 5: 정오 현황 히트맵 (신규) -->
+        
+        <div class="a4-page">
+            <div class="page-head">
+                <h2 class="page-head-title">정오 현황</h2>
+                <span class="page-head-num">Page 5</span>
+            </div>
+
+            <section class="section">
+                <h2 class="section-title-report">전 문항 정오 한눈에 보기</h2>
+                <div class="insight"><div class="insight-mark"></div><div><p class="insight-text">틀린 문항은 <b>18문항</b>이고, 그중 난이도 상은 3문항입니다.</p><p class="insight-sub">아래 격자에서 면 색은 정오, 테두리 색은 난이도입니다.</p></div></div>
+                <div class="omr"><div class="omr-cell omr-x" style="border-color: var(--diff-lo)"><span class="omr-num">1</span><span class="omr-mark">X</span></div><div class="omr-cell omr-o" style="border-color: var(--diff-mid)"><span class="omr-num">2</span><span class="omr-mark">O</span></div><div class="omr-cell omr-x" style="border-color: var(--diff-mid)"><span class="omr-num">3</span><span class="omr-mark">X</span></div><div class="omr-cell omr-x" style="border-color: var(--diff-mid)"><span class="omr-num">4</span><span class="omr-mark">X</span></div><div class="omr-cell omr-x" style="border-color: var(--diff-mid)"><span class="omr-num">5</span><span class="omr-mark">X</span></div><div class="omr-cell omr-o" style="border-color: var(--diff-mid)"><span class="omr-num">6</span><span class="omr-mark">O</span></div><div class="omr-cell omr-o" style="border-color: var(--diff-hi)"><span class="omr-num">7</span><span class="omr-mark">O</span></div><div class="omr-cell omr-o" style="border-color: var(--diff-mid)"><span class="omr-num">8</span><span class="omr-mark">O</span></div><div class="omr-cell omr-o" style="border-color: var(--diff-lo)"><span class="omr-num">9</span><span class="omr-mark">O</span></div><div class="omr-cell omr-x" style="border-color: var(--diff-mid)"><span class="omr-num">10</span><span class="omr-mark">X</span></div><div class="omr-cell omr-x" style="border-color: var(--diff-mid)"><span class="omr-num">11</span><span class="omr-mark">X</span></div><div class="omr-cell omr-x" style="border-color: var(--diff-hi)"><span class="omr-num">12</span><span class="omr-mark">X</span></div><div class="omr-cell omr-o" style="border-color: var(--diff-mid)"><span class="omr-num">13</span><span class="omr-mark">O</span></div><div class="omr-cell omr-o" style="border-color: var(--diff-hi)"><span class="omr-num">14</span><span class="omr-mark">O</span></div><div class="omr-cell omr-o" style="border-color: var(--diff-mid)"><span class="omr-num">15</span><span class="omr-mark">O</span></div><div class="omr-cell omr-o" style="border-color: var(--diff-lo)"><span class="omr-num">16</span><span class="omr-mark">O</span></div><div class="omr-cell omr-x" style="border-color: var(--diff-mid)"><span class="omr-num">17</span><span class="omr-mark">X</span></div><div class="omr-cell omr-x" style="border-color: var(--diff-mid)"><span class="omr-num">18</span><span class="omr-mark">X</span></div><div class="omr-cell omr-x" style="border-color: var(--diff-hi)"><span class="omr-num">19</span><span class="omr-mark">X</span></div><div class="omr-cell omr-o" style="border-color: var(--diff-hi)"><span class="omr-num">20</span><span class="omr-mark">O</span></div><div class="omr-cell omr-o" style="border-color: var(--diff-lo)"><span class="omr-num">21</span><span class="omr-mark">O</span></div><div class="omr-cell omr-o" style="border-color: var(--diff-lo)"><span class="omr-num">22</span><span class="omr-mark">O</span></div><div class="omr-cell omr-o" style="border-color: var(--diff-mid)"><span class="omr-num">23</span><span class="omr-mark">O</span></div><div class="omr-cell omr-o" style="border-color: var(--diff-hi)"><span class="omr-num">24</span><span class="omr-mark">O</span></div><div class="omr-cell omr-x" style="border-color: var(--diff-lo)"><span class="omr-num">25</span><span class="omr-mark">X</span></div><div class="omr-cell omr-x" style="border-color: var(--diff-mid)"><span class="omr-num">26</span><span class="omr-mark">X</span></div><div class="omr-cell omr-x" style="border-color: var(--diff-mid)"><span class="omr-num">27</span><span class="omr-mark">X</span></div><div class="omr-cell omr-o" style="border-color: var(--diff-mid)"><span class="omr-num">28</span><span class="omr-mark">O</span></div><div class="omr-cell omr-o" style="border-color: var(--diff-lo)"><span class="omr-num">29</span><span class="omr-mark">O</span></div><div class="omr-cell omr-o" style="border-color: var(--diff-hi)"><span class="omr-num">30</span><span class="omr-mark">O</span></div><div class="omr-cell omr-o" style="border-color: var(--diff-mid)"><span class="omr-num">31</span><span class="omr-mark">O</span></div><div class="omr-cell omr-o" style="border-color: var(--diff-lo)"><span class="omr-num">32</span><span class="omr-mark">O</span></div><div class="omr-cell omr-x" style="border-color: var(--diff-hi)"><span class="omr-num">33</span><span class="omr-mark">X</span></div><div class="omr-cell omr-x" style="border-color: var(--diff-mid)"><span class="omr-num">34</span><span class="omr-mark">X</span></div><div class="omr-cell omr-x" style="border-color: var(--diff-mid)"><span class="omr-num">35</span><span class="omr-mark">X</span></div><div class="omr-cell omr-o" style="border-color: var(--diff-hi)"><span class="omr-num">36</span><span class="omr-mark">O</span></div><div class="omr-cell omr-o" style="border-color: var(--diff-mid)"><span class="omr-num">37</span><span class="omr-mark">O</span></div><div class="omr-cell omr-o" style="border-color: var(--diff-mid)"><span class="omr-num">38</span><span class="omr-mark">O</span></div><div class="omr-cell omr-o" style="border-color: var(--diff-mid)"><span class="omr-num">39</span><span class="omr-mark">O</span></div><div class="omr-cell omr-o" style="border-color: var(--diff-mid)"><span class="omr-num">40</span><span class="omr-mark">O</span></div><div class="omr-cell omr-o" style="border-color: var(--diff-mid)"><span class="omr-num">41</span><span class="omr-mark">O</span></div><div class="omr-cell omr-x" style="border-color: var(--diff-mid)"><span class="omr-num">42</span><span class="omr-mark">X</span></div><div class="omr-cell omr-x" style="border-color: var(--diff-lo)"><span class="omr-num">43</span><span class="omr-mark">X</span></div><div class="omr-cell omr-o" style="border-color: var(--diff-mid)"><span class="omr-num">44</span><span class="omr-mark">O</span></div><div class="omr-cell omr-o" style="border-color: var(--diff-mid)"><span class="omr-num">45</span><span class="omr-mark">O</span></div></div>
+                <div class="omr-legend">
+                    <div><span class="key" style="background:var(--heat-5); border-color:var(--rule-mid)"></span>정답</div>
+                    <div><span class="key" style="background:var(--heat-1); border-color:var(--rule-mid)"></span>오답</div>
+                    <div><span class="key" style="background:transparent; border-color:var(--diff-hi)"></span>난이도 상</div>
+                    <div><span class="key" style="background:transparent; border-color:var(--diff-mid)"></span>난이도 중</div>
+                    <div><span class="key" style="background:transparent; border-color:var(--diff-lo)"></span>난이도 하</div>
+                </div>
+                <p class="figure-note" style="text-align:left; margin-top:14px;">면 색은 정오, 테두리 색은 난이도입니다. 흑백으로 인쇄해도 O와 X 글자로 구분됩니다.</p>
+            </section>
+
+            <section class="section">
+                <h2 class="section-title-report">영역별 배점과 성취</h2>
+                <div class="catbars"><div class="catbar"><div class="catbar-head"><span class="cat-chip" style="background: var(--cat-1)"></span><span class="catbar-name">화법</span><span class="catbar-meta">5문항 · 11점</span><span class="catbar-val">20%</span></div><div class="catbar-track"><div class="catbar-fill" style="width:20%; background: var(--cat-1)"></div><div class="catbar-avg" style="left:77%" title="전체 평균"></div></div></div><div class="catbar"><div class="catbar-head"><span class="cat-chip" style="background: var(--cat-2)"></span><span class="catbar-name">작문</span><span class="catbar-meta">5문항 · 11점</span><span class="catbar-val">80%</span></div><div class="catbar-track"><div class="catbar-fill" style="width:80%; background: var(--cat-2)"></div><div class="catbar-avg" style="left:95%" title="전체 평균"></div></div></div><div class="catbar"><div class="catbar-head"><span class="cat-chip" style="background: var(--cat-6)"></span><span class="catbar-name">문법</span><span class="catbar-meta">5문항 · 11점</span><span class="catbar-val">60%</span></div><div class="catbar-track"><div class="catbar-fill" style="width:60%; background: var(--cat-6)"></div><div class="catbar-avg" style="left:77%" title="전체 평균"></div></div></div><div class="catbar"><div class="catbar-head"><span class="cat-chip" style="background: var(--cat-3)"></span><span class="catbar-name">수능독서</span><span class="catbar-meta">15문항 · 33점</span><span class="catbar-val">60%</span></div><div class="catbar-track"><div class="catbar-fill" style="width:60%; background: var(--cat-3)"></div><div class="catbar-avg" style="left:86%" title="전체 평균"></div></div></div><div class="catbar"><div class="catbar-head"><span class="cat-chip" style="background: var(--cat-4)"></span><span class="catbar-name">문학</span><span class="catbar-meta">15문항 · 34점</span><span class="catbar-val">67%</span></div><div class="catbar-track"><div class="catbar-fill" style="width:67%; background: var(--cat-4)"></div><div class="catbar-avg" style="left:66%" title="전체 평균"></div></div></div></div>
+            </section>
+
+            <div class="page-foot">© 2025 올가교육 수능연구소 | Page 5 / 12</div>
+        </div>
+
+        <!-- Page 6: 문항별 분석 (신규) -->
+        
+        <div class="a4-page">
+            <div class="page-head">
+                <h2 class="page-head-title">문항별 분석</h2>
+                <span class="page-head-num">Page 6</span>
+            </div>
+
+            <section class="section">
+                <h2 class="section-title-report">전 문항 정오 및 전체 정답률</h2>
+                <div class="qtable-split">
+                    <div><table class="qtable"><thead><tr><th class="c-num">번호</th><th>영역</th><th>유형</th><th class="c-mid">난이도</th><th class="c-num">배점</th><th class="c-mid">정오</th><th class="c-rate">전체</th></tr></thead><tbody><tr><td class="c-num">1</td><td class="c-cat"><span class="cat-dot" style="background: var(--cat-1)"></span>화법</td><td class="c-type">주요 내용과 의도 파악</td><td class="c-mid"><span class="dbadge" style="color: var(--diff-lo); border-color: var(--diff-lo)">하</span></td><td class="c-num">2</td><td class="c-mid"><span class="ox ox-x">X</span></td><td class="c-rate heat-4">87%</td></tr><tr><td class="c-num">2</td><td class="c-cat"><span class="cat-dot" style="background: var(--cat-1)"></span>화법</td><td class="c-type">계획하기</td><td class="c-mid"><span class="dbadge" style="color: var(--diff-mid); border-color: var(--diff-mid)">중</span></td><td class="c-num">2</td><td class="c-mid"><span class="ox ox-o">O</span></td><td class="c-rate heat-3">73%</td></tr><tr><td class="c-num">3</td><td class="c-cat"><span class="cat-dot" style="background: var(--cat-1)"></span>화법</td><td class="c-type">공손한 표현 사용</td><td class="c-mid"><span class="dbadge" style="color: var(--diff-mid); border-color: var(--diff-mid)">중</span></td><td class="c-num">2</td><td class="c-mid"><span class="ox ox-x">X</span></td><td class="c-rate heat-4">87%</td></tr><tr><td class="c-num">4</td><td class="c-cat"><span class="cat-dot" style="background: var(--cat-1)"></span>화법</td><td class="c-type">청자와 목적 고려한 말하기</td><td class="c-mid"><span class="dbadge" style="color: var(--diff-mid); border-color: var(--diff-mid)">중</span></td><td class="c-num">2</td><td class="c-mid"><span class="ox ox-x">X</span></td><td class="c-rate heat-3">73%</td></tr><tr><td class="c-num">5</td><td class="c-cat"><span class="cat-dot" style="background: var(--cat-1)"></span>화법</td><td class="c-type">자료 활용</td><td class="c-mid"><span class="dbadge" style="color: var(--diff-mid); border-color: var(--diff-mid)">중</span></td><td class="c-num">3</td><td class="c-mid"><span class="ox ox-x">X</span></td><td class="c-rate heat-3">67%</td></tr><tr><td class="c-num">6</td><td class="c-cat"><span class="cat-dot" style="background: var(--cat-2)"></span>작문</td><td class="c-type">고쳐쓰기</td><td class="c-mid"><span class="dbadge" style="color: var(--diff-mid); border-color: var(--diff-mid)">중</span></td><td class="c-num">2</td><td class="c-mid"><span class="ox ox-o">O</span></td><td class="c-rate heat-4">87%</td></tr><tr><td class="c-num">7</td><td class="c-cat"><span class="cat-dot" style="background: var(--cat-2)"></span>작문</td><td class="c-type">시각 자료 등과 연계한 글쓰기</td><td class="c-mid"><span class="dbadge" style="color: var(--diff-hi); border-color: var(--diff-hi)">상</span></td><td class="c-num">3</td><td class="c-mid"><span class="ox ox-o">O</span></td><td class="c-rate heat-5">100%</td></tr><tr><td class="c-num">8</td><td class="c-cat"><span class="cat-dot" style="background: var(--cat-2)"></span>작문</td><td class="c-type">계획하기, 내용 생성하기</td><td class="c-mid"><span class="dbadge" style="color: var(--diff-mid); border-color: var(--diff-mid)">중</span></td><td class="c-num">2</td><td class="c-mid"><span class="ox ox-o">O</span></td><td class="c-rate heat-5">93%</td></tr><tr><td class="c-num">9</td><td class="c-cat"><span class="cat-dot" style="background: var(--cat-2)"></span>작문</td><td class="c-type">문체의 통일과 적절한 표현</td><td class="c-mid"><span class="dbadge" style="color: var(--diff-lo); border-color: var(--diff-lo)">하</span></td><td class="c-num">2</td><td class="c-mid"><span class="ox ox-o">O</span></td><td class="c-rate heat-5">100%</td></tr><tr><td class="c-num">10</td><td class="c-cat"><span class="cat-dot" style="background: var(--cat-2)"></span>작문</td><td class="c-type">고쳐쓰기</td><td class="c-mid"><span class="dbadge" style="color: var(--diff-mid); border-color: var(--diff-mid)">중</span></td><td class="c-num">2</td><td class="c-mid"><span class="ox ox-x">X</span></td><td class="c-rate heat-5">93%</td></tr><tr><td class="c-num">11</td><td class="c-cat"><span class="cat-dot" style="background: var(--cat-6)"></span>문법</td><td class="c-type">모음의 분류</td><td class="c-mid"><span class="dbadge" style="color: var(--diff-mid); border-color: var(--diff-mid)">중</span></td><td class="c-num">2</td><td class="c-mid"><span class="ox ox-x">X</span></td><td class="c-rate heat-4">87%</td></tr><tr><td class="c-num">12</td><td class="c-cat"><span class="cat-dot" style="background: var(--cat-6)"></span>문법</td><td class="c-type">품사 변별 및 활용 형태</td><td class="c-mid"><span class="dbadge" style="color: var(--diff-hi); border-color: var(--diff-hi)">상</span></td><td class="c-num">2</td><td class="c-mid"><span class="ox ox-x">X</span></td><td class="c-rate heat-4">80%</td></tr><tr><td class="c-num">13</td><td class="c-cat"><span class="cat-dot" style="background: var(--cat-6)"></span>문법</td><td class="c-type">과거, 현재, 미래 시제</td><td class="c-mid"><span class="dbadge" style="color: var(--diff-mid); border-color: var(--diff-mid)">중</span></td><td class="c-num">3</td><td class="c-mid"><span class="ox ox-o">O</span></td><td class="c-rate heat-3">73%</td></tr><tr><td class="c-num">14</td><td class="c-cat"><span class="cat-dot" style="background: var(--cat-6)"></span>문법</td><td class="c-type">과거, 현재, 미래 시제, 동작상</td><td class="c-mid"><span class="dbadge" style="color: var(--diff-hi); border-color: var(--diff-hi)">상</span></td><td class="c-num">2</td><td class="c-mid"><span class="ox ox-o">O</span></td><td class="c-rate heat-3">73%</td></tr><tr><td class="c-num">15</td><td class="c-cat"><span class="cat-dot" style="background: var(--cat-6)"></span>문법</td><td class="c-type">관형어</td><td class="c-mid"><span class="dbadge" style="color: var(--diff-mid); border-color: var(--diff-mid)">중</span></td><td class="c-num">2</td><td class="c-mid"><span class="ox ox-o">O</span></td><td class="c-rate heat-3">73%</td></tr><tr><td class="c-num">16</td><td class="c-cat"><span class="cat-dot" style="background: var(--cat-3)"></span>수능독서</td><td class="c-type">분류 대조 구분 예시</td><td class="c-mid"><span class="dbadge" style="color: var(--diff-lo); border-color: var(--diff-lo)">하</span></td><td class="c-num">2</td><td class="c-mid"><span class="ox ox-o">O</span></td><td class="c-rate heat-4">87%</td></tr><tr><td class="c-num">17</td><td class="c-cat"><span class="cat-dot" style="background: var(--cat-3)"></span>수능독서</td><td class="c-type">자료의 종합적 이해</td><td class="c-mid"><span class="dbadge" style="color: var(--diff-mid); border-color: var(--diff-mid)">중</span></td><td class="c-num">2</td><td class="c-mid"><span class="ox ox-x">X</span></td><td class="c-rate heat-4">80%</td></tr><tr><td class="c-num">18</td><td class="c-cat"><span class="cat-dot" style="background: var(--cat-3)"></span>수능독서</td><td class="c-type">대상의 특징</td><td class="c-mid"><span class="dbadge" style="color: var(--diff-mid); border-color: var(--diff-mid)">중</span></td><td class="c-num">2</td><td class="c-mid"><span class="ox ox-x">X</span></td><td class="c-rate heat-4">87%</td></tr><tr><td class="c-num">19</td><td class="c-cat"><span class="cat-dot" style="background: var(--cat-3)"></span>수능독서</td><td class="c-type">대상의 특징</td><td class="c-mid"><span class="dbadge" style="color: var(--diff-hi); border-color: var(--diff-hi)">상</span></td><td class="c-num">2</td><td class="c-mid"><span class="ox ox-x">X</span></td><td class="c-rate heat-5">93%</td></tr><tr><td class="c-num">20</td><td class="c-cat"><span class="cat-dot" style="background: var(--cat-3)"></span>수능독서</td><td class="c-type">도표의 이해</td><td class="c-mid"><span class="dbadge" style="color: var(--diff-hi); border-color: var(--diff-hi)">상</span></td><td class="c-num">3</td><td class="c-mid"><span class="ox ox-o">O</span></td><td class="c-rate heat-5">93%</td></tr><tr><td class="c-num">21</td><td class="c-cat"><span class="cat-dot" style="background: var(--cat-3)"></span>수능독서</td><td class="c-type">생략된 내용 추론</td><td class="c-mid"><span class="dbadge" style="color: var(--diff-lo); border-color: var(--diff-lo)">하</span></td><td class="c-num">2</td><td class="c-mid"><span class="ox ox-o">O</span></td><td class="c-rate heat-4">80%</td></tr><tr><td class="c-num">22</td><td class="c-cat"><span class="cat-dot" style="background: var(--cat-3)"></span>수능독서</td><td class="c-type">주장과 근거, 대상의 특징</td><td class="c-mid"><span class="dbadge" style="color: var(--diff-lo); border-color: var(--diff-lo)">하</span></td><td class="c-num">2</td><td class="c-mid"><span class="ox ox-o">O</span></td><td class="c-rate heat-4">87%</td></tr><tr><td class="c-num">23</td><td class="c-cat"><span class="cat-dot" style="background: var(--cat-3)"></span>수능독서</td><td class="c-type">대상의 특징</td><td class="c-mid"><span class="dbadge" style="color: var(--diff-mid); border-color: var(--diff-mid)">중</span></td><td class="c-num">2</td><td class="c-mid"><span class="ox ox-o">O</span></td><td class="c-rate heat-4">87%</td></tr></tbody></table></div>
+                    <div><table class="qtable"><thead><tr><th class="c-num">번호</th><th>영역</th><th>유형</th><th class="c-mid">난이도</th><th class="c-num">배점</th><th class="c-mid">정오</th><th class="c-rate">전체</th></tr></thead><tbody><tr><td class="c-num">24</td><td class="c-cat"><span class="cat-dot" style="background: var(--cat-3)"></span>수능독서</td><td class="c-type">생략된 내용 추론</td><td class="c-mid"><span class="dbadge" style="color: var(--diff-hi); border-color: var(--diff-hi)">상</span></td><td class="c-num">3</td><td class="c-mid"><span class="ox ox-o">O</span></td><td class="c-rate heat-4">87%</td></tr><tr><td class="c-num">25</td><td class="c-cat"><span class="cat-dot" style="background: var(--cat-3)"></span>수능독서</td><td class="c-type">시간과 변천, 논증</td><td class="c-mid"><span class="dbadge" style="color: var(--diff-lo); border-color: var(--diff-lo)">하</span></td><td class="c-num">2</td><td class="c-mid"><span class="ox ox-x">X</span></td><td class="c-rate heat-4">80%</td></tr><tr><td class="c-num">26</td><td class="c-cat"><span class="cat-dot" style="background: var(--cat-3)"></span>수능독서</td><td class="c-type">대상의 특징</td><td class="c-mid"><span class="dbadge" style="color: var(--diff-mid); border-color: var(--diff-mid)">중</span></td><td class="c-num">2</td><td class="c-mid"><span class="ox ox-x">X</span></td><td class="c-rate heat-4">87%</td></tr><tr><td class="c-num">27</td><td class="c-cat"><span class="cat-dot" style="background: var(--cat-3)"></span>수능독서</td><td class="c-type">대상의 특징</td><td class="c-mid"><span class="dbadge" style="color: var(--diff-mid); border-color: var(--diff-mid)">중</span></td><td class="c-num">2</td><td class="c-mid"><span class="ox ox-x">X</span></td><td class="c-rate heat-4">87%</td></tr><tr><td class="c-num">28</td><td class="c-cat"><span class="cat-dot" style="background: var(--cat-3)"></span>수능독서</td><td class="c-type">논증</td><td class="c-mid"><span class="dbadge" style="color: var(--diff-mid); border-color: var(--diff-mid)">중</span></td><td class="c-num">2</td><td class="c-mid"><span class="ox ox-o">O</span></td><td class="c-rate heat-3">67%</td></tr><tr><td class="c-num">29</td><td class="c-cat"><span class="cat-dot" style="background: var(--cat-3)"></span>수능독서</td><td class="c-type">대상의 특징</td><td class="c-mid"><span class="dbadge" style="color: var(--diff-lo); border-color: var(--diff-lo)">하</span></td><td class="c-num">2</td><td class="c-mid"><span class="ox ox-o">O</span></td><td class="c-rate heat-5">93%</td></tr><tr><td class="c-num">30</td><td class="c-cat"><span class="cat-dot" style="background: var(--cat-3)"></span>수능독서</td><td class="c-type">이미지의 이해</td><td class="c-mid"><span class="dbadge" style="color: var(--diff-hi); border-color: var(--diff-hi)">상</span></td><td class="c-num">3</td><td class="c-mid"><span class="ox ox-o">O</span></td><td class="c-rate heat-5">93%</td></tr><tr><td class="c-num">31</td><td class="c-cat"><span class="cat-dot" style="background: var(--cat-4)"></span>문학</td><td class="c-type">서술상의 특징</td><td class="c-mid"><span class="dbadge" style="color: var(--diff-mid); border-color: var(--diff-mid)">중</span></td><td class="c-num">2</td><td class="c-mid"><span class="ox ox-o">O</span></td><td class="c-rate heat-5">93%</td></tr><tr><td class="c-num">32</td><td class="c-cat"><span class="cat-dot" style="background: var(--cat-4)"></span>문학</td><td class="c-type">표현상의 특징</td><td class="c-mid"><span class="dbadge" style="color: var(--diff-lo); border-color: var(--diff-lo)">하</span></td><td class="c-num">2</td><td class="c-mid"><span class="ox ox-o">O</span></td><td class="c-rate heat-4">87%</td></tr><tr><td class="c-num">33</td><td class="c-cat"><span class="cat-dot" style="background: var(--cat-4)"></span>문학</td><td class="c-type">작품에 나타난 시공간의 의미</td><td class="c-mid"><span class="dbadge" style="color: var(--diff-hi); border-color: var(--diff-hi)">상</span></td><td class="c-num">3</td><td class="c-mid"><span class="ox ox-x">X</span></td><td class="c-rate heat-3">73%</td></tr><tr><td class="c-num">34</td><td class="c-cat"><span class="cat-dot" style="background: var(--cat-4)"></span>문학</td><td class="c-type">작품의 내용</td><td class="c-mid"><span class="dbadge" style="color: var(--diff-mid); border-color: var(--diff-mid)">중</span></td><td class="c-num">2</td><td class="c-mid"><span class="ox ox-x">X</span></td><td class="c-rate heat-4">80%</td></tr><tr><td class="c-num">35</td><td class="c-cat"><span class="cat-dot" style="background: var(--cat-4)"></span>문학</td><td class="c-type">인물의 심리 및 태도</td><td class="c-mid"><span class="dbadge" style="color: var(--diff-mid); border-color: var(--diff-mid)">중</span></td><td class="c-num">2</td><td class="c-mid"><span class="ox ox-x">X</span></td><td class="c-rate heat-3">73%</td></tr><tr><td class="c-num">36</td><td class="c-cat"><span class="cat-dot" style="background: var(--cat-4)"></span>문학</td><td class="c-type">소재의 의미와 기능</td><td class="c-mid"><span class="dbadge" style="color: var(--diff-hi); border-color: var(--diff-hi)">상</span></td><td class="c-num">3</td><td class="c-mid"><span class="ox ox-o">O</span></td><td class="c-rate heat-4">80%</td></tr><tr><td class="c-num">37</td><td class="c-cat"><span class="cat-dot" style="background: var(--cat-4)"></span>문학</td><td class="c-type">작품의 내용</td><td class="c-mid"><span class="dbadge" style="color: var(--diff-mid); border-color: var(--diff-mid)">중</span></td><td class="c-num">2</td><td class="c-mid"><span class="ox ox-o">O</span></td><td class="c-rate heat-3">67%</td></tr><tr><td class="c-num">38</td><td class="c-cat"><span class="cat-dot" style="background: var(--cat-4)"></span>문학</td><td class="c-type">시적 상황과 대상의 태도</td><td class="c-mid"><span class="dbadge" style="color: var(--diff-mid); border-color: var(--diff-mid)">중</span></td><td class="c-num">2</td><td class="c-mid"><span class="ox ox-o">O</span></td><td class="c-rate heat-4">80%</td></tr><tr><td class="c-num">39</td><td class="c-cat"><span class="cat-dot" style="background: var(--cat-4)"></span>문학</td><td class="c-type">외적 준거에 따른 감상의 적절성</td><td class="c-mid"><span class="dbadge" style="color: var(--diff-mid); border-color: var(--diff-mid)">중</span></td><td class="c-num">3</td><td class="c-mid"><span class="ox ox-o">O</span></td><td class="c-rate heat-4">80%</td></tr><tr><td class="c-num">40</td><td class="c-cat"><span class="cat-dot" style="background: var(--cat-4)"></span>문학</td><td class="c-type">표현상의 특징</td><td class="c-mid"><span class="dbadge" style="color: var(--diff-mid); border-color: var(--diff-mid)">중</span></td><td class="c-num">2</td><td class="c-mid"><span class="ox ox-o">O</span></td><td class="c-rate heat-3">67%</td></tr><tr><td class="c-num">41</td><td class="c-cat"><span class="cat-dot" style="background: var(--cat-4)"></span>문학</td><td class="c-type">화자와 작가의 태도</td><td class="c-mid"><span class="dbadge" style="color: var(--diff-mid); border-color: var(--diff-mid)">중</span></td><td class="c-num">2</td><td class="c-mid"><span class="ox ox-o">O</span></td><td class="c-rate heat-2">53%</td></tr><tr><td class="c-num">42</td><td class="c-cat"><span class="cat-dot" style="background: var(--cat-4)"></span>문학</td><td class="c-type">외적 준거에 따른 감상의 적절성</td><td class="c-mid"><span class="dbadge" style="color: var(--diff-mid); border-color: var(--diff-mid)">중</span></td><td class="c-num">3</td><td class="c-mid"><span class="ox ox-x">X</span></td><td class="c-rate heat-2">53%</td></tr><tr><td class="c-num">43</td><td class="c-cat"><span class="cat-dot" style="background: var(--cat-4)"></span>문학</td><td class="c-type">서술상의 특징</td><td class="c-mid"><span class="dbadge" style="color: var(--diff-lo); border-color: var(--diff-lo)">하</span></td><td class="c-num">2</td><td class="c-mid"><span class="ox ox-x">X</span></td><td class="c-rate heat-1">33%</td></tr><tr><td class="c-num">44</td><td class="c-cat"><span class="cat-dot" style="background: var(--cat-4)"></span>문학</td><td class="c-type">서술자와 작가의 태도</td><td class="c-mid"><span class="dbadge" style="color: var(--diff-mid); border-color: var(--diff-mid)">중</span></td><td class="c-num">2</td><td class="c-mid"><span class="ox ox-o">O</span></td><td class="c-rate heat-2">47%</td></tr><tr><td class="c-num">45</td><td class="c-cat"><span class="cat-dot" style="background: var(--cat-4)"></span>문학</td><td class="c-type">작품의 내용</td><td class="c-mid"><span class="dbadge" style="color: var(--diff-mid); border-color: var(--diff-mid)">중</span></td><td class="c-num">2</td><td class="c-mid"><span class="ox ox-o">O</span></td><td class="c-rate heat-1">27%</td></tr></tbody></table></div>
+                </div>
+                <div class="heat-legend">
+                    <span class="lab">전체 정답률 낮음</span>
+                    <i style="background:var(--heat-1)"></i><i style="background:var(--heat-2)"></i><i style="background:var(--heat-3)"></i><i style="background:var(--heat-4)"></i><i style="background:var(--heat-5)"></i>
+                    <span class="lab">높음</span>
+                </div>
+                <p class="figure-note" style="text-align:left; margin-top:10px;">전체 정답률은 이 시험을 제출한 응시자 15명 기준입니다.</p>
+            </section>
+
+            <div class="page-foot">© 2025 올가교육 수능연구소 | Page 6 / 12</div>
+        </div>
+
+        <!-- Page 7: 난이도 분석 (신규) -->
+        
+        <div class="a4-page">
+            <div class="page-head">
+                <h2 class="page-head-title">난이도 분석</h2>
+                <span class="page-head-num">Page 7</span>
+            </div>
+
+            <section class="section">
+                <h2 class="section-title-report">문항별 전체 정답률</h2>
+                <div class="panel">
+                    <div class="chart-frame h-52"><canvas id="questionRateChart"></canvas></div>
+                    <p class="figure-note">가로축은 문항 번호입니다. 내가 틀린 문항은 진한 색으로 표시했습니다.</p>
+                </div>
+            </section>
+
+            <section class="section">
+                <h2 class="section-title-report">난이도별 정답률 비교</h2>
+                <div class="insight"><div class="insight-mark"></div><div><p class="insight-text">난이도 <em>상</em> 문항에서 전체 평균과 가장 크게 벌어집니다.</p><p class="insight-sub">내 정답률 67% / 전체 평균 86% (-19%p)</p></div></div>
+                <div class="panel">
+                    <div class="chart-frame h-40"><canvas id="difficultyCompareChart"></canvas></div>
+                </div>
+            </section>
+
+            <div class="page-foot">© 2025 올가교육 수능연구소 | Page 7 / 12</div>
+        </div>
+
+        <!-- Page 8: 변별 분석 (신규) -->
+        
+        <div class="a4-page">
+            <div class="page-head">
+                <h2 class="page-head-title">변별 분석</h2>
+                <span class="page-head-num">Page 8</span>
+            </div>
+
+            <section class="section">
+                <h2 class="section-title-report">아쉬운 실점</h2>
+                <p class="figure-note" style="text-align:left; margin:0 0 10px;">전체 정답률 70% 이상인 문항 중 틀린 문항입니다. 먼저 회복할 수 있는 점수입니다.</p>
+                <div class="disc-panel"><ul class="disc-list"><li class="disc-item miss"><span class="disc-num">10번</span><span class="disc-meta">작문 · 중 · 2점</span><span class="disc-rate">전체 93%</span></li><li class="disc-item miss"><span class="disc-num">19번</span><span class="disc-meta">수능독서 · 상 · 2점</span><span class="disc-rate">전체 93%</span></li><li class="disc-item miss"><span class="disc-num">1번</span><span class="disc-meta">화법 · 하 · 2점</span><span class="disc-rate">전체 87%</span></li><li class="disc-item miss"><span class="disc-num">3번</span><span class="disc-meta">화법 · 중 · 2점</span><span class="disc-rate">전체 87%</span></li><li class="disc-item miss"><span class="disc-num">11번</span><span class="disc-meta">문법 · 중 · 2점</span><span class="disc-rate">전체 87%</span></li><li class="disc-item miss"><span class="disc-num">18번</span><span class="disc-meta">수능독서 · 중 · 2점</span><span class="disc-rate">전체 87%</span></li><li class="disc-item miss"><span class="disc-num">26번</span><span class="disc-meta">수능독서 · 중 · 2점</span><span class="disc-rate">전체 87%</span></li><li class="disc-item miss"><span class="disc-num">27번</span><span class="disc-meta">수능독서 · 중 · 2점</span><span class="disc-rate">전체 87%</span></li><li class="disc-item miss"><span class="disc-num">12번</span><span class="disc-meta">문법 · 상 · 2점</span><span class="disc-rate">전체 80%</span></li><li class="disc-item miss"><span class="disc-num">17번</span><span class="disc-meta">수능독서 · 중 · 2점</span><span class="disc-rate">전체 80%</span></li><li class="disc-item miss"><span class="disc-num">25번</span><span class="disc-meta">수능독서 · 하 · 2점</span><span class="disc-rate">전체 80%</span></li><li class="disc-item miss"><span class="disc-num">34번</span><span class="disc-meta">문학 · 중 · 2점</span><span class="disc-rate">전체 80%</span></li><li class="disc-item miss"><span class="disc-num">4번</span><span class="disc-meta">화법 · 중 · 2점</span><span class="disc-rate">전체 73%</span></li><li class="disc-item miss"><span class="disc-num">33번</span><span class="disc-meta">문학 · 상 · 3점</span><span class="disc-rate">전체 73%</span></li><li class="disc-item miss"><span class="disc-num">35번</span><span class="disc-meta">문학 · 중 · 2점</span><span class="disc-rate">전체 73%</span></li></ul></div>
+            </section>
+
+            <section>
+                <h2 class="section-title-report">강점 근거</h2>
+                <p class="figure-note" style="text-align:left; margin:0 0 10px;">전체 정답률 40% 이하인 문항 중 맞힌 문항입니다.</p>
+                <div class="disc-panel is-won"><ul class="disc-list"><li class="disc-item won"><span class="disc-num">45번</span><span class="disc-meta">문학 · 중 · 2점</span><span class="disc-rate">전체 27%</span></li></ul></div>
+            </section>
+
+            <div class="page-foot">© 2025 올가교육 수능연구소 | Page 8 / 12</div>
+        </div>
+
+        <!-- Page 9: 틀린 문항 해설 (신규) -->
+        
+        <div class="a4-page">
+            <div class="page-head">
+                <h2 class="page-head-title">틀린 문항 해설</h2>
+                <span class="page-head-num">Page 9</span>
+            </div>
+
+            <section class="section">
+                <h2 class="section-title-report">오답 18문항</h2>
+                <div class="wrong-grid"><div class="wrong-item"><div class="wrong-head"><span class="wrong-num">1번</span><span class="wrong-meta">화법 · 주요 내용과 의도 파악 · 난이도 하 · 2점</span><span class="wrong-rate">전체 정답률 87%</span></div><p class="wrong-answer">정답 1 / 내 답안 무응답</p><p class="wrong-text">발표의 핵심 소재인 `공정여행`의 개념과 취지를 정확히 이해했는지 확인하는 문제입니다.</p></div><div class="wrong-item"><div class="wrong-head"><span class="wrong-num">3번</span><span class="wrong-meta">화법 · 공손한 표현 사용 · 난이도 중 · 2점</span><span class="wrong-rate">전체 정답률 87%</span></div><p class="wrong-answer">정답 1 / 내 답안 무응답</p><p class="wrong-text">학생회장의 인사말에 사용된 높임 표현, 어조, 단어 사용의 적절성을 평가하는 문제입니다.</p></div><div class="wrong-item"><div class="wrong-head"><span class="wrong-num">4번</span><span class="wrong-meta">화법 · 청자와 목적 고려한 말하기 · 난이도 중 · 2점</span><span class="wrong-rate">전체 정답률 73%</span></div><p class="wrong-answer">정답 1 / 내 답안 무응답</p><p class="wrong-text">토의 내용에 대한 이해를 바탕으로, 각 참여자의 발언 의도와 근거를 바르게 파악했는지 확인하는 문제입니다.</p></div><div class="wrong-item"><div class="wrong-head"><span class="wrong-num">5번</span><span class="wrong-meta">화법 · 자료 활용 · 난이도 중 · 3점</span><span class="wrong-rate">전체 정답률 67%</span></div><p class="wrong-answer">정답 1 / 내 답안 무응답</p><p class="wrong-text">주어진 자료(&lt;보기&gt;)의 정보를 활용하여, 특정 질문에 대한 가장 적절한 답변을 구성하는 능력을 평가합니다.</p></div><div class="wrong-item"><div class="wrong-head"><span class="wrong-num">10번</span><span class="wrong-meta">작문 · 고쳐쓰기 · 난이도 중 · 2점</span><span class="wrong-rate">전체 정답률 93%</span></div><p class="wrong-answer">정답 1 / 내 답안 무응답</p><p class="wrong-text">문단의 흐름을 해치는 불필요한 문장을 찾아 삭제하고, 어법과 문맥에 맞게 어휘와 문장 구조를 수정하는 능력을 평가합니다.</p></div><div class="wrong-item"><div class="wrong-head"><span class="wrong-num">11번</span><span class="wrong-meta">문법 · 모음의 분류 · 난이도 중 · 2점</span><span class="wrong-rate">전체 정답률 87%</span></div><p class="wrong-answer">정답 1 / 내 답안 무응답</p><p class="wrong-text">단모음 체계표를 이해하고, 두 모음(`ㅐ`와 `ㅔ`)의 조음 위치 차이를 설명하는 문제입니다.</p></div><div class="wrong-item"><div class="wrong-head"><span class="wrong-num">12번</span><span class="wrong-meta">문법 · 품사 변별 및 활용 형태 · 난이도 상 · 2점</span><span class="wrong-rate">전체 정답률 80%</span></div><p class="wrong-answer">정답 1 / 내 답안 무응답</p><p class="wrong-text">&lt;보기&gt;에서 설명한 특정 단어(부정어와만 결합하는 용언)의 문법적 제약 조건을 이해하고, 그에 해당하지 않는 예외 사례를 찾는 문제입니다.</p></div><div class="wrong-item"><div class="wrong-head"><span class="wrong-num">17번</span><span class="wrong-meta">수능독서 · 자료의 종합적 이해 · 난이도 중 · 2점</span><span class="wrong-rate">전체 정답률 80%</span></div><p class="wrong-answer">정답 1 / 내 답안 무응답</p><p class="wrong-text">글 전체의 논리적 흐름을 파악하고, 본문에서 다루지 않은 내용이 무엇인지 찾아내는 문제입니다.</p></div><div class="wrong-item"><div class="wrong-head"><span class="wrong-num">18번</span><span class="wrong-meta">수능독서 · 대상의 특징 · 난이도 중 · 2점</span><span class="wrong-rate">전체 정답률 87%</span></div><p class="wrong-answer">정답 1 / 내 답안 무응답</p><p class="wrong-text">본문에 제시된 정보를 정확히 이해하고, 선택지의 진술과 일치하는지 혹은 불일치하는지 판별하는 문제입니다.</p></div><div class="wrong-item"><div class="wrong-head"><span class="wrong-num">19번</span><span class="wrong-meta">수능독서 · 대상의 특징 · 난이도 상 · 2점</span><span class="wrong-rate">전체 정답률 93%</span></div><p class="wrong-answer">정답 1 / 내 답안 무응답</p><p class="wrong-text">비교 우위`와 `기회비용`이라는 핵심 개념을 이해하고, 이를 주어진 상황에 적용하여 국가 간의 관계를 추론하는 문제입니다.</p></div><div class="wrong-item"><div class="wrong-head"><span class="wrong-num">25번</span><span class="wrong-meta">수능독서 · 시간과 변천, 논증 · 난이도 하 · 2점</span><span class="wrong-rate">전체 정답률 80%</span></div><p class="wrong-answer">정답 1 / 내 답안 무응답</p><p class="wrong-text">글의 중심 내용을 효과적으로 전달하기 위해 사용된 서술 방식(구체적 사례 제시)을 파악하는 문제입니다.</p></div><div class="wrong-item"><div class="wrong-head"><span class="wrong-num">26번</span><span class="wrong-meta">수능독서 · 대상의 특징 · 난이도 중 · 2점</span><span class="wrong-rate">전체 정답률 87%</span></div><p class="wrong-answer">정답 1 / 내 답안 무응답</p><p class="wrong-text">본문 내용에 대한 이해를 바탕으로, 글의 전체적인 주장과 어긋나는 선택지를 찾아내는 문제입니다.</p></div><div class="wrong-item"><div class="wrong-head"><span class="wrong-num">27번</span><span class="wrong-meta">수능독서 · 대상의 특징 · 난이도 중 · 2점</span><span class="wrong-rate">전체 정답률 87%</span></div><p class="wrong-answer">정답 1 / 내 답안 무응답</p><p class="wrong-text">본문에 제시된 두 인물(지휘자)의 음악 해석 방식을 비교하고, 그 공통점과 차이점을 정확히 파악하는 문제입니다.</p></div><div class="wrong-item"><div class="wrong-head"><span class="wrong-num">33번</span><span class="wrong-meta">문학 · 작품에 나타난 시공간의 의미 · 난이도 상 · 3점</span><span class="wrong-rate">전체 정답률 73%</span></div><p class="wrong-answer">정답 1 / 내 답안 무응답</p><p class="wrong-text">&lt;보기&gt;에 제시된 비평적 관점(산업화와 농촌 공동체 해체)을 바탕으로 시를 심층적으로 감상하고, 그 내용의 적절성을 판단하는 문제입니다.</p></div><div class="wrong-item"><div class="wrong-head"><span class="wrong-num">34번</span><span class="wrong-meta">문학 · 작품의 내용 · 난이도 중 · 2점</span><span class="wrong-rate">전체 정답률 80%</span></div><p class="wrong-answer">정답 1 / 내 답안 무응답</p><p class="wrong-text">희곡이라는 갈래의 특징(독백, 방백, 시간/공간의 압축적 제시 등)을 이해하고 작품에 어떻게 구현되었는지 분석하는 문제입니다.</p></div><div class="wrong-item"><div class="wrong-head"><span class="wrong-num">35번</span><span class="wrong-meta">문학 · 인물의 심리 및 태도 · 난이도 중 · 2점</span><span class="wrong-rate">전체 정답률 73%</span></div><p class="wrong-answer">정답 1 / 내 답안 무응답</p><p class="wrong-text">극의 흐름과 인물의 대사를 통해 특정 상황에서 인물이 보일 표정이나 행동을 가장 적절하게 추론하는 문제입니다.</p></div><div class="wrong-item"><div class="wrong-head"><span class="wrong-num">42번</span><span class="wrong-meta">문학 · 외적 준거에 따른 감상의 적절성 · 난이도 중 · 3점</span><span class="wrong-rate">전체 정답률 53%</span></div><p class="wrong-answer">정답 1 / 내 답안 무응답</p><p class="wrong-text">&lt;보기&gt;에 제시된 작가의 창작 배경(유배)을 바탕으로, 시의 각 구절이 어떤 의미를 지니는지 심층적으로 이해하는 문제입니다.</p></div><div class="wrong-item"><div class="wrong-head"><span class="wrong-num">43번</span><span class="wrong-meta">문학 · 서술상의 특징 · 난이도 하 · 2점</span><span class="wrong-rate">전체 정답률 33%</span></div><p class="wrong-answer">정답 1 / 내 답안 무응답</p><p class="wrong-text">1인칭 주인공 시점으로 서술되어, 서술자인 `나`의 내면 심리가 효과적으로 드러나는 소설의 특징을 파악하는 문제입니다.</p></div></div>
+            </section>
+
+            <div class="page-foot">© 2025 올가교육 수능연구소 | Page 9 / 12</div>
+        </div>
+
+        <!-- Page 10: 올가 분석 & 학습 로드맵 -->
+        <div class="a4-page">
+            <div class="page-head">
+                <h2 class="page-head-title">올가 분석 &amp; 학습 로드맵</h2>
+                <span class="page-head-num">Page 10</span>
+            </div>
+
+            <section class="section">
+                <h2 class="section-title-report">강점·약점 심층 분석</h2>
+                <div class="grid-2">
+                    <div>
+                        <h3 class="sw-col-title">✓ 강점 영역</h3>
+                        <div class="sw-stack">
+                            <div class="sw-item"><div class="sw-head"><p class="sw-name">작문</p><span class="sw-score">80%</span></div><div class="sw-body"><p class="analysis-label">💪 전문가 분석</p><p class="analysis-text">작문 영역은 80%의 높은 정답률을 기록하며 김민수 학생의 강점으로 확고히 자리매김했습니다. 글의 내용 생성, 조직, 표현 등 작문의 전반적인 과정에 대한 이해가 뛰어나며, 다양한 글쓰기 상황에 효과적으로 대응할 수 있는 능력을 갖추고 있습니다.</p></div></div>
+                        </div>
+                    </div>
+                    <div>
+                        <h3 class="sw-col-title is-weak-title">✗ 보완 영역</h3>
+                        <div class="sw-stack">
+                            <div class="sw-item is-weak-item"><div class="sw-head"><p class="sw-name">화법</p><span class="sw-score is-weak-score">20%</span></div><div class="sw-body"><p class="analysis-label is-weak-label">⚠️ 전문가 분석</p><p class="analysis-text">화법 영역은 20%의 저조한 정답률로 가장 심각한 약점으로 분석됩니다. 특히 &#039;듣기의 과정-주요 내용과 의도 파악&#039;, &#039;상황에 따른 화법-공손한 표현 사용&#039;, &#039;표현 전략-자료 활용&#039; 등 기본적인 화법 원리 및 전략 이해가 부족합니다. 이 부분에 대한 집중적인 보완이 시급합니다.</p></div></div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="section">
+                <h2 class="section-title-report">올가 분석 총평</h2>
+                <div class="callout">
+                    <div>
+                        <svg class="callout-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                          <path fill-rule="evenodd" d="M2.25 2.25a.75.75 0 0 0-1.5 0v1.5A.75.75 0 0 0 1.5 4.5h.75A.75.75 0 0 0 3 3.75V3h1.5A.75.75 0 0 0 5.25 2.25h-3Z M3.75 9A.75.75 0 0 1 3 9.75v1.5a.75.75 0 0 1 1.5 0v-1.5A.75.75 0 0 1 3.75 9Zm1.5 0A.75.75 0 0 0 4.5 9.75v1.5A.75.75 0 0 0 6 11.25v-1.5A.75.75 0 0 0 5.25 9Zm1.5 0A.75.75 0 0 1 6.75 9.75v1.5a.75.75 0 0 1 1.5 0v-1.5A.75.75 0 0 1 8.25 9Zm1.5 0A.75.75 0 0 0 9 9.75v1.5a.75.75 0 0 0 1.5 0v-1.5A.75.75 0 0 0 10.5 9Z" clip-rule="evenodd" />
+                          <path d="M6.26.177a.75.75 0 0 1 1.06 1.06L6.802 1.75h10.448A2.25 2.25 0 0 1 19.5 4v16.5a2.25 2.25 0 0 1-2.25 2.25H6.75A2.25 2.25 0 0 1 4.5 20.5V13.802l-.482.482a.75.75 0 1 1-1.06-1.06l1.26-1.26a.75.75 0 0 1 1.06 0l1.018 1.018a.75.75 0 0 0 1.06 0l3.018-3.018a.75.75 0 0 0 0-1.06l-4.018-4.018a.75.75 0 0 0-1.06 0l-1.768 1.768A.75.75 0 0 1 6.26.177Z" />
+                        </svg>
+                    </div>
+                    <div class="callout-body">
+                        <div class="callout-text">김민수 학생은 이번 시험에서 원점수 61점을 기록하며 4등급에 머물렀습니다. 이는 올가교육 중3 프로그램이 지향하는 고등 국어 전환을 위한 실전 독해 강화라는 목표에 도달하기에는 부족한 성취로 분석됩니다. 전반적인 국어 기초 개념 이해와 이를 실제 문제에 적용하는 능력 전반에 걸쳐 심도 깊은 점검이 필요한 시점입니다. 특히 고등 과정의 복잡한 지문과 문제 유형에 대비하기 위한 기초 체력 강화를 소홀히 해서는 안 됩니다.
+
+특히 화법 영역에서는 평균 정답률에 크게 미치지 못하는 현저히 낮은 성적을 보이며 가장 취약한 부분으로 드러났습니다. 반면 작문 영역에서는 평균을 훨씬 웃도는 우수한 성취를 달성하여 특정 영역에서의 강점을 분명하게 확인했습니다. 이처럼 영역별 학습 편차가 큰 상황이므로, 학습 전략을 수립할 때 취약 영역 보완과 강점 영역 심화 사이의 균형을 면밀히 고려해야 합니다.
+
+고등 국어의 탄탄한 기반을 다지는 중3 시기임을 감안할 때, 현재 부족한 영역의 기본 개념을 다시 한번 확립하는 것이 무엇보다 시급합니다. 단순히 많은 문제를 풀기보다 개념 학습에 충분한 시간을 할애하고, 꾸준한 연습을 통해 고등 과정에 필수적인 국어 실력을 체계적으로 쌓아나가는 학습 태도가 필요합니다. 장기적인 관점에서 꾸준한 노력을 기울이세요.</div>
+                    </div>
+                </div>
+            </section>
+
+            <div class="page-foot">
+                © 2025 올가교육 수능연구소 | Page 10 / 12
+            </div>
+        </div>
+
+        <!-- Page 11: 데이터 분석 및 로드맵 -->
+        <div class="a4-page">
+            <div class="page-head">
+                <h2 class="page-head-title">데이터 분석 및 중장기 로드맵</h2>
+                <span class="page-head-num">Page 11</span>
+            </div>
+
+            <section class="section">
+                <h2 class="section-title-report">학생 vs 평균 비교 분석</h2>
+                <div class="panel">
+                    <div class="chart-frame h-64">
+                        <canvas id="radarChart"></canvas>
+                    </div>
+                    <p class="figure-note">
+                        [분석] '김민수' 학생(파란색)과 '전체 평균'(회색)의 비교 분석
+                    </p>
+                </div>
+            </section>
+
+            <section>
+                <h2 class="section-title-report">중3 → 고3 수능 완성 로드맵</h2>
+                <div class="roadmap-stack">
+                    <div class="roadmap-item">
+                        <div class="roadmap-num">1</div>
+                        <div>
+                            <h3 class="roadmap-title">중학교 3학년 - 기초 체력 완성 단계</h3>
+                            <p class="roadmap-text"><strong>목표:</strong> 수능 국어의 기본 토대 구축 | <strong>학습:</strong> 갈래별(현대시, 고전소설 등) 대표 작품 읽기, 영역별(화작, 문법, 독서, 문학) 독해 훈련 시작, 중등 문법 마스터</p>
+                        </div>
+                    </div>
+                    <div class="roadmap-item">
+                        <div class="roadmap-num">2</div>
+                        <div><h3 class="roadmap-title">고등학교 1학년 - 심화 학습 전개 단계</h3><p class="roadmap-text"><strong>목표:</strong> 수능 출제 패턴 익숙화 및 실력 도약 | <strong>학습:</strong> 고1 학력평가 기출 작품/지문 완벽 분석, 독해 전략 수립, 수능 문법 전 영역 1회독 완료</p></div>
+                    </div>
+                    <div class="roadmap-item">
+                        <div class="roadmap-num">3</div>
+                        <div><h3 class="roadmap-title">고등학교 2학년 - 실전 역량 강화 단계</h3><p class="roadmap-text"><strong>목표:</strong> 2등급 진입 및 1등급 도전 기반 구축 | <strong>학습:</strong> 고2 학력평가 및 수능 기출(3개년) 분석, 고난도 독서 지문(과학, 기술, 경제) 대응 훈련, EBS 연계 작품 사전 학습</p></div>
+                    </div>
+                    <div class="roadmap-item">
+                        <div class="roadmap-num">4</div>
+                        <div><h3 class="roadmap-title">고등학교 3학년 - 수능 완전 정복 단계</h3><p class="roadmap-text"><strong>목표:</strong> 1등급 안정적 획득 및 만점 도전 | <strong>학습:</strong> 주 2회 이상 실전 모의고사, 취약 영역/유형 집중 공략, EBS 연계/비연계 고난도 문제 풀이, 시간 관리 및 멘탈 관리 훈련</p></div>
+                    </div>
+                </div>
+            </section>
+
+            <div class="page-foot">
+                © 2025 올가교육 수능연구소 | Page 11 / 12
+            </div>
+        </div>
+
+        <!-- Page 12: 맞춤형 학습 전략 -->
+        <div class="a4-page">
+            <div class="page-head">
+                <h2 class="page-head-title">맞춤형 학습 전략</h2>
+                <span class="page-head-num">Page 12</span>
+            </div>
+
+            <section class="section">
+                <h2 class="section-title-report">학생 성향 분석</h2>
+                <div class="callout">
+                    <div>
+                        <svg class="callout-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M12 2C6.475 2 2 6.475 2 12s4.475 10 10 10 10-4.475 10-10S17.525 2 12 2ZM8.007 17.05a8.002 8.002 0 0 1-4.002-8.03A8 8 0 0 1 12.002 4.004a8 8 0 0 1 7.995 8.01 8 8 0 0 1-8.01 7.995 8.002 8.002 0 0 1-3.988-1.004.75.75 0 0 0 .011.004Zm8.948-2.31a.75.75 0 0 0 .15-.098A5.502 5.502 0 0 0 18.5 8.5a5.5 5.5 0 0 0-11 0 5.502 5.502 0 0 0 1.395 6.142.75.75 0 0 0 .95.274 6.978 6.978 0 0 1 7.31 0 .75.75 0 0 0 .95-.274ZM12 11a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z"/>
+                        </svg>
+                    </div>
+                    <div class="callout-body">
+                        <h3 class="callout-title">개념 이해 부족으로 등급 하락을 경험한 기초 보완 집중형</h3>
+                        <p class="callout-text">김민수 학생은 이번 시험에서 전반적으로 기본 개념 이해가 미흡하여 고득점에 어려움을 겪었습니다. 특히 화법과 같은 특정 영역에서 매우 낮은 성취도를 보이며 기초가 흔들리는 양상을 보였습니다. 이는 고등 국어 전환을 앞둔 중3 시점에서 매우 우려되는 부분입니다. 현재는 개념 학습에 집중하여 단단한 기반을 다지는 것이 중요합니다. 기본적인 독해 원리와 문법 지식을 확고히 다진 후, 점진적으로 문제 풀이 양을 늘려가야 합니다.</p>
+                    </div>
+                </div>
+            </section>
+
+            <section class="section">
+                <h2 class="section-title-report">12주 집중 학습 전략</h2>
+                <table class="rpt-table">
+                    <thead>
+                        <tr>
+                            <th class="col-step">단계</th>
+                            <th>핵심 전략</th>
+                            <th>세부 학습 내용</th>
+                            <th class="col-outcome">예상 성과</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td class="cell-strong">1단계<br/>(4주)</td>
+                            <td class="cell-strong">약점 영역 집중 공략</td>
+                            <td>약점 영역의 긴 지문 독해 훈련. 매일 2개 지문씩 시간 내에 풀고 오답 분석.</td>
+                            <td class="col-outcome">정답률 +10%<br/>상승</td>
+                        </tr>
+                        <tr>
+                            <td class="cell-strong">2단계<br/>(3주)</td>
+                            <td class="cell-strong">개념어 적용 훈련</td>
+                            <td>약점인 개념어를 실제 기출 문제에 적용하는 훈련.</td>
+                            <td class="col-outcome">정답률 +5%<br/>상승</td>
+                        </tr>
+                        <tr>
+                            <td class="cell-strong">3단계<br/>(5주)</td>
+                            <td class="cell-strong">종합 실전 대비 및 시간 관리</td>
+                            <td>주 2회 실전 모의고사(시간 측정 필수), 오답 문항 심층 분석, 취약 유형 집중 보완</td>
+                            <td class="col-outcome">등급 상승<br/>달성</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </section>
+
+            <section class="section">
+                <h2 class="section-title-report">성적 향상 예측 그래프</h2>
+                <div class="panel">
+                    <div class="chart-frame h-52">
+                        <canvas id="predictionChart"></canvas>
+                    </div>
+                </div>
+            </section>
+
+            <section>
+                <div class="outcome-banner">
+                    <p class="outcome-title">목표 달성 가능성: <span class="outcome-accent">높음</span></p>
+                    <p class="outcome-text">김민수 학생은 강점이 명확합니다. 제시된 전략을 성실히 따른다면 목표 등급 달성이 가능합니다.</p>
+                </div>
+            </section>
+
+            <div class="page-foot">
+                © 2025 올가교육 수능연구소 | Page 12 / 12
+            </div>
+        </div>
+    </section>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // ===== INJECT REPORT DATA =====
+            const reportData = {
+  "metaVersion": "v2",
+  "studentInfo": {
+    "name": "김민수",
+    "school": "강남고등학교",
+    "date": "2025. 11. 18.",
+    "level": "중3"
+  },
+  "scoreSummary": {
+    "grade": 4,
+    "rawScore": 61,
+    "rawScoreMax": 100,
+    "standardScore": 128,
+    "percentile": 61
+  },
+  "analysis": {
+    "olgaSummary": "김민수 학생은 이번 시험에서 원점수 61점을 기록하며 4등급에 머물렀습니다. 이는 올가교육 중3 프로그램이 지향하는 고등 국어 전환을 위한 실전 독해 강화라는 목표에 도달하기에는 부족한 성취로 분석됩니다. 전반적인 국어 기초 개념 이해와 이를 실제 문제에 적용하는 능력 전반에 걸쳐 심도 깊은 점검이 필요한 시점입니다. 특히 고등 과정의 복잡한 지문과 문제 유형에 대비하기 위한 기초 체력 강화를 소홀히 해서는 안 됩니다.\n\n특히 화법 영역에서는 평균 정답률에 크게 미치지 못하는 현저히 낮은 성적을 보이며 가장 취약한 부분으로 드러났습니다. 반면 작문 영역에서는 평균을 훨씬 웃도는 우수한 성취를 달성하여 특정 영역에서의 강점을 분명하게 확인했습니다. 이처럼 영역별 학습 편차가 큰 상황이므로, 학습 전략을 수립할 때 취약 영역 보완과 강점 영역 심화 사이의 균형을 면밀히 고려해야 합니다.\n\n고등 국어의 탄탄한 기반을 다지는 중3 시기임을 감안할 때, 현재 부족한 영역의 기본 개념을 다시 한번 확립하는 것이 무엇보다 시급합니다. 단순히 많은 문제를 풀기보다 개념 학습에 충분한 시간을 할애하고, 꾸준한 연습을 통해 고등 과정에 필수적인 국어 실력을 체계적으로 쌓아나가는 학습 태도가 필요합니다. 장기적인 관점에서 꾸준한 노력을 기울이세요.",
+    "subjectDetails": [
+      {
+        "name": "화법",
+        "score": 20,
+        "scoreText": "취득 2점 / 만점 11점 (1/5문항 정답)",
+        "analysisText": "김민수 학생은 화법 영역에서 전체 평균 65%에 크게 못 미치는 20%의 정답률을 기록하며 매우 취약한 모습을 보였습니다. 특히 '듣기의 과정-주요 내용과 의도 파악', '상황에 따른 화법-공손한 표현 사용', '표현 전략-자료 활용' 등 기본적인 화법 원리 및 전략 이해에 어려움을 겪는 것으로 분석됩니다. 화법의 기초 개념부터 다시 학습해야 합니다.",
+        "statusColor": "red"
+      },
+      {
+        "name": "작문",
+        "score": 80,
+        "scoreText": "취득 9점 / 만점 11점 (4/5문항 정답)",
+        "analysisText": "작문 영역에서는 평균 65%를 상회하는 80%의 높은 정답률을 달성하며 뛰어난 이해도를 입증했습니다. 이는 작문의 과정 전반에 걸쳐 탄탄한 실력을 갖추고 있음을 보여줍니다. 다만 '작문의 과정-고쳐쓰기' 소분류에서 한 문항을 틀려 아쉬움을 남겼으므로, 해당 부분만 보완한다면 완벽한 성취가 가능할 것입니다.",
+        "statusColor": "blue"
+      },
+      {
+        "name": "문법",
+        "score": 60,
+        "scoreText": "취득 7점 / 만점 11점 (3/5문항 정답)",
+        "analysisText": "문법 영역은 평균 65%에 근접한 60%의 정답률을 기록하며 보통 수준의 이해도를 나타냈습니다. '음운의 개념-모음의 분류', '품사-품사 변별 및 활용 형태'에서 오답이 발생하여 이 부분에 대한 개념이 다소 흔들리는 것으로 판단됩니다. 명확한 개념 정립과 유형별 문제 풀이를 통해 정확도를 높여야 합니다.",
+        "statusColor": "green"
+      },
+      {
+        "name": "수능독서",
+        "score": 60,
+        "scoreText": "취득 21점 / 만점 33점 (9/15문항 정답)",
+        "analysisText": "수능독서 영역에서는 평균 65%와 유사한 60%의 정답률을 보였습니다. '자료 해석-자료의 종합적 이해', '언어논리 이해와 표현-대상의 특징', '글의 논리 구조-시간과 변천, 논증', '사실적 이해-대상의 특징' 등 다양한 유형에서 오답이 확인되어 특정 유형보다는 전반적인 독해력 강화가 필요합니다. 지문 분석 연습이 중요합니다.",
+        "statusColor": "green"
+      },
+      {
+        "name": "문학",
+        "score": 67,
+        "scoreText": "취득 22점 / 만점 34점 (10/15문항 정답)",
+        "analysisText": "문학 영역은 평균 65%를 소폭 상회하는 67%의 정답률을 기록하며 비교적 안정적인 실력을 보였습니다. '문학사적 맥락 이해-작품에 나타난 시공간의 의미', '내용 이해와 해석-작품의 내용', '인물 및 화자의 태도 파악-인물의 심리 및 태도', '표현 방식과 구조 이해-서술상의 특징' 등에서 오답이 나왔습니다. 다양한 작품을 접하며 해석 능력을 심화해야 합니다.",
+        "statusColor": "green"
+      }
+    ],
+    "strengths": [
+      {
+        "name": "작문",
+        "score": 80,
+        "analysisText": "작문 영역은 80%의 높은 정답률을 기록하며 김민수 학생의 강점으로 확고히 자리매김했습니다. 글의 내용 생성, 조직, 표현 등 작문의 전반적인 과정에 대한 이해가 뛰어나며, 다양한 글쓰기 상황에 효과적으로 대응할 수 있는 능력을 갖추고 있습니다."
+      }
+    ],
+    "weaknesses": [
+      {
+        "name": "화법",
+        "score": 20,
+        "analysisText": "화법 영역은 20%의 저조한 정답률로 가장 심각한 약점으로 분석됩니다. 특히 '듣기의 과정-주요 내용과 의도 파악', '상황에 따른 화법-공손한 표현 사용', '표현 전략-자료 활용' 등 기본적인 화법 원리 및 전략 이해가 부족합니다. 이 부분에 대한 집중적인 보완이 시급합니다."
+      }
+    ],
+    "propensity": {
+      "typeTitle": "개념 이해 부족으로 등급 하락을 경험한 기초 보완 집중형",
+      "typeDescription": "김민수 학생은 이번 시험에서 전반적으로 기본 개념 이해가 미흡하여 고득점에 어려움을 겪었습니다. 특히 화법과 같은 특정 영역에서 매우 낮은 성취도를 보이며 기초가 흔들리는 양상을 보였습니다. 이는 고등 국어 전환을 앞둔 중3 시점에서 매우 우려되는 부분입니다. 현재는 개념 학습에 집중하여 단단한 기반을 다지는 것이 중요합니다. 기본적인 독해 원리와 문법 지식을 확고히 다진 후, 점진적으로 문제 풀이 양을 늘려가야 합니다."
+    }
+  },
+  "charts": {
+    "radarChartData": {
+      "labels": [
+        "화법",
+        "작문",
+        "문법",
+        "수능독서",
+        "문학"
+      ],
+      "student": [
+        20,
+        80,
+        60,
+        60,
+        67
+      ],
+      "average": [
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "barChartData": {
+      "labels": [
+        "화법",
+        "작문",
+        "문법",
+        "수능독서",
+        "문학"
+      ],
+      "values": [
+        20,
+        80,
+        60,
+        60,
+        67
+      ]
+    },
+    "predictionData": {
+      "labels": [
+        "현재",
+        "4주 후",
+        "8주 후",
+        "12주 후"
+      ],
+      "values": [
+        61,
+        66,
+        71,
+        76
+      ]
+    }
+  },
+  "questionAnalysis": [
+    {
+      "number": 1,
+      "isCorrect": false,
+      "cohortRate": 87,
+      "difficulty": "하",
+      "category": "화법"
+    },
+    {
+      "number": 2,
+      "isCorrect": true,
+      "cohortRate": 73,
+      "difficulty": "중",
+      "category": "화법"
+    },
+    {
+      "number": 3,
+      "isCorrect": false,
+      "cohortRate": 87,
+      "difficulty": "중",
+      "category": "화법"
+    },
+    {
+      "number": 4,
+      "isCorrect": false,
+      "cohortRate": 73,
+      "difficulty": "중",
+      "category": "화법"
+    },
+    {
+      "number": 5,
+      "isCorrect": false,
+      "cohortRate": 67,
+      "difficulty": "중",
+      "category": "화법"
+    },
+    {
+      "number": 6,
+      "isCorrect": true,
+      "cohortRate": 87,
+      "difficulty": "중",
+      "category": "작문"
+    },
+    {
+      "number": 7,
+      "isCorrect": true,
+      "cohortRate": 100,
+      "difficulty": "상",
+      "category": "작문"
+    },
+    {
+      "number": 8,
+      "isCorrect": true,
+      "cohortRate": 93,
+      "difficulty": "중",
+      "category": "작문"
+    },
+    {
+      "number": 9,
+      "isCorrect": true,
+      "cohortRate": 100,
+      "difficulty": "하",
+      "category": "작문"
+    },
+    {
+      "number": 10,
+      "isCorrect": false,
+      "cohortRate": 93,
+      "difficulty": "중",
+      "category": "작문"
+    },
+    {
+      "number": 11,
+      "isCorrect": false,
+      "cohortRate": 87,
+      "difficulty": "중",
+      "category": "문법"
+    },
+    {
+      "number": 12,
+      "isCorrect": false,
+      "cohortRate": 80,
+      "difficulty": "상",
+      "category": "문법"
+    },
+    {
+      "number": 13,
+      "isCorrect": true,
+      "cohortRate": 73,
+      "difficulty": "중",
+      "category": "문법"
+    },
+    {
+      "number": 14,
+      "isCorrect": true,
+      "cohortRate": 73,
+      "difficulty": "상",
+      "category": "문법"
+    },
+    {
+      "number": 15,
+      "isCorrect": true,
+      "cohortRate": 73,
+      "difficulty": "중",
+      "category": "문법"
+    },
+    {
+      "number": 16,
+      "isCorrect": true,
+      "cohortRate": 87,
+      "difficulty": "하",
+      "category": "수능독서"
+    },
+    {
+      "number": 17,
+      "isCorrect": false,
+      "cohortRate": 80,
+      "difficulty": "중",
+      "category": "수능독서"
+    },
+    {
+      "number": 18,
+      "isCorrect": false,
+      "cohortRate": 87,
+      "difficulty": "중",
+      "category": "수능독서"
+    },
+    {
+      "number": 19,
+      "isCorrect": false,
+      "cohortRate": 93,
+      "difficulty": "상",
+      "category": "수능독서"
+    },
+    {
+      "number": 20,
+      "isCorrect": true,
+      "cohortRate": 93,
+      "difficulty": "상",
+      "category": "수능독서"
+    },
+    {
+      "number": 21,
+      "isCorrect": true,
+      "cohortRate": 80,
+      "difficulty": "하",
+      "category": "수능독서"
+    },
+    {
+      "number": 22,
+      "isCorrect": true,
+      "cohortRate": 87,
+      "difficulty": "하",
+      "category": "수능독서"
+    },
+    {
+      "number": 23,
+      "isCorrect": true,
+      "cohortRate": 87,
+      "difficulty": "중",
+      "category": "수능독서"
+    },
+    {
+      "number": 24,
+      "isCorrect": true,
+      "cohortRate": 87,
+      "difficulty": "상",
+      "category": "수능독서"
+    },
+    {
+      "number": 25,
+      "isCorrect": false,
+      "cohortRate": 80,
+      "difficulty": "하",
+      "category": "수능독서"
+    },
+    {
+      "number": 26,
+      "isCorrect": false,
+      "cohortRate": 87,
+      "difficulty": "중",
+      "category": "수능독서"
+    },
+    {
+      "number": 27,
+      "isCorrect": false,
+      "cohortRate": 87,
+      "difficulty": "중",
+      "category": "수능독서"
+    },
+    {
+      "number": 28,
+      "isCorrect": true,
+      "cohortRate": 67,
+      "difficulty": "중",
+      "category": "수능독서"
+    },
+    {
+      "number": 29,
+      "isCorrect": true,
+      "cohortRate": 93,
+      "difficulty": "하",
+      "category": "수능독서"
+    },
+    {
+      "number": 30,
+      "isCorrect": true,
+      "cohortRate": 93,
+      "difficulty": "상",
+      "category": "수능독서"
+    },
+    {
+      "number": 31,
+      "isCorrect": true,
+      "cohortRate": 93,
+      "difficulty": "중",
+      "category": "문학"
+    },
+    {
+      "number": 32,
+      "isCorrect": true,
+      "cohortRate": 87,
+      "difficulty": "하",
+      "category": "문학"
+    },
+    {
+      "number": 33,
+      "isCorrect": false,
+      "cohortRate": 73,
+      "difficulty": "상",
+      "category": "문학"
+    },
+    {
+      "number": 34,
+      "isCorrect": false,
+      "cohortRate": 80,
+      "difficulty": "중",
+      "category": "문학"
+    },
+    {
+      "number": 35,
+      "isCorrect": false,
+      "cohortRate": 73,
+      "difficulty": "중",
+      "category": "문학"
+    },
+    {
+      "number": 36,
+      "isCorrect": true,
+      "cohortRate": 80,
+      "difficulty": "상",
+      "category": "문학"
+    },
+    {
+      "number": 37,
+      "isCorrect": true,
+      "cohortRate": 67,
+      "difficulty": "중",
+      "category": "문학"
+    },
+    {
+      "number": 38,
+      "isCorrect": true,
+      "cohortRate": 80,
+      "difficulty": "중",
+      "category": "문학"
+    },
+    {
+      "number": 39,
+      "isCorrect": true,
+      "cohortRate": 80,
+      "difficulty": "중",
+      "category": "문학"
+    },
+    {
+      "number": 40,
+      "isCorrect": true,
+      "cohortRate": 67,
+      "difficulty": "중",
+      "category": "문학"
+    },
+    {
+      "number": 41,
+      "isCorrect": true,
+      "cohortRate": 53,
+      "difficulty": "중",
+      "category": "문학"
+    },
+    {
+      "number": 42,
+      "isCorrect": false,
+      "cohortRate": 53,
+      "difficulty": "중",
+      "category": "문학"
+    },
+    {
+      "number": 43,
+      "isCorrect": false,
+      "cohortRate": 33,
+      "difficulty": "하",
+      "category": "문학"
+    },
+    {
+      "number": 44,
+      "isCorrect": true,
+      "cohortRate": 47,
+      "difficulty": "중",
+      "category": "문학"
+    },
+    {
+      "number": 45,
+      "isCorrect": true,
+      "cohortRate": 27,
+      "difficulty": "중",
+      "category": "문학"
+    }
+  ],
+  "difficultyStats": [
+    {
+      "level": "상",
+      "count": 9,
+      "points": 24,
+      "studentCorrect": 6,
+      "studentRate": 67,
+      "cohortRate": 86
+    },
+    {
+      "level": "중",
+      "count": 27,
+      "points": 58,
+      "studentCorrect": 15,
+      "studentRate": 56,
+      "cohortRate": 75
+    },
+    {
+      "level": "하",
+      "count": 9,
+      "points": 18,
+      "studentCorrect": 6,
+      "studentRate": 67,
+      "cohortRate": 81
+    }
+  ],
+  "categoryPointsMap": [
+    {
+      "name": "화법",
+      "count": 5,
+      "points": 11,
+      "studentCorrect": 1,
+      "cohortCorrect": 58,
+      "studentRate": 20,
+      "cohortRate": 77
+    },
+    {
+      "name": "작문",
+      "count": 5,
+      "points": 11,
+      "studentCorrect": 4,
+      "cohortCorrect": 71,
+      "studentRate": 80,
+      "cohortRate": 95
+    },
+    {
+      "name": "문법",
+      "count": 5,
+      "points": 11,
+      "studentCorrect": 3,
+      "cohortCorrect": 58,
+      "studentRate": 60,
+      "cohortRate": 77
+    },
+    {
+      "name": "수능독서",
+      "count": 15,
+      "points": 33,
+      "studentCorrect": 9,
+      "cohortCorrect": 193,
+      "studentRate": 60,
+      "cohortRate": 86
+    },
+    {
+      "name": "문학",
+      "count": 15,
+      "points": 34,
+      "studentCorrect": 10,
+      "cohortCorrect": 149,
+      "studentRate": 67,
+      "cohortRate": 66
+    }
+  ]
+};
+
+            console.log('[DEBUG] reportData injected:', reportData);
+
+            // 차트 색도 DESIGN.md 토큰을 따른다. 캔버스에는 CSS 클래스를 적용할 수 없으므로
+            // :root 의 CSS 변수 계산값을 읽어서 넘긴다 (새 hex 를 만들지 않는다).
+            const token = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+            const tokenAlpha = (name, alpha) => {
+                const raw = token(name).replace('#', '');
+                if (raw.length !== 3 && raw.length !== 6) return 'rgba(0,0,0,' + alpha + ')';
+                const full = raw.length === 3 ? raw.split('').map(c => c + c).join('') : raw;
+                const n = parseInt(full, 16);
+                return 'rgba(' + ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + alpha + ')';
+            };
+
+            // 도판(圖版) 공통 규격: 지면 서체와 옅은 괘선으로 통일한다
+            const sansStack = getComputedStyle(document.body).fontFamily;
+            Chart.defaults.font.family = sansStack;
+            Chart.defaults.font.size = 10.5;
+            Chart.defaults.color = token('--text-tertiary');
+            Chart.defaults.borderColor = token('--rule-faint');
+            Chart.defaults.plugins.tooltip.enabled = false;
+            const gridStyle = { color: token('--rule-faint'), drawTicks: false };
+            const axisBorder = { display: false };
+            const legendStyle = {
+                labels: { boxWidth: 8, boxHeight: 8, usePointStyle: true, pointStyle: 'rect', padding: 14,
+                          font: { size: 10.5 }, color: token('--text-secondary') }
+            };
+
+            // Page 1: Score Chart (Bar Chart)
+            const ctx1 = document.getElementById('scoreChart');
+            if (ctx1) {
+                const barData = reportData.charts.barChartData.values;
+                const barColors = barData.map(p => {
+                    if (p >= 80) return token('--fn-success');
+                    if (p >= 70) return token('--fn-info');
+                    if (p >= 60) return token('--text-tertiary');
+                    return token('--fn-warning');
+                });
+                new Chart(ctx1, {
+                    type: 'bar',
+                    data: {
+                        labels: reportData.charts.barChartData.labels,
+                        datasets: [{
+                            label: '정답률 (%)',
+                            data: barData,
+                            backgroundColor: barColors,
+                            borderRadius: 2,
+                            barPercentage: 0.5,
+                            categoryPercentage: 0.7
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        layout: { padding: { top: 8 } },
+                        scales: {
+                            y: { beginAtZero: true, max: 100, border: axisBorder, grid: gridStyle,
+                                 ticks: { stepSize: 25, padding: 8, callback: value => value + '%' } },
+                            x: { border: axisBorder, grid: { display: false },
+                                 ticks: { padding: 6, color: token('--text-secondary'), font: { size: 11 } } }
+                        },
+                        plugins: { legend: { display: false } }
+                    }
+                });
+            }
+
+            // Page 1: Percentile Chart (Line Chart)
+            const ctx2 = document.getElementById('percentileChart');
+            if (ctx2) {
+                const studentPercentile = reportData.scoreSummary.percentile;
+                const cumulativeData = [0, 15, 35, 60, 85, 100];
+                const percentilePoints = [0, 20, 40, 60, 80, 100];
+
+                let studentYValue = 0;
+                for (let i = 0; i < percentilePoints.length - 1; i++) {
+                    if (studentPercentile >= percentilePoints[i] && studentPercentile <= percentilePoints[i + 1]) {
+                        const x0 = percentilePoints[i];
+                        const x1 = percentilePoints[i + 1];
+                        const y0 = cumulativeData[i];
+                        const y1 = cumulativeData[i + 1];
+                        studentYValue = y0 + (y1 - y0) * (studentPercentile - x0) / (x1 - x0);
+                        break;
+                    }
+                }
+
+                new Chart(ctx2, {
+                    type: 'line',
+                    data: {
+                        labels: percentilePoints.map(p => p + '%'),
+                        datasets: [{
+                            label: '누적 분포',
+                            data: cumulativeData,
+                            borderColor: token('--action'),
+                            backgroundColor: tokenAlpha('--action', 0.06),
+                            borderWidth: 1.5,
+                            pointRadius: 0,
+                            fill: true,
+                            tension: 0.4
+                        }, {
+                            // 브라스 2/2 (1쪽): 학생 위치는 이 지면의 성취 지점이다
+                            label: '학생 위치 (' + studentPercentile + '%)',
+                            data: [{x: studentPercentile, y: studentYValue}],
+                            borderColor: token('--accent-strong'),
+                            backgroundColor: token('--accent'),
+                            borderWidth: 1.5,
+                            pointRadius: 7,
+                            pointHoverRadius: 7,
+                            showLine: false
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        layout: { padding: { top: 4 } },
+                        plugins: { legend: Object.assign({ display: true, position: 'top', align: 'end' }, legendStyle) },
+                        scales: {
+                            x: { type: 'linear', min: 0, max: 100, border: axisBorder, grid: gridStyle,
+                                 ticks: { stepSize: 20, padding: 6, callback: value => value + '%' } },
+                            y: { min: 0, max: 100, border: axisBorder, grid: gridStyle, ticks: { stepSize: 25, padding: 8 } }
+                        }
+                    }
+                });
+            }
+
+            // Page 4: Radar Chart
+            const ctx3 = document.getElementById('radarChart');
+            if (ctx3) {
+                new Chart(ctx3, {
+                    type: 'radar',
+                    data: {
+                        labels: reportData.charts.radarChartData.labels,
+                        datasets: [{
+                            label: '학생',
+                            data: reportData.charts.radarChartData.student,
+                            borderColor: token('--cat-1'),
+                            backgroundColor: tokenAlpha('--cat-1', 0.14),
+                            borderWidth: 1.5,
+                            pointRadius: 2.5,
+                            pointBackgroundColor: token('--action')
+                        }, {
+                            label: '전체 평균',
+                            data: reportData.charts.radarChartData.average,
+                            borderColor: token('--cat-4'),
+                            backgroundColor: tokenAlpha('--cat-4', 0.10),
+                            borderWidth: 1.5,
+                            borderDash: [4, 3],
+                            pointRadius: 2.5,
+                            pointBackgroundColor: token('--text-tertiary')
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: Object.assign({ display: true, position: 'top', align: 'end' }, legendStyle) },
+                        scales: {
+                            r: {
+                                beginAtZero: true, max: 100,
+                                grid: { color: token('--rule-faint') },
+                                angleLines: { color: token('--rule-faint') },
+                                pointLabels: { font: { size: 11 }, color: token('--text-secondary') },
+                                ticks: { stepSize: 25, backdropColor: 'transparent', font: { size: 9.5 }, color: token('--text-tertiary') }
+                            }
+                        }
+                    }
+                });
+            }
+
+            // Page 5: Prediction Chart
+            const ctx4 = document.getElementById('predictionChart');
+            if (ctx4) {
+                new Chart(ctx4, {
+                    type: 'line',
+                    data: {
+                        labels: reportData.charts.predictionData.labels,
+                        datasets: [{
+                            label: '예상 점수',
+                            data: reportData.charts.predictionData.values,
+                            borderColor: token('--cat-3'),
+                            backgroundColor: tokenAlpha('--cat-3', 0.10),
+                            borderWidth: 1.5,
+                            pointRadius: 3,
+                            pointBackgroundColor: token('--surface'),
+                            pointBorderColor: token('--action'),
+                            pointBorderWidth: 1.5,
+                            fill: true,
+                            tension: 0.4
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        layout: { padding: { top: 8 } },
+                        plugins: { legend: Object.assign({ display: true, position: 'top', align: 'end' }, legendStyle) },
+                        scales: {
+                            y: { min: 0, max: 100, border: axisBorder, grid: gridStyle, ticks: { stepSize: 25, padding: 8 } },
+                            x: { border: axisBorder, grid: { display: false },
+                                 ticks: { padding: 6, color: token('--text-secondary'), font: { size: 11 } } }
+                        }
+                    }
+                });
+            }
+
+
+            // ===== 시험 분석지 도판 (모두 서버 실계산 값) =====
+            // DESIGN.md 10.5.2 영역 색은 이름 기준 고정 (서버 조판과 같은 배정)
+            const CAT_VAR_JS = {
+                '화법': '--cat-1', '화법과 작문': '--cat-1', '작문': '--cat-2',
+                '수능독서': '--cat-3', '독서': '--cat-3', '문학': '--cat-4',
+                '문법': '--cat-6', '언어와 매체': '--cat-6', '언어와매체': '--cat-6', '매체': '--cat-6'
+            };
+            const FALLBACK_JS = ['--cat-1', '--cat-2', '--cat-3', '--cat-4', '--cat-5', '--cat-6'];
+            const catColor = (name, i) => token(CAT_VAR_JS[name] || FALLBACK_JS[i % FALLBACK_JS.length]);
+            const diffColor = (d) => token(d === '상' ? '--diff-hi' : d === '하' ? '--diff-lo' : '--diff-mid');
+
+            // 막대 위에 값을 적는 최소 플러그인 (외부 플러그인 없이)
+            const valueLabel = {
+                id: 'valueLabel',
+                afterDatasetsDraw(chart, args, opts) {
+                    const { ctx } = chart;
+                    ctx.save();
+                    ctx.font = '600 9.5px ' + sansStack;
+                    ctx.fillStyle = token('--text-secondary');
+                    ctx.textAlign = 'center';
+                    chart.data.datasets.forEach((ds, di) => {
+                        const meta = chart.getDatasetMeta(di);
+                        if (meta.hidden) return;
+                        meta.data.forEach((el, i) => {
+                            const v = ds.data[i];
+                            if (v === null || v === undefined) return;
+                            const suffix = opts && opts.suffix ? opts.suffix : '';
+                            if (opts && opts.horizontal) {
+                                ctx.textAlign = 'left';
+                                ctx.fillText(v + suffix, el.x + 6, el.y + 3);
+                            } else {
+                                ctx.fillText(v + suffix, el.x, el.y - 5);
+                            }
+                        });
+                    });
+                    ctx.restore();
+                }
+            };
+
+            // Page 2: 영역별 배점 구성
+            const ctx5 = document.getElementById('categoryDonut');
+            if (ctx5 && reportData.categoryPointsMap) {
+                const cats = reportData.categoryPointsMap;
+                new Chart(ctx5, {
+                    type: 'doughnut',
+                    data: {
+                        labels: cats.map(c => c.name + ' ' + c.points + '점'),
+                        datasets: [{
+                            data: cats.map(c => c.points),
+                            backgroundColor: cats.map((c, i) => catColor(c.name, i)),
+                            borderColor: token('--surface'), borderWidth: 2
+                        }]
+                    },
+                    options: {
+                        responsive: true, maintainAspectRatio: false, cutout: '58%',
+                        plugins: { legend: Object.assign({ display: true, position: 'right' }, legendStyle) }
+                    }
+                });
+            }
+
+            // Page 2: 난이도 구성
+            const ctx6 = document.getElementById('difficultyBar');
+            if (ctx6 && reportData.difficultyStats) {
+                const ds = reportData.difficultyStats;
+                new Chart(ctx6, {
+                    type: 'bar',
+                    data: {
+                        labels: ds.map(d => '난이도 ' + d.level),
+                        datasets: [{
+                            label: '문항 수',
+                            data: ds.map(d => d.count),
+                            backgroundColor: ds.map(d => diffColor(d.level)),
+                            borderRadius: 2, barPercentage: 0.45
+                        }]
+                    },
+                    plugins: [valueLabel],
+                    options: {
+                        indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+                        layout: { padding: { right: 26 } },
+                        plugins: { legend: { display: false }, valueLabel: { horizontal: true, suffix: '문항' } },
+                        scales: {
+                            x: { beginAtZero: true, border: axisBorder, grid: gridStyle, ticks: { padding: 6, precision: 0 } },
+                            y: { border: axisBorder, grid: { display: false }, ticks: { color: token('--text-secondary'), font: { size: 11 } } }
+                        }
+                    }
+                });
+            }
+
+            // Page 5: 문항별 전체 정답률
+            const ctx7 = document.getElementById('questionRateChart');
+            if (ctx7 && reportData.questionAnalysis) {
+                const qs = reportData.questionAnalysis;
+                new Chart(ctx7, {
+                    type: 'bar',
+                    data: {
+                        labels: qs.map(q => q.number),
+                        datasets: [{
+                            label: '전체 정답률',
+                            data: qs.map(q => q.cohortRate),
+                            backgroundColor: qs.map((q, i) => catColor(q.category, i)),
+                            borderColor: qs.map(q => q.isCorrect ? 'transparent' : token('--cat-5')),
+                            borderWidth: qs.map(q => q.isCorrect ? 0 : 1.5),
+                            borderRadius: 1, barPercentage: 0.9, categoryPercentage: 0.92
+                        }]
+                    },
+                    options: {
+                        responsive: true, maintainAspectRatio: false,
+                        plugins: { legend: { display: false } },
+                        scales: {
+                            y: { beginAtZero: true, max: 100, border: axisBorder, grid: gridStyle,
+                                 ticks: { stepSize: 25, padding: 6, callback: v => v + '%' } },
+                            x: { border: axisBorder, grid: { display: false },
+                                 ticks: { autoSkip: false, maxRotation: 0, font: { size: 7 }, color: token('--text-tertiary') } }
+                        }
+                    }
+                });
+            }
+
+            // Page 5: 난이도별 정답률 비교
+            const ctx8 = document.getElementById('difficultyCompareChart');
+            if (ctx8 && reportData.difficultyStats) {
+                const ds2 = reportData.difficultyStats;
+                new Chart(ctx8, {
+                    type: 'bar',
+                    data: {
+                        labels: ds2.map(d => '난이도 ' + d.level + ' (' + d.count + '문항)'),
+                        datasets: [
+                            { label: '내 정답률', data: ds2.map(d => d.studentRate),
+                              backgroundColor: token('--cat-1'), borderRadius: 2, barPercentage: 0.7 },
+                            { label: '전체 평균', data: ds2.map(d => d.cohortRate),
+                              backgroundColor: token('--cat-4'), borderRadius: 2, barPercentage: 0.7 }
+                        ]
+                    },
+                    plugins: [valueLabel],
+                    options: {
+                        responsive: true, maintainAspectRatio: false,
+                        plugins: {
+                            legend: Object.assign({ display: true, position: 'top', align: 'end' }, legendStyle),
+                            valueLabel: { suffix: '%' }
+                        },
+                        layout: { padding: { top: 16 } },
+                        scales: {
+                            y: { beginAtZero: true, max: 100, border: axisBorder, grid: gridStyle,
+                                 ticks: { stepSize: 25, padding: 6, callback: v => v + '%' } },
+                            x: { border: axisBorder, grid: { display: false },
+                                 ticks: { color: token('--text-secondary'), font: { size: 10.5 } } }
+                        }
+                    }
+                });
+            }
+
+            // PDF Download
+            async function downloadPDF() {
+                const loadingOverlay = document.getElementById('pdf-loading-overlay');
+                loadingOverlay.style.display = 'flex';
+                try {
+                    const { jsPDF } = window.jspdf;
+                    const doc = new jsPDF('p', 'mm', 'a4');
+                    const pages = document.querySelectorAll('.a4-page');
+                    const pageWidth = 210;
+                    const pageHeight = 297;
+
+                    for (let i = 0; i < pages.length; i++) {
+                        const page = pages[i];
+                        const canvas = await html2canvas(page, { scale: 2, useCORS: true, logging: false });
+                        const imgData = canvas.toDataURL('image/png', 0.98);
+                        if (i > 0) { doc.addPage(); }
+                        doc.addImage(imgData, 'PNG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
+                    }
+
+                    const studentName = reportData.studentInfo.name;
+                    const filename = `올가국어_분석보고서_${studentName}.pdf`;
+                    doc.save(filename);
+                } catch (error) {
+                    console.error("PDF 생성 중 오류:", error);
+                    alert("PDF 파일 생성에 실패했습니다. 다시 시도해주세요.");
+                } finally {
+                    loadingOverlay.style.display = 'none';
+                }
+            }
+
+            const downloadButton = document.getElementById('pdf-download-btn');
+            if (downloadButton) {
+                downloadButton.addEventListener('click', downloadPDF);
+            }
+        });
+    </script>
+</body>
+</html>

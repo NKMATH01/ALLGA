@@ -4,10 +4,25 @@ import { db } from '../db/index';
 import { aiReports, examAttempts, exams, parents, studentParents, students, users } from '../db/schema';
 import { and, eq } from 'drizzle-orm';
 import { requireAuth } from '../middleware/auth';
-import { OLGA_REPORT_META_PROMPT_V2 } from '../prompts/olga-report-meta-prompt-v2';
+import { OLGA_REPORT_META_PROMPT_V3 } from '../prompts/olga-report-meta-prompt-v3';
 import { generateReportHTML as generateNewReportHTML } from '../templates/newReportTemplate';
 
 const router = express.Router();
+
+/**
+ * 실제 응시 점수 분포로 10분위 누적 비율(%)을 만든다.
+ * 각 원소는 "만점의 10%·20%…100% 이하를 받은 응시자 비율".
+ * 표본이 없거나 만점이 0이면 빈 배열 (가짜 곡선을 만들지 않는다).
+ */
+function buildCumulativeDistribution(scores: number[], maxScore: number): number[] {
+  if (scores.length === 0 || !maxScore || maxScore <= 0) return [];
+
+  return Array.from({ length: 10 }, (_, i) => {
+    const threshold = (maxScore * (i + 1)) / 10;
+    const atOrBelow = scores.filter(s => s <= threshold).length;
+    return Math.round((atOrBelow / scores.length) * 100);
+  });
+}
 
 type SessionUser = { id: string; role: string; branchId?: string };
 
@@ -181,7 +196,55 @@ router.post('/generate/:attemptId', requireAuth, async (req, res) => {
     const sortedAttempts = completedAttempts
       .sort((a, b) => (b.score || 0) - (a.score || 0));
 
-    const rank = sortedAttempts.findIndex(a => a.id === attemptId) + 1;
+    const rankIndex = sortedAttempts.findIndex(a => a.id === attemptId);
+    const rank = rankIndex + 1; // 못 찾으면 0
+
+    // 같은 시험 응시자 전체의 영역별 실제 평균. (기존에는 65% 하드코딩)
+    // 각 응시 기록의 채점 방식(_gradingMode)을 존중해 정오를 판정한다.
+    const domainAverageMap = new Map<
+      string,
+      { earnedScore: number; maxScore: number; correct: number; total: number }
+    >();
+
+    for (const other of completedAttempts) {
+      const otherAnswers = (other.answers as any) || {};
+      const otherIsOx = otherAnswers._gradingMode === 'ox';
+
+      questionsData.forEach((q: any, idx: number) => {
+        const domain = q.domain || q.category || '독서';
+        const qNum = q.number || idx + 1;
+        const studentAnswer = otherAnswers[qNum.toString()];
+        const correct = otherIsOx
+          ? Number(studentAnswer) === 1
+          : studentAnswer === q.correctAnswer;
+        const qScore = q.score || 2;
+
+        if (!domainAverageMap.has(domain)) {
+          domainAverageMap.set(domain, { earnedScore: 0, maxScore: 0, correct: 0, total: 0 });
+        }
+        const acc = domainAverageMap.get(domain)!;
+        acc.maxScore += qScore;
+        acc.total += 1;
+        if (correct) {
+          acc.earnedScore += qScore;
+          acc.correct += 1;
+        }
+      });
+    }
+
+    const attemptCount = completedAttempts.length;
+
+    /** 영역별 실제 평균 점수/정답률. 표본이 없으면 null (임의 값을 만들지 않는다) */
+    function domainAverage(domainName: string): { avgScore: number | null; avgPercentage: number | null } {
+      const acc = domainAverageMap.get(domainName);
+      if (!acc || attemptCount === 0 || acc.total === 0) {
+        return { avgScore: null, avgPercentage: null };
+      }
+      return {
+        avgScore: Math.round(acc.earnedScore / attemptCount),
+        avgPercentage: Math.round((acc.correct / acc.total) * 100),
+      };
+    }
 
     // Call Gemini API with detailed prompt for comprehensive report
     // Try multiple models as fallback
@@ -259,17 +322,22 @@ router.post('/generate/:attemptId', requireAuth, async (req, res) => {
         }) : []
       },
       average: {
-        응시학생수: completedAttempts.length,
-        영역별평균: domainStats.map(d => ({
-          영역: d.name,
-          평균점수: Math.round(d.maxScore * 0.65),
-          평균정답률: 65
-        }))
+        응시학생수: attemptCount,
+        영역별평균: domainStats.map(d => {
+          const avg = domainAverage(d.name);
+          return {
+            영역: d.name,
+            평균점수: avg.avgScore,
+            평균정답률: avg.avgPercentage,
+            // 표본이 1명(본인)뿐이면 비교 의미가 없음을 AI 에 알린다
+            비교가능: attemptCount > 1,
+          };
+        })
       }
     };
 
     // Combine System Prompt + User Data (clean separation)
-    const prompt = `${OLGA_REPORT_META_PROMPT_V2}
+    const prompt = `${OLGA_REPORT_META_PROMPT_V3}
 
 [입력 데이터]
 ${JSON.stringify(userData, null, 2)}`;
@@ -292,7 +360,10 @@ ${JSON.stringify(userData, null, 2)}`;
         model: "gemini-2.5-flash",
         generationConfig: {
           temperature: 0.7,
-          maxOutputTokens: 8000,
+          // v3 프롬프트는 영역별 소견 5건(각 300-420자) + 진학 대비 소견 + 처방 5갈래를
+          // 한 번에 요구한다. 8000 으로는 응답이 잘려 JSON 파싱이 실패하고
+          // 폴백 텍스트로 떨어진다 (실측: 잘림 -> subjectDetails 25자짜리 기본 문장).
+          maxOutputTokens: 16000,
         }
       });
 
@@ -307,15 +378,18 @@ ${JSON.stringify(userData, null, 2)}`;
       responseText = JSON.stringify({
         olgaSummary: `AI 분석이 일시적으로 불가능합니다.\n\n성적: ${attempt.score}점/${attempt.maxScore}점 (${Math.round((attempt.score || 0) / (attempt.maxScore || 100) * 100)}%)\n등급: ${attempt.grade}등급\n순위: ${rank}/${completedAttempts.length}`,
         errorPatterns: [],
-        subjectAreas: domainStats.map((d: any) => ({
-          name: d.name,
-          percentage: d.percentage,
-          earnedScore: d.earnedScore,
-          maxScore: d.maxScore,
-          avgScore: 65,
-          avgPercentage: 65,
-          analysis: `${d.name} 영역에서 ${d.percentage}%의 정답률을 보였습니다.`
-        }))
+        subjectAreas: domainStats.map((d: any) => {
+          const avg = domainAverage(d.name);
+          return {
+            name: d.name,
+            percentage: d.percentage,
+            earnedScore: d.earnedScore,
+            maxScore: d.maxScore,
+            avgScore: avg.avgScore,
+            avgPercentage: avg.avgPercentage,
+            analysis: `${d.name} 영역에서 ${d.percentage}%의 정답률을 보였습니다.`
+          };
+        })
       });
     }
 
@@ -332,25 +406,30 @@ ${JSON.stringify(userData, null, 2)}`;
 
       aiAnalysis = JSON.parse(cleanedText);
 
-      // metaVersion 검증
-      if (aiAnalysis.metaVersion !== 'v2') {
+      // metaVersion 검증. v3 프롬프트를 보냈으므로 v3 응답을 기대한다.
+      // v2 응답은 highSchoolPrep 이 없고 영역 소견이 짧지만, 지면이 폴백을 갖고 있어 렌더는 된다.
+      if (aiAnalysis.metaVersion !== 'v3') {
         console.warn('⚠️ 경고: 이전 버전의 프롬프트 응답 감지됨. metaVersion:', aiAnalysis.metaVersion);
       } else {
-        console.log('✅ 새로운 메타 프롬프트 v2 응답 확인');
+        console.log('✅ 새로운 메타 프롬프트 v3 응답 확인');
       }
     } catch (e) {
       console.error('JSON 파싱 오류:', e);
       console.error('응답 내용:', responseText.substring(0, 500));
       aiAnalysis = {
-        metaVersion: 'v2',
+        metaVersion: 'v3',
         olgaSummary: responseText,
         subjectAreas: [],
         errorPatterns: []
       };
     }
 
-    // 계산된 값들 (필요한 기본 통계만)
-    const percentile = Math.round(100 * (1 - (rank / completedAttempts.length)) * 10) / 10;
+    // 백분위. 순위를 못 찾았거나(rank=0) 표본이 없으면 100 이 아니라 0 으로 둔다.
+    // (기존에는 findIndex 실패 시 1 - 0/n = 1 → 백분위 100 으로 잘못 표시됐다)
+    const percentile =
+      rank > 0 && attemptCount > 0
+        ? Math.round(100 * (1 - rank / attemptCount) * 10) / 10
+        : 0;
 
     // 표준점수는 채점 결과(등급·원점수·만점)가 모두 있을 때만 산출한다.
     // 값이 없으면 임의의 숫자를 만들지 않고 null 로 둔다.
@@ -373,9 +452,294 @@ ${JSON.stringify(userData, null, 2)}`;
     const aiStats = aiAnalysis.stats || {};
     const aiAnalysisData = aiAnalysis.analysis || {};
 
+    // =====================================================================
+    // 시험지/문항 분석 실계산.
+    // 모든 값은 exam.questionsData 와 제출 완료된 attempts 에서만 나온다.
+    // 표본이 없으면 null 을 반환하고, 임의의 평균이나 곡선을 만들지 않는다.
+    // =====================================================================
+
+    /** 문항별 전체 응시자 정답 수. O/X 수동 채점 기록은 값이 정답 번호가 아니라 O=1 이다. */
+    const perQuestionCorrect = new Map<number, number>();
+    questionsData.forEach((q: any, idx: number) => {
+      perQuestionCorrect.set(q.number || idx + 1, 0);
+    });
+    for (const other of completedAttempts) {
+      const otherAnswers = (other.answers as any) || {};
+      const otherIsOx = otherAnswers._gradingMode === 'ox';
+      questionsData.forEach((q: any, idx: number) => {
+        const qNum = q.number || idx + 1;
+        const otherAnswer = otherAnswers[qNum.toString()];
+        const correct = otherIsOx
+          ? Number(otherAnswer) === 1
+          : otherAnswer === q.correctAnswer;
+        if (correct) {
+          perQuestionCorrect.set(qNum, (perQuestionCorrect.get(qNum) || 0) + 1);
+        }
+      });
+    }
+
+    /** 문항별 분석. 학생 정오 + 전체 응시자 정답률. */
+    const questionAnalysis = questionsData.map((q: any, idx: number) => {
+      const qNum = q.number || idx + 1;
+      const studentAnswer = answers[qNum.toString()];
+      const cohortCorrectCount = perQuestionCorrect.get(qNum) || 0;
+      return {
+        number: qNum,
+        category: q.category || q.domain || '미분류',
+        type: q.typeAnalysis || q.questionIntent || '',
+        subcategory: q.subcategory || '',
+        difficulty: q.difficulty || '중',
+        points: Number(q.points ?? q.score) || 0,
+        isCorrect: isAnswerCorrect(q, studentAnswer),
+        correctAnswer: q.correctAnswer ?? null,
+        studentAnswer: isOxGraded ? null : (studentAnswer ?? null),
+        explanation: q.explanation || q.commentary || '',
+        cohortCorrectCount,
+        cohortRate: attemptCount > 0 ? Math.round((cohortCorrectCount / attemptCount) * 100) : null,
+      };
+    });
+
+    /** 난이도별 학생 정답률과 전체 평균 정답률. */
+    const difficultyStats = ['상', '중', '하']
+      .map((level) => {
+        const items = questionAnalysis.filter((q) => q.difficulty === level);
+        if (items.length === 0) return null;
+        const studentCorrect = items.filter((q) => q.isCorrect).length;
+        const cohortCorrectSum = items.reduce((s, q) => s + q.cohortCorrectCount, 0);
+        const cohortDenominator = items.length * attemptCount;
+        return {
+          level,
+          count: items.length,
+          points: items.reduce((s, q) => s + q.points, 0),
+          studentCorrect,
+          studentRate: Math.round((studentCorrect / items.length) * 100),
+          cohortRate: cohortDenominator > 0 ? Math.round((cohortCorrectSum / cohortDenominator) * 100) : null,
+        };
+      })
+      .filter((d): d is NonNullable<typeof d> => d !== null);
+
+    /** 영역별 배점 구성과 정답률. */
+    const categoryAccumulator = new Map<string, { name: string; count: number; points: number; studentCorrect: number; cohortCorrect: number }>();
+    for (const q of questionAnalysis) {
+      if (!categoryAccumulator.has(q.category)) {
+        categoryAccumulator.set(q.category, { name: q.category, count: 0, points: 0, studentCorrect: 0, cohortCorrect: 0 });
+      }
+      const acc = categoryAccumulator.get(q.category)!;
+      acc.count += 1;
+      acc.points += q.points;
+      if (q.isCorrect) acc.studentCorrect += 1;
+      acc.cohortCorrect += q.cohortCorrectCount;
+    }
+    const categoryPointsMap = Array.from(categoryAccumulator.values()).map((c) => ({
+      ...c,
+      studentRate: Math.round((c.studentCorrect / c.count) * 100),
+      cohortRate: attemptCount > 0 ? Math.round((c.cohortCorrect / (c.count * attemptCount)) * 100) : null,
+    }));
+
+    // =====================================================================
+    // 참고치(reference range).
+    // 건강검진 결과지의 '참고치'와 같은 개념으로, 같은 시험을 제출한 응시자들의
+    // 항목별 정답률 분포에서 가운데 80% 구간(제10 ~ 제90 백분위)을 참고치로 삼는다.
+    // 임상 검사의 참고구간과 같은 방식이며, 평균 +- 표준편차와 달리 0/100 에서
+    // 잘려 나가지 않는다. 가운데 50%(사분위) 구간은 응시자 절반이 미달로 찍혀
+    // 검진지의 플래그 의미가 희석되므로 쓰지 않는다.
+    // 표본이 REFERENCE_MIN_SAMPLE 미만이면 구간을 만들지 않는다.
+    // 지면에는 '기준 축적 중'으로 표기한다 (없는 범위를 지어내지 않는다).
+    // =====================================================================
+    const REFERENCE_MIN_SAMPLE = 5;
+
+    type ReferenceBand = {
+      available: boolean;
+      sampleSize: number;
+      mid: number | null;
+      mean: number | null;
+      low: number | null;
+      high: number | null;
+    };
+
+    function buildReferenceBand(values: number[]): ReferenceBand {
+      if (values.length < REFERENCE_MIN_SAMPLE) {
+        return { available: false, sampleSize: values.length, mid: null, mean: null, low: null, high: null };
+      }
+      const sorted = values.slice().sort((a, b) => a - b);
+      const quantile = (p: number) => {
+        const pos = (sorted.length - 1) * p;
+        const lo = Math.floor(pos);
+        const hi = Math.ceil(pos);
+        return sorted[lo] + (sorted[hi] - sorted[lo]) * (pos - lo);
+      };
+      return {
+        available: true,
+        sampleSize: values.length,
+        low: Math.round(quantile(0.10)),
+        mid: Math.round(quantile(0.5)),
+        high: Math.round(quantile(0.90)),
+        mean: Math.round(values.reduce((s, v) => s + v, 0) / values.length),
+      };
+    }
+
+    /** 응시자 한 명 한 명의 항목별 정답률. 참고치 구간의 표본이 된다. */
+    const referenceCategorySamples = new Map<string, number[]>();
+    const referenceDifficultySamples = new Map<string, number[]>();
+    const referenceTotalSamples: number[] = [];
+
+    for (const other of completedAttempts) {
+      const otherAnswers = (other.answers as any) || {};
+      const otherIsOx = otherAnswers._gradingMode === 'ox';
+      const catTally = new Map<string, { correct: number; total: number }>();
+      const diffTally = new Map<string, { correct: number; total: number }>();
+      let correctTally = 0;
+
+      questionsData.forEach((q: any, idx: number) => {
+        const qNum = q.number || idx + 1;
+        const otherAnswer = otherAnswers[qNum.toString()];
+        const correct = otherIsOx
+          ? Number(otherAnswer) === 1
+          : otherAnswer === q.correctAnswer;
+        const category = q.category || q.domain || '미분류';
+        const level = q.difficulty || '중';
+
+        if (!catTally.has(category)) catTally.set(category, { correct: 0, total: 0 });
+        if (!diffTally.has(level)) diffTally.set(level, { correct: 0, total: 0 });
+        catTally.get(category)!.total += 1;
+        diffTally.get(level)!.total += 1;
+        if (correct) {
+          catTally.get(category)!.correct += 1;
+          diffTally.get(level)!.correct += 1;
+          correctTally += 1;
+        }
+      });
+
+      for (const [name, t] of catTally) {
+        if (!referenceCategorySamples.has(name)) referenceCategorySamples.set(name, []);
+        referenceCategorySamples.get(name)!.push((t.correct / t.total) * 100);
+      }
+      for (const [level, t] of diffTally) {
+        if (!referenceDifficultySamples.has(level)) referenceDifficultySamples.set(level, []);
+        referenceDifficultySamples.get(level)!.push((t.correct / t.total) * 100);
+      }
+      if (questionsData.length > 0) {
+        referenceTotalSamples.push((correctTally / questionsData.length) * 100);
+      }
+    }
+
+    const categoryReference = categoryPointsMap.map((c) => ({
+      name: c.name,
+      ...buildReferenceBand(referenceCategorySamples.get(c.name) || []),
+    }));
+    const difficultyReference = difficultyStats.map((d) => ({
+      level: d.level,
+      ...buildReferenceBand(referenceDifficultySamples.get(d.level) || []),
+    }));
+    const overallReference = buildReferenceBand(referenceTotalSamples);
+
+    // =====================================================================
+    // 추이(이전 검사 대비). 같은 학생의 이전 제출 기록 중 가장 최근 것과 비교한다.
+    // 시험이 다르면 만점이 다르므로 정답률(%)로 비교하고, 지면에 시험명을 함께 적는다.
+    // 이전 기록이 없으면 비교하지 않는다 (첫 검사임을 그대로 표기한다).
+    // =====================================================================
+    const studentAllAttempts = await db
+      .select()
+      .from(examAttempts)
+      .where(eq(examAttempts.studentId, attempt.studentId));
+
+    const priorAttempts = studentAllAttempts
+      .filter(
+        (a) =>
+          a.id !== attemptId &&
+          a.submittedAt !== null &&
+          a.score !== null &&
+          !!a.maxScore &&
+          new Date(a.submittedAt).getTime() < new Date(attempt.submittedAt!).getTime()
+      )
+      .sort((a, b) => new Date(b.submittedAt!).getTime() - new Date(a.submittedAt!).getTime());
+
+    const previousAttempt = priorAttempts[0] || null;
+    let previousExam: typeof exams.$inferSelect | null = null;
+    if (previousAttempt) {
+      const [found] = await db
+        .select()
+        .from(exams)
+        .where(eq(exams.id, previousAttempt.examId))
+        .limit(1);
+      previousExam = found || null;
+    }
+
+    const currentRate = attempt.maxScore
+      ? Math.round(((attempt.score || 0) / attempt.maxScore) * 100)
+      : null;
+    const previousRate =
+      previousAttempt && previousAttempt.maxScore
+        ? Math.round(((previousAttempt.score || 0) / previousAttempt.maxScore) * 100)
+        : null;
+
+    const examHistory = {
+      available: previousAttempt !== null,
+      priorCount: priorAttempts.length,
+      sameExam: previousAttempt ? previousAttempt.examId === attempt.examId : false,
+      previous: previousAttempt
+        ? {
+            examTitle: previousExam?.title || '이전 검사',
+            date: new Date(previousAttempt.submittedAt!).toLocaleDateString('ko-KR'),
+            score: previousAttempt.score,
+            maxScore: previousAttempt.maxScore,
+            rate: previousRate,
+            grade: previousAttempt.grade ?? null,
+          }
+        : null,
+      current: {
+        examTitle: exam.title,
+        date: new Date(attempt.submittedAt!).toLocaleDateString('ko-KR'),
+        score: attempt.score,
+        maxScore: attempt.maxScore,
+        rate: currentRate,
+        grade: attempt.grade ?? null,
+      },
+      delta:
+        previousAttempt && previousRate !== null && currentRate !== null
+          ? {
+              rate: currentRate - previousRate,
+              score:
+                previousAttempt.maxScore === attempt.maxScore
+                  ? (attempt.score || 0) - (previousAttempt.score || 0)
+                  : null,
+              grade:
+                previousAttempt.grade !== null && attempt.grade !== null
+                  ? (previousAttempt.grade as number) - (attempt.grade as number)
+                  : null,
+            }
+          : null,
+    };
+
+    /** 변별 분석: 전체는 잘 맞힌 문항인데 놓친 것 / 전체가 어려워한 문항인데 맞힌 것. */
+    const missedEasyQuestions = questionAnalysis
+      .filter((q) => q.cohortRate !== null && q.cohortRate >= 70 && !q.isCorrect)
+      .sort((a, b) => (b.cohortRate || 0) - (a.cohortRate || 0));
+    const solvedHardQuestions = questionAnalysis
+      .filter((q) => q.cohortRate !== null && q.cohortRate <= 40 && q.isCorrect)
+      .sort((a, b) => (a.cohortRate || 0) - (b.cohortRate || 0));
+
+    const examOverview = {
+      title: exam.title,
+      subject: exam.subject,
+      grade: exam.grade || '',
+      totalQuestions: exam.totalQuestions,
+      totalScore: exam.totalScore,
+      pointsSum: questionAnalysis.reduce((s, q) => s + q.points, 0),
+      attemptCount,
+      rank: rank > 0 ? rank : null,
+      categoryCount: categoryPointsMap.length,
+      difficultyCount: difficultyStats.length,
+      explainedCount: questionAnalysis.filter((q) => q.explanation).length,
+      // 결과통보서 문서번호. 응시 기록 id 앞 8자리로, 새로 만들어낸 값이 아니다.
+      documentNo: attemptId.replace(/-/g, '').slice(0, 8).toUpperCase(),
+      issuedDate: new Date().toLocaleDateString('ko-KR'),
+      referenceMinSample: REFERENCE_MIN_SAMPLE,
+    };
+
     // reportData 구조 (AI JSON 기반)
     const reportData = {
-      metaVersion: aiAnalysis.metaVersion || 'v2',
+      metaVersion: aiAnalysis.metaVersion || 'v3',
       studentInfo: {
         name: studentUser.name,
         school: student.student.school || '미지정',
@@ -393,11 +757,17 @@ ${JSON.stringify(userData, null, 2)}`;
         scoreChartData: domainStats.map(d => d.percentage),
         percentileChartData: {
           studentPercentile: percentile,
-          cumulativeData: [3, 8, 16, 28, 43, 61, 77, 90, 97, 100], // 표준 누적 분포
+          // 실제 응시자 점수 분포에서 만든 10분위 누적 비율.
+          // (기존에는 표본과 무관한 고정 곡선을 넣고 있었다)
+          cumulativeData: buildCumulativeDistribution(
+            completedAttempts.map(a => a.score || 0),
+            attempt.maxScore || 0
+          ),
+          sampleSize: attemptCount,
         },
         radarChartData: aiStats.domainChartData || {
           student: domainStats.map(d => d.percentage),
-          average: domainStats.map(() => 65),
+          average: domainStats.map(d => domainAverage(d.name).avgPercentage),
         },
         predictionChartData: [
           Math.round((attempt.score || 0) / (attempt.maxScore || 100) * 100),
@@ -421,6 +791,35 @@ ${JSON.stringify(userData, null, 2)}`;
           typeTitle: '분석 중',
           typeDescription: '성향 분석 데이터가 생성 중입니다.',
         },
+        // 고교 진학 대비 소견. 프롬프트 v2 에서 새로 요구하는 필드이므로
+        // 이전에 생성된 보고서에는 없다. 없으면 null 로 두고 지면에서 대체 문구를 쓴다.
+        highSchoolPrep: aiAnalysisData.highSchoolPrep || null,
+      },
+      // 수능 등급 예측 표기용. 이번 검사에서 '측정된' 등급을 그대로 옮긴 구간이며
+      // 새 수치를 만들어내지 않는다. 해석 문구와 단서는 지면이 붙인다.
+      ceoOutlook: {
+        measuredGrade: attempt.grade ?? null,
+        bandLow: attempt.grade ? Math.max(1, (attempt.grade as number) - 1) : null,
+        bandHigh: attempt.grade ? Math.min(9, (attempt.grade as number) + 1) : null,
+        sampleSize: attemptCount,
+      },
+      // ===== 시험지/문항 분석 (전부 DB 실데이터 계산) =====
+      examOverview,
+      questionAnalysis,
+      difficultyStats,
+      categoryPointsMap,
+      // 건강검진 결과지 문법의 참고치 / 추이 (전부 실표본 계산)
+      categoryReference,
+      difficultyReference,
+      overallReference,
+      examHistory,
+      discrimination: {
+        missedEasy: missedEasyQuestions,
+        solvedHard: solvedHardQuestions,
+      },
+      examInsight: {
+        trends: Array.isArray(exam.examTrends) ? (exam.examTrends as any[]) : [],
+        overallReview: exam.overallReview || '',
       },
     };
 
@@ -428,7 +827,7 @@ ${JSON.stringify(userData, null, 2)}`;
     console.log('[DEBUG][REPORT_DATA]', JSON.stringify(reportData, null, 2));
 
     // metaVersion 검증
-    if (reportData.metaVersion !== 'v2') {
+    if (reportData.metaVersion !== 'v3') {
       console.warn('[WARN] Old style reportData detected:', reportData.metaVersion);
     }
 
