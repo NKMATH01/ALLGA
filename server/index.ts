@@ -49,7 +49,12 @@ app.use(express.urlencoded({ extended: true }));
 app.use(
   session({
     store: new PgSession({
-      conString: process.env.DATABASE_URL,
+      // 세션 스토어는 자체 pg 풀을 만든다. 상한을 명시하지 않으면 기본값(10)이 잡혀
+      // 앱 쿼리 풀과 합쳐 프로세스당 20 커넥션이 된다. 예산은 server/db/index.ts 주석 참고.
+      conObject: {
+        connectionString: process.env.DATABASE_URL,
+        max: 5,
+      },
       tableName: 'session',
       createTableIfMissing: true,
     }),

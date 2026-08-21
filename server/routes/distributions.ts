@@ -432,8 +432,9 @@ router.get('/:id/students', requireBranchManager, async (req, res) => {
       let hasReport = false;
       let reportId = null;
       if (attempt && attempt.submittedAt) {
+        // 존재 여부와 id 만 필요하다. 전체 행을 select 하면 htmlContent 가 함께 실려 온다.
         const [report] = await db
-          .select()
+          .select({ id: aiReports.id })
           .from(aiReports)
           .where(eq(aiReports.attemptId, attempt.id))
           .limit(1);

@@ -1,0 +1,1 @@
+ALTER TABLE "exam_attempts" ADD CONSTRAINT "exam_attempts_student_distribution_unique" UNIQUE("student_id","distribution_id");

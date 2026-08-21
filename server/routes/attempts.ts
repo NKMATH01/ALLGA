@@ -9,8 +9,10 @@ import {
   aiReports,
   distributionStudents,
   users,
+  parents,
+  studentParents,
 } from '../db/schema';
-import { eq, and, isNotNull } from 'drizzle-orm';
+import { eq, and, isNotNull, isNull, inArray } from 'drizzle-orm';
 import { requireStudent, requireBranchManager } from '../middleware/auth';
 import { calculateGrade, endOfLocalDay } from '../utils/helpers';
 
@@ -39,9 +41,60 @@ router.get('/my-exams', requireStudent, async (req, res) => {
       .innerJoin(exams, eq(examDistributions.examId, exams.id))
       .where(eq(examDistributions.branchId, student.branchId));
 
-    // TODO(N+1): 배포마다 distributionStudents·studentClasses·examAttempts·aiReports 를
-    // 개별 조회한다. 배포 수가 늘면 요청당 쿼리가 선형으로 증가하므로
-    // inArray 배치 조회로 묶어야 한다. (iteration 3 범위 외)
+    // 배포마다 개별 조회하면 요청당 쿼리가 배포 수에 비례해 늘어난다(N+1).
+    // 필요한 부수 데이터를 배포 목록 기준으로 한 번씩만 가져와 Map 으로 조립한다.
+    // 판정 로직과 응답 형태는 기존과 동일하다.
+    const distributionIds = allDistributions.map((row) => row.distribution.id);
+
+    // ① 개별 지정 대상: 배포별로 "지정이 존재하는가" 와 "내가 포함되는가" 두 가지가 필요하다.
+    const targetRows = distributionIds.length
+      ? await db
+          .select({
+            distributionId: distributionStudents.distributionId,
+            studentId: distributionStudents.studentId,
+          })
+          .from(distributionStudents)
+          .where(inArray(distributionStudents.distributionId, distributionIds))
+      : [];
+
+    const hasAnyTarget = new Set<string>();
+    const targetsMe = new Set<string>();
+    for (const t of targetRows) {
+      hasAnyTarget.add(t.distributionId);
+      if (t.studentId === student.id) targetsMe.add(t.distributionId);
+    }
+
+    // ② 내가 속한 반 목록 (반 배포 판정용)
+    const myClassRows = await db
+      .select({ classId: studentClasses.classId })
+      .from(studentClasses)
+      .where(eq(studentClasses.studentId, student.id));
+    const myClassIds = new Set(myClassRows.map((c) => c.classId));
+
+    // ③ 내 응시 기록 (해당 배포들에 한해)
+    const attemptRows = distributionIds.length
+      ? await db
+          .select()
+          .from(examAttempts)
+          .where(
+            and(
+              eq(examAttempts.studentId, student.id),
+              inArray(examAttempts.distributionId, distributionIds)
+            )
+          )
+      : [];
+    const attemptByDistribution = new Map(attemptRows.map((a) => [a.distributionId, a]));
+
+    // ④ 보고서 존재 여부만 필요하므로 id 만 가져온다(htmlContent 는 수십~수백 KB).
+    const attemptIds = attemptRows.map((a) => a.id);
+    const reportRows = attemptIds.length
+      ? await db
+          .select({ attemptId: aiReports.attemptId })
+          .from(aiReports)
+          .where(inArray(aiReports.attemptId, attemptIds))
+      : [];
+    const attemptIdsWithReport = new Set(reportRows.map((r) => r.attemptId));
+
     // Filter distributions that apply to this student
     const result = [];
     for (const row of allDistributions) {
@@ -49,70 +102,25 @@ router.get('/my-exams', requireStudent, async (req, res) => {
 
       // Check 1: Distribution has no classId (distributed to all students in branch)
       if (!row.distribution.classId) {
-        // Check if there are specific students selected
-        const [studentDist] = await db
-          .select()
-          .from(distributionStudents)
-          .where(eq(distributionStudents.distributionId, row.distribution.id))
-          .limit(1);
-
-        if (!studentDist) {
+        if (!hasAnyTarget.has(row.distribution.id)) {
           // No specific students, so applies to all
           applies = true;
         } else {
           // Check if this student is in the list
-          const [myDist] = await db
-            .select()
-            .from(distributionStudents)
-            .where(
-              and(
-                eq(distributionStudents.distributionId, row.distribution.id),
-                eq(distributionStudents.studentId, student.id)
-              )
-            )
-            .limit(1);
-          applies = !!myDist;
+          applies = targetsMe.has(row.distribution.id);
         }
       }
       // Check 2: Distribution is for a class - check if student is in that class
       else if (row.distribution.classId) {
-        const [studentClass] = await db
-          .select()
-          .from(studentClasses)
-          .where(
-            and(
-              eq(studentClasses.studentId, student.id),
-              eq(studentClasses.classId, row.distribution.classId)
-            )
-          )
-          .limit(1);
-        applies = !!studentClass;
+        applies = myClassIds.has(row.distribution.classId);
       }
 
       if (!applies) continue;
 
-      // Get attempt
-      const [attempt] = await db
-        .select()
-        .from(examAttempts)
-        .where(
-          and(
-            eq(examAttempts.studentId, student.id),
-            eq(examAttempts.distributionId, row.distribution.id)
-          )
-        )
-        .limit(1);
+      const attempt = attemptByDistribution.get(row.distribution.id);
 
       // Check if report exists
-      let hasReport = false;
-      if (attempt) {
-        const [report] = await db
-          .select()
-          .from(aiReports)
-          .where(eq(aiReports.attemptId, attempt.id))
-          .limit(1);
-        hasReport = !!report;
-      }
+      const hasReport = attempt ? attemptIdsWithReport.has(attempt.id) : false;
 
       // Determine status
       let status = 'available';
@@ -269,8 +277,11 @@ router.get('/exam-attempts/:id', async (req, res) => {
       return res.status(404).json({ message: '학생 정보를 찾을 수 없습니다.' });
     }
 
-    // Check permissions
-    if (user.role === 'student') {
+    // 권한 검사: 기본은 차단이고, 허용되는 역할만 명시적으로 통과시킨다.
+    // (기존에는 어느 분기에도 걸리지 않는 역할이 그대로 통과했다)
+    if (user.role === 'admin') {
+      // 전체 열람 허용
+    } else if (user.role === 'student') {
       // Students can only view their own attempts
       const [myStudent] = await db
         .select()
@@ -286,8 +297,35 @@ router.get('/exam-attempts/:id', async (req, res) => {
       if (student.branchId !== user.branchId) {
         return res.status(403).json({ message: '권한이 없습니다.' });
       }
+    } else if (user.role === 'parent') {
+      // 자기 자녀의 응시만 열람 가능
+      const [parent] = await db
+        .select()
+        .from(parents)
+        .where(eq(parents.userId, user.id))
+        .limit(1);
+
+      if (!parent) {
+        return res.status(403).json({ message: '권한이 없습니다.' });
+      }
+
+      const [link] = await db
+        .select()
+        .from(studentParents)
+        .where(
+          and(
+            eq(studentParents.parentId, parent.id),
+            eq(studentParents.studentId, attempt.studentId)
+          )
+        )
+        .limit(1);
+
+      if (!link) {
+        return res.status(403).json({ message: '권한이 없습니다.' });
+      }
+    } else {
+      return res.status(403).json({ message: '권한이 없습니다.' });
     }
-    // Admin can view all
 
     res.json({
       success: true,
@@ -323,7 +361,85 @@ router.post('/exam-attempts', requireStudent, async (req, res) => {
       return res.status(404).json({ message: '배포를 찾을 수 없습니다.' });
     }
 
-    // Check if already attempted
+    // 이 학생이 해당 배포의 응시 대상인지 검증 (지점 → 반/개별 지정 순)
+    if (distribution.branchId !== student.branchId) {
+      return res.status(403).json({ message: '응시 대상이 아닌 시험입니다.' });
+    }
+
+    if (distribution.classId) {
+      // 반 배포: 해당 반 소속이어야 한다
+      const [enrolled] = await db
+        .select()
+        .from(studentClasses)
+        .where(
+          and(
+            eq(studentClasses.studentId, student.id),
+            eq(studentClasses.classId, distribution.classId)
+          )
+        )
+        .limit(1);
+
+      if (!enrolled) {
+        return res.status(403).json({ message: '응시 대상이 아닌 시험입니다.' });
+      }
+    } else {
+      // 개별 지정이 있으면 그 목록에 있어야 하고, 없으면 지점 전체 대상이다
+      const [anyTarget] = await db
+        .select()
+        .from(distributionStudents)
+        .where(eq(distributionStudents.distributionId, distributionId))
+        .limit(1);
+
+      if (anyTarget) {
+        const [me] = await db
+          .select()
+          .from(distributionStudents)
+          .where(
+            and(
+              eq(distributionStudents.distributionId, distributionId),
+              eq(distributionStudents.studentId, student.id)
+            )
+          )
+          .limit(1);
+
+        if (!me) {
+          return res.status(403).json({ message: '응시 대상이 아닌 시험입니다.' });
+        }
+      }
+    }
+
+    // 응시 기간 검증 (마감일은 그 날 23:59:59 까지 허용)
+    const now = new Date();
+    if (now < distribution.startDate) {
+      return res.status(400).json({ message: '아직 응시 기간이 아닙니다.' });
+    }
+    if (now > endOfLocalDay(distribution.endDate)) {
+      return res.status(400).json({ message: '응시 기간이 종료되었습니다.' });
+    }
+
+    // 동시 요청으로 중복 attempt 가 생기지 않도록 UNIQUE(student_id, distribution_id) 에 기댄다.
+    // 충돌하면 삽입하지 않고 기존 레코드를 돌려준다(재진입을 실패로 만들지 않는다).
+    const [inserted] = await db
+      .insert(examAttempts)
+      .values({
+        examId: distribution.examId,
+        studentId: student.id,
+        distributionId,
+        answers: {},
+      })
+      .onConflictDoNothing({
+        target: [examAttempts.studentId, examAttempts.distributionId],
+      })
+      .returning();
+
+    if (inserted) {
+      return res.status(201).json({
+        success: true,
+        data: inserted,
+      });
+    }
+
+    // 이미 존재 → 기존 응시 기록 반환 (200)
     const [existing] = await db
       .select()
       .from(examAttempts)
@@ -332,24 +448,14 @@ router.post('/exam-attempts', requireStudent, async (req, res) => {
       )
       .limit(1);
 
-    if (existing) {
-      return res.status(400).json({ message: '이미 시험을 시작했습니다.' });
+    if (!existing) {
+      return res.status(500).json({ message: '시험 시작 중 오류가 발생했습니다.' });
     }
 
-    // Create attempt
-    const [attempt] = await db
-      .insert(examAttempts)
-      .values({
-        examId: distribution.examId,
-        studentId: student.id,
-        distributionId,
-        answers: {},
-      })
-      .returning();
-
-    res.status(201).json({
+    res.status(200).json({
       success: true,
-      data: attempt,
+      data: existing,
+      message: '이미 시작한 시험입니다.',
     });
   } catch (error) {
     console.error('Create attempt error:', error);
@@ -385,11 +491,17 @@ router.put('/exam-attempts/:id', requireStudent, async (req, res) => {
       return res.status(400).json({ message: '이미 제출된 시험은 수정할 수 없습니다.' });
     }
 
+    // 위 사전 체크와 이 UPDATE 사이에 제출이 끼어들 수 있으므로(read-then-write 경합)
+    // WHERE 에 submitted_at IS NULL 을 걸어 원자적으로 막는다. 사전 체크는 이중 방어로 유지.
     const [attempt] = await db
       .update(examAttempts)
       .set({ answers })
-      .where(eq(examAttempts.id, id))
+      .where(and(eq(examAttempts.id, id), isNull(examAttempts.submittedAt)))
       .returning();
+
+    if (!attempt) {
+      return res.status(400).json({ message: '이미 제출된 시험은 수정할 수 없습니다.' });
+    }
 
     res.json({
       success: true,
@@ -489,7 +601,9 @@ router.post('/exam-attempts/:id/submit', requireStudent, async (req, res) => {
     const percentage = (score / maxScore) * 100;
     const grade = calculateGrade(percentage);
 
-    // Update attempt
+    // 제출은 한 번만 성립해야 한다. 더블클릭·재시도로 두 요청이 동시에 오면
+    // 사전 체크는 둘 다 통과할 수 있으므로 WHERE 에 submitted_at IS NULL 을 걸어
+    // 실제로 행을 잡은 쪽만 채점 결과를 쓴다.
     const now = new Date();
     const [updatedAttempt] = await db
       .update(examAttempts)
@@ -502,8 +616,12 @@ router.post('/exam-attempts/:id/submit', requireStudent, async (req, res) => {
         submittedAt: now,
         gradedAt: now,
       })
-      .where(eq(examAttempts.id, id))
+      .where(and(eq(examAttempts.id, id), isNull(examAttempts.submittedAt)))
       .returning();
+
+    if (!updatedAttempt) {
+      return res.status(409).json({ message: '이미 제출 처리된 시험입니다.' });
+    }
 
     res.json({
       success: true,
@@ -560,8 +678,10 @@ router.get('/branch/completed', async (req, res) => {
     for (const row of completedAttempts) {
       if (!row.attempt.submittedAt) continue;
 
+      // 존재 여부와 id 만 필요하다. select() 로 전체 행을 가져오면
+      // htmlContent(수십~수백 KB)가 매 행마다 네트워크로 실려 온다.
       const [report] = await db
-        .select()
+        .select({ id: aiReports.id })
         .from(aiReports)
         .where(eq(aiReports.attemptId, row.attempt.id))
         .limit(1);

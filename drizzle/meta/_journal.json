@@ -36,6 +36,20 @@
       "when": 1763397197091,
       "tag": "0004_milky_rachel_grey",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1787320928089,
+      "tag": "0005_icy_talisman",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1787322376837,
+      "tag": "0006_premium_puck",
+      "breakpoints": true
     }
   ]
 }

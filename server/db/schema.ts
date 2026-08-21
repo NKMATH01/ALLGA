@@ -1,4 +1,4 @@
-import { pgTable, varchar, text, boolean, timestamp, integer, json } from 'drizzle-orm/pg-core';
+import { pgTable, varchar, text, boolean, timestamp, integer, json, unique, index } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
 // Users table
@@ -38,7 +38,10 @@ export const classes = pgTable('classes', {
   description: text('description'),
   isActive: boolean('is_active').default(true).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
-});
+}, (table) => ({
+  // classes.ts GET / : WHERE branch_id = ? (지점 반 목록)
+  branchIdx: index('classes_branch_id_idx').on(table.branchId),
+}));
 
 // Students table
 export const students = pgTable('students', {
@@ -49,7 +52,11 @@ export const students = pgTable('students', {
   grade: text('grade'),
   parentPhone: text('parent_phone'),
   enrollmentDate: timestamp('enrollment_date').defaultNow().notNull(),
-});
+}, (table) => ({
+  // students.ts GET / 및 /branch-students : WHERE branch_id = ? (지점 학생 목록·통계)
+  // FK 컬럼은 Postgres 가 자동 인덱싱하지 않는다.
+  branchIdx: index('students_branch_id_idx').on(table.branchId),
+}));
 
 // Parents table
 export const parents = pgTable('parents', {
@@ -71,7 +78,10 @@ export const studentClasses = pgTable('student_classes', {
   studentId: varchar('student_id', { length: 255 }).notNull().references(() => students.id, { onDelete: 'cascade' }),
   classId: varchar('class_id', { length: 255 }).notNull().references(() => classes.id, { onDelete: 'cascade' }),
   enrolledAt: timestamp('enrolled_at').defaultNow().notNull(),
-});
+}, (table) => ({
+  // attempts.ts /my-exams : WHERE student_id = ? (반 배포 대상 판정, 전 학생 진입점)
+  studentIdx: index('student_classes_student_id_idx').on(table.studentId),
+}));
 
 // Exams table
 export const exams = pgTable('exams', {
@@ -101,7 +111,13 @@ export const examDistributions: any = pgTable('exam_distributions', {
   endDate: timestamp('end_date').notNull(),
   distributedBy: varchar('distributed_by', { length: 255 }).notNull().references(() => users.id),
   createdAt: timestamp('created_at').defaultNow().notNull(),
-});
+}, (table: any) => ({
+  // attempts.ts /my-exams : WHERE branch_id = ? (전 학생 진입점)
+  // distributions.ts GET / : WHERE branch_id = ? (지점 배포 목록)
+  branchIdx: index('exam_distributions_branch_id_idx').on(table.branchId),
+  // exams.ts DELETE /:id : WHERE exam_id = ? (삭제 영향 조회)
+  examIdx: index('exam_distributions_exam_id_idx').on(table.examId),
+}));
 
 // Distribution Students table (for student-specific distributions)
 export const distributionStudents = pgTable('distribution_students', {
@@ -109,7 +125,14 @@ export const distributionStudents = pgTable('distribution_students', {
   distributionId: varchar('distribution_id', { length: 255 }).notNull().references(() => examDistributions.id, { onDelete: 'cascade' }),
   studentId: varchar('student_id', { length: 255 }).notNull().references(() => students.id, { onDelete: 'cascade' }),
   createdAt: timestamp('created_at').defaultNow().notNull(),
-});
+}, (table) => ({
+  // attempts.ts /my-exams : WHERE distribution_id IN (...) 로 조회하고 student_id 를 읽는다.
+  // 두 컬럼을 함께 두어 커버링 인덱스가 되게 한다.
+  distributionStudentIdx: index('distribution_students_distribution_id_student_id_idx').on(
+    table.distributionId,
+    table.studentId
+  ),
+}));
 
 // Exam Attempts table
 export const examAttempts = pgTable('exam_attempts', {
@@ -125,7 +148,18 @@ export const examAttempts = pgTable('exam_attempts', {
   startedAt: timestamp('started_at').defaultNow().notNull(),
   submittedAt: timestamp('submitted_at'),
   gradedAt: timestamp('graded_at'),
-});
+}, (table) => ({
+  // 한 학생이 같은 배포에 대해 응시 레코드를 두 개 가질 수 없다.
+  // 동시 요청으로 중복 attempt 가 생기면 성적이 갈라지므로 DB 차원에서 막는다.
+  studentDistributionUnique: unique('exam_attempts_student_distribution_unique').on(
+    table.studentId,
+    table.distributionId
+  ),
+  // reports.ts 보고서 생성 : WHERE exam_id = ? (순위·평균 산출을 위해 동일 시험 전체 조회)
+  // exams.ts DELETE /:id : WHERE exam_id = ? (삭제 영향 조회)
+  // (student_id 로 시작하는 조회는 위 UNIQUE 인덱스가 이미 커버한다)
+  examIdx: index('exam_attempts_exam_id_idx').on(table.examId),
+}));
 
 // AI Reports table
 export const aiReports = pgTable('ai_reports', {
