@@ -19,12 +19,5 @@
     }
   },
   "include": ["server/**/*", "shared/**/*"],
-  "exclude": [
-    "node_modules",
-    "dist",
-    "client",
-    "server/routes/reports_old.ts",
-    "server/routes/reports_temp.ts",
-    "server/routes/reports_openai.ts"
-  ]
+  "exclude": ["node_modules", "dist", "client"]
 }

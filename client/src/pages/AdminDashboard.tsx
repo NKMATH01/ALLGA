@@ -897,7 +897,7 @@ export default function AdminDashboard({ user }: { user: User }) {
                     grade: formData.get('grade'),
                     description: formData.get('description'),
                     totalQuestions: questionsData.length,
-                    totalScore: questionsData.reduce((sum, q) => sum + q.points, 0),
+                    totalScore: questionsData.reduce((sum: number, q: any) => sum + q.points, 0),
                     questionsData,
                     overallReview: formData.get('overallReview'),
                   };

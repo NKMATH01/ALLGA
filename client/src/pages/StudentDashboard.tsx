@@ -5,12 +5,10 @@ import { toast } from '../components/ui/toast';
 import { ThemeToggle } from '../components/ui/theme-toggle';
 import { useTheme } from '../lib/useTheme';
 import { Button } from '../components/ui/button';
-import { Input } from '../components/ui/input';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog';
 import { Badge } from '../components/ui/badge';
 import {
-  Users,
   FileText,
   BarChart3,
   LogOut,
@@ -33,25 +31,18 @@ import {
   ChevronRight,
   GraduationCap,
   Trophy,
-  Zap,
   Star,
-  Eye,
   PlayCircle,
   ClipboardCheck,
   Settings,
-  Lock,
   User,
   School,
   Phone,
-  Mail,
   CalendarDays,
-  TrendingDown,
-  Minus,
   RefreshCw,
-  FileCheck,
   PieChart,
 } from 'lucide-react';
-import { Line, Doughnut, Bar } from 'react-chartjs-2';
+import { Line, Doughnut } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -481,14 +472,14 @@ function AIReportButton({ attemptId }: { attemptId: string }) {
 // ===============================
 function ExamTakingModal({
   exam,
-  distribution,
   attempt,
   attemptId,
   onClose,
   onSubmit,
 }: {
   exam: any;
-  distribution: any;
+  // 호출부가 계속 전달하므로 타입에는 남겨두고 본문에서만 쓰지 않는다
+  distribution?: any;
   attempt: any;
   attemptId: string;
   onClose: () => void;

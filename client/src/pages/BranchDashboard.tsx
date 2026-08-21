@@ -6,7 +6,7 @@ import { ThemeToggle } from '../components/ui/theme-toggle';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
-import { Users, GraduationCap, FileText, BarChart3, LogOut, LayoutDashboard, Menu, X, UserCircle, Home, Plus, Trash2, LogIn, CheckCircle, XCircle, Edit, Sparkles, ArrowLeft } from 'lucide-react';
+import { Users, GraduationCap, FileText, BarChart3, LogOut, LayoutDashboard, Menu, X, Home, Plus, Trash2, LogIn, CheckCircle, XCircle, Edit, Sparkles, ArrowLeft } from 'lucide-react';
 
 interface User {
   id: string;
@@ -50,7 +50,8 @@ export default function BranchDashboard({ user }: { user: User }) {
   const [selectedClassStudents, setSelectedClassStudents] = useState<string[]>([]);
   const [gradeFilter, setGradeFilter] = useState<string>('');
 
-  const { data: branchStats } = useQuery({
+  // 결과값은 쓰지 않지만 캐시 예열 목적으로 조회는 유지한다 (구독을 없애면 요청 자체가 사라진다)
+  useQuery({
     queryKey: ['branch', 'stats', user.branchId],
     queryFn: async () => {
       const res = await api.get(`/branch-students/stats`);
@@ -2058,7 +2059,7 @@ export default function BranchDashboard({ user }: { user: User }) {
                 <div className="grid grid-cols-3 gap-3">
                   <button
                     type="button"
-                    onClick={(e) => {
+                    onClick={() => {
                       const form = document.getElementById('answer-form') as HTMLFormElement;
                       if (form) {
                         const totalQuestions = resolveTotalQuestions();
@@ -2081,7 +2082,7 @@ export default function BranchDashboard({ user }: { user: User }) {
                   </button>
                   <button
                     type="button"
-                    onClick={(e) => {
+                    onClick={() => {
                       const form = document.getElementById('answer-form') as HTMLFormElement;
                       if (form) {
                         const totalQuestions = resolveTotalQuestions();
@@ -2104,7 +2105,7 @@ export default function BranchDashboard({ user }: { user: User }) {
                   </button>
                   <button
                     type="button"
-                    onClick={(e) => {
+                    onClick={() => {
                       const form = document.getElementById('answer-form') as HTMLFormElement;
                       if (form) {
                         const totalQuestions = resolveTotalQuestions();
