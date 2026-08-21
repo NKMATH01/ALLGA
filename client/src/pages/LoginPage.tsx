@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
+import { toast } from '../components/ui/toast';
+import { ThemeToggle } from '../components/ui/theme-toggle';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
@@ -21,7 +23,7 @@ export default function LoginPage() {
       queryClient.invalidateQueries({ queryKey: ['auth', 'me'] });
     },
     onError: (error: any) => {
-      alert(error.response?.data?.message || '로그인에 실패했습니다.');
+      toast.error(error.response?.data?.message || '로그인에 실패했습니다.');
     },
   });
 
@@ -37,7 +39,11 @@ export default function LoginPage() {
    *   브라스 사용 0곳. 로그인 화면에는 강조할 성취가 없으므로 브라스를 쓰지 않는다 (1.2)
    */
   return (
-    <div className="flex min-h-[100dvh] items-center justify-center bg-surface-sunken p-4">
+    <div className="relative flex min-h-[100dvh] items-center justify-center bg-surface-sunken p-4">
+      {/* 로그인도 야간 모드 대상 (DESIGN.md 6.3) */}
+      <div className="absolute right-4 top-4">
+        <ThemeToggle />
+      </div>
       <Card className="w-full max-w-md shadow-lg">
         <CardHeader className="space-y-4 pb-8">
           <div className="flex justify-center">

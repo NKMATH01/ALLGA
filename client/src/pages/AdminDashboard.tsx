@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
+import { toast } from '../components/ui/toast';
+import { ThemeToggle } from '../components/ui/theme-toggle';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
@@ -77,10 +79,10 @@ export default function AdminDashboard({ user }: { user: User }) {
     onSuccess: () => {
       refetchBranches();
       setShowBranchModal(false);
-      alert('지점이 등록되었습니다.');
+      toast.success('지점이 등록되었습니다.');
     },
     onError: (error: any) => {
-      alert(error.response?.data?.message || '지점 등록에 실패했습니다.');
+      toast.error(error.response?.data?.message || '지점 등록에 실패했습니다.');
     },
   });
 
@@ -93,10 +95,10 @@ export default function AdminDashboard({ user }: { user: User }) {
       refetchBranches();
       setShowBranchModal(false);
       setEditingBranch(null);
-      alert('지점이 수정되었습니다.');
+      toast.success('지점이 수정되었습니다.');
     },
     onError: (error: any) => {
-      alert(error.response?.data?.message || '지점 수정에 실패했습니다.');
+      toast.error(error.response?.data?.message || '지점 수정에 실패했습니다.');
     },
   });
 
@@ -107,10 +109,10 @@ export default function AdminDashboard({ user }: { user: User }) {
     },
     onSuccess: () => {
       refetchBranches();
-      alert('지점이 삭제되었습니다.');
+      toast.success('지점이 삭제되었습니다.');
     },
     onError: (error: any) => {
-      alert(error.response?.data?.message || '지점 삭제에 실패했습니다.');
+      toast.error(error.response?.data?.message || '지점 삭제에 실패했습니다.');
     },
   });
 
@@ -121,12 +123,12 @@ export default function AdminDashboard({ user }: { user: User }) {
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['auth', 'me'] });
-      alert(data.message || '지점 관리자로 전환되었습니다.');
+      toast.success(data.message || '지점 관리자로 전환되었습니다.');
       // 페이지 새로고침하여 지점 관리자 대시보드로 이동
       window.location.reload();
     },
     onError: (error: any) => {
-      alert(error.response?.data?.message || '전환에 실패했습니다.');
+      toast.error(error.response?.data?.message || '전환에 실패했습니다.');
     },
   });
 
@@ -142,11 +144,11 @@ export default function AdminDashboard({ user }: { user: User }) {
     onSuccess: (data) => {
       refetchExams();
       setUploadingFile(false);
-      alert(data.message || '시험이 업로드되었습니다.');
+      toast.success(data.message || '시험이 업로드되었습니다.');
     },
     onError: (error: any) => {
       setUploadingFile(false);
-      alert(error.response?.data?.message || '시험 업로드에 실패했습니다.');
+      toast.error(error.response?.data?.message || '시험 업로드에 실패했습니다.');
     },
   });
 
@@ -157,10 +159,10 @@ export default function AdminDashboard({ user }: { user: User }) {
     },
     onSuccess: () => {
       refetchExams();
-      alert('시험이 삭제되었습니다.');
+      toast.success('시험이 삭제되었습니다.');
     },
     onError: (error: any) => {
-      alert(error.response?.data?.message || '시험 삭제에 실패했습니다.');
+      toast.error(error.response?.data?.message || '시험 삭제에 실패했습니다.');
     },
   });
 
@@ -172,10 +174,10 @@ export default function AdminDashboard({ user }: { user: User }) {
     onSuccess: () => {
       refetchExams();
       setShowExamModal(false);
-      alert('시험이 생성되었습니다.');
+      toast.success('시험이 생성되었습니다.');
     },
     onError: (error: any) => {
-      alert(error.response?.data?.message || '시험 생성에 실패했습니다.');
+      toast.error(error.response?.data?.message || '시험 생성에 실패했습니다.');
     },
   });
 
@@ -188,10 +190,10 @@ export default function AdminDashboard({ user }: { user: User }) {
       refetchExams();
       setViewingExam(null);
       setEditingExam(false);
-      alert('시험이 수정되었습니다.');
+      toast.success('시험이 수정되었습니다.');
     },
     onError: (error: any) => {
-      alert(error.response?.data?.message || '시험 수정에 실패했습니다.');
+      toast.error(error.response?.data?.message || '시험 수정에 실패했습니다.');
     },
   });
 
@@ -204,10 +206,10 @@ export default function AdminDashboard({ user }: { user: User }) {
       refetchDistributions();
       setShowDistributionModal(false);
       setSelectedBranches([]);
-      alert(data.message || '시험이 배포되었습니다.');
+      toast.success(data.message || '시험이 배포되었습니다.');
     },
     onError: (error: any) => {
-      alert(error.response?.data?.message || '시험 배포에 실패했습니다.');
+      toast.error(error.response?.data?.message || '시험 배포에 실패했습니다.');
     },
   });
 
@@ -218,10 +220,10 @@ export default function AdminDashboard({ user }: { user: User }) {
     },
     onSuccess: () => {
       refetchDistributions();
-      alert('배포가 삭제되었습니다.');
+      toast.success('배포가 삭제되었습니다.');
     },
     onError: (error: any) => {
-      alert(error.response?.data?.message || '배포 삭제에 실패했습니다.');
+      toast.error(error.response?.data?.message || '배포 삭제에 실패했습니다.');
     },
   });
 
@@ -234,7 +236,7 @@ export default function AdminDashboard({ user }: { user: User }) {
       refetchBranches();
     },
     onError: (error: any) => {
-      alert(error.response?.data?.message || '순서 변경에 실패했습니다.');
+      toast.error(error.response?.data?.message || '순서 변경에 실패했습니다.');
     },
   });
 
@@ -273,7 +275,7 @@ export default function AdminDashboard({ user }: { user: User }) {
     const totalQuestions = parseInt(formData.get('totalQuestions') as string);
 
     if (!Number.isInteger(totalQuestions) || totalQuestions < 1) {
-      alert('총 문제 수를 1 이상의 정수로 입력해주세요.');
+      toast.error('총 문제 수를 1 이상의 정수로 입력해주세요.');
       return;
     }
 
@@ -281,14 +283,14 @@ export default function AdminDashboard({ user }: { user: User }) {
     const answerKeyRaw = ((formData.get('answerKey') as string) || '').trim();
 
     if (!answerKeyRaw) {
-      alert('정답을 입력해주세요. (예: 1,3,2,5,4)');
+      toast.error('정답을 입력해주세요. (예: 1,3,2,5,4)');
       return;
     }
 
     const answerKeyTokens = answerKeyRaw.split(/[\s,]+/).filter((t) => t !== '');
 
     if (answerKeyTokens.length !== totalQuestions) {
-      alert(`정답 개수(${answerKeyTokens.length}개)가 총 문제 수(${totalQuestions}개)와 일치하지 않습니다.`);
+      toast.error(`정답 개수(${answerKeyTokens.length}개)가 총 문제 수(${totalQuestions}개)와 일치하지 않습니다.`);
       return;
     }
 
@@ -297,7 +299,7 @@ export default function AdminDashboard({ user }: { user: User }) {
       const token = answerKeyTokens[i];
       const value = Number(token);
       if (!/^[1-5]$/.test(token) || !Number.isInteger(value)) {
-        alert(`${i + 1}번 문항의 정답 "${token}"이(가) 올바르지 않습니다. 정답은 1~5 사이의 숫자여야 합니다.`);
+        toast.error(`${i + 1}번 문항의 정답 "${token}"이(가) 올바르지 않습니다. 정답은 1~5 사이의 숫자여야 합니다.`);
         return;
       }
       answerKey.push(value);
@@ -1243,7 +1245,7 @@ export default function AdminDashboard({ user }: { user: User }) {
                       <label key={branch.id} className="flex cursor-pointer items-center gap-2 rounded-sm p-1.5 transition-colors duration-150 ease-out hover:bg-surface-subtle">
                         <input
                           type="checkbox"
-                          className="h-4 w-4 accent-action"
+                          className="h-4 w-4 rounded border-line accent-action"
                           checked={selectedBranches.includes(branch.id)}
                           onChange={(e) => {
                             if (e.target.checked) {
@@ -1252,7 +1254,6 @@ export default function AdminDashboard({ user }: { user: User }) {
                               setSelectedBranches(selectedBranches.filter((id) => id !== branch.id));
                             }
                           }}
-                          className="rounded border-line"
                         />
                         <span className="text-sm">{branch.name}</span>
                       </label>
@@ -1413,6 +1414,11 @@ export default function AdminDashboard({ user }: { user: User }) {
               <p className="text-xs text-ink-tertiary mt-1 md:text-sm">
                 {user.name}님 환영합니다
               </p>
+            </div>
+
+            {/* 야간 모드 토글 (DESIGN.md 6장) */}
+            <div className="ml-auto flex flex-shrink-0 items-center gap-2">
+              <ThemeToggle />
             </div>
           </div>
         </header>

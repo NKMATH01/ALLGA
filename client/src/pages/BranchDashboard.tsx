@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
+import { toast } from '../components/ui/toast';
+import { ThemeToggle } from '../components/ui/theme-toggle';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
@@ -73,7 +75,7 @@ export default function BranchDashboard({ user }: { user: User }) {
     },
   });
 
-  const { data: distributions } = useQuery({
+  const { data: distributions, refetch: refetchDistributions } = useQuery({
     queryKey: ['distributions', user.branchId],
     queryFn: async () => {
       const res = await api.get('/distributions');
@@ -134,10 +136,10 @@ export default function BranchDashboard({ user }: { user: User }) {
     onSuccess: () => {
       refetchStudents();
       setShowStudentModal(false);
-      alert('학생이 등록되었습니다.');
+      toast.success('학생이 등록되었습니다.');
     },
     onError: (error: any) => {
-      alert(error.response?.data?.message || '학생 등록에 실패했습니다.');
+      toast.error(error.response?.data?.message || '학생 등록에 실패했습니다.');
     },
   });
 
@@ -150,10 +152,10 @@ export default function BranchDashboard({ user }: { user: User }) {
       refetchStudents();
       setShowStudentModal(false);
       setEditingStudent(null);
-      alert('학생 정보가 수정되었습니다.');
+      toast.success('학생 정보가 수정되었습니다.');
     },
     onError: (error: any) => {
-      alert(error.response?.data?.message || '학생 수정에 실패했습니다.');
+      toast.error(error.response?.data?.message || '학생 수정에 실패했습니다.');
     },
   });
 
@@ -165,10 +167,10 @@ export default function BranchDashboard({ user }: { user: User }) {
     onSuccess: () => {
       refetchClasses();
       setShowClassModal(false);
-      alert('반이 생성되었습니다.');
+      toast.success('반이 생성되었습니다.');
     },
     onError: (error: any) => {
-      alert(error.response?.data?.message || '반 생성에 실패했습니다.');
+      toast.error(error.response?.data?.message || '반 생성에 실패했습니다.');
     },
   });
 
@@ -181,10 +183,10 @@ export default function BranchDashboard({ user }: { user: User }) {
       refetchClasses();
       setShowClassModal(false);
       setEditingClass(null);
-      alert('반이 수정되었습니다.');
+      toast.success('반이 수정되었습니다.');
     },
     onError: (error: any) => {
-      alert(error.response?.data?.message || '반 수정에 실패했습니다.');
+      toast.error(error.response?.data?.message || '반 수정에 실패했습니다.');
     },
   });
 
@@ -199,10 +201,10 @@ export default function BranchDashboard({ user }: { user: User }) {
       setSelectedDistribution(null);
       setSelectedClassId('');
       setSelectedStudentIds([]);
-      alert(data.message || '지점내 배포가 완료되었습니다.');
+      toast.success(data.message || '지점내 배포가 완료되었습니다.');
     },
     onError: (error: any) => {
-      alert(error.response?.data?.message || '지점내 배포에 실패했습니다.');
+      toast.error(error.response?.data?.message || '지점내 배포에 실패했습니다.');
     },
   });
 
@@ -212,11 +214,11 @@ export default function BranchDashboard({ user }: { user: User }) {
       return res.data;
     },
     onSuccess: (data) => {
-      alert(data.message || '학생으로 로그인되었습니다.');
+      toast.success(data.message || '학생으로 로그인되었습니다.');
       window.location.href = '/student';
     },
     onError: (error: any) => {
-      alert(error.response?.data?.message || '학생 로그인에 실패했습니다.');
+      toast.error(error.response?.data?.message || '학생 로그인에 실패했습니다.');
     },
   });
 
@@ -230,7 +232,7 @@ export default function BranchDashboard({ user }: { user: User }) {
       refetchAllDistributionStudents();
     },
     onError: (error: any) => {
-      alert(error.response?.data?.message || '답안지 생성에 실패했습니다.');
+      toast.error(error.response?.data?.message || '답안지 생성에 실패했습니다.');
     },
   });
 
@@ -247,10 +249,10 @@ export default function BranchDashboard({ user }: { user: User }) {
       refetchAllDistributionStudents();
       setShowAnswerModal(false);
       setSelectedAttempt(null);
-      alert('답안이 저장되었습니다.');
+      toast.success('답안이 저장되었습니다.');
     },
     onError: (error: any) => {
-      alert(error.response?.data?.message || '답안 저장에 실패했습니다.');
+      toast.error(error.response?.data?.message || '답안 저장에 실패했습니다.');
     },
   });
 
@@ -262,10 +264,10 @@ export default function BranchDashboard({ user }: { user: User }) {
     onSuccess: (data) => {
       refetchDistributionStudents();
       refetchAllDistributionStudents();
-      alert(data.message || 'AI 분석이 완료되었습니다.');
+      toast.success(data.message || 'AI 분석이 완료되었습니다.');
     },
     onError: (error: any) => {
-      alert(error.response?.data?.message || 'AI 분석에 실패했습니다.');
+      toast.error(error.response?.data?.message || 'AI 분석에 실패했습니다.');
     },
   });
 
@@ -277,10 +279,10 @@ export default function BranchDashboard({ user }: { user: User }) {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['distributions', user.branchId] });
       setSelectedReportDistribution(null);
-      alert(data.message || '배포가 삭제되었습니다.');
+      toast.success(data.message || '배포가 삭제되었습니다.');
     },
     onError: (error: any) => {
-      alert(error.response?.data?.message || '배포 삭제에 실패했습니다.');
+      toast.error(error.response?.data?.message || '배포 삭제에 실패했습니다.');
     },
   });
 
@@ -333,13 +335,13 @@ export default function BranchDashboard({ user }: { user: User }) {
 
     if (redistributeType === 'class') {
       if (!selectedClassId) {
-        alert('반을 선택해주세요.');
+        toast.error('반을 선택해주세요.');
         return;
       }
       data.classId = selectedClassId;
     } else {
       if (selectedStudentIds.length === 0) {
-        alert('학생을 선택해주세요.');
+        toast.error('학생을 선택해주세요.');
         return;
       }
       data.studentIds = selectedStudentIds;
@@ -348,19 +350,38 @@ export default function BranchDashboard({ user }: { user: User }) {
     redistributeMutation.mutate({ id: selectedDistribution.id, data });
   };
 
+  // 채점 대상 시험 정보를 현재 선택된 배포 기준으로 찾는다.
+  const resolveSelectedExam = (): any | null => {
+    if (distributionStudents?.exam) return distributionStudents.exam;
+    if (selectedAttempt?.distributionId && allDistributionStudents) {
+      const distData = allDistributionStudents.find(
+        (d: any) => d.distribution.id === selectedAttempt.distributionId
+      );
+      if (distData?.exam) return distData.exam;
+    }
+    return null;
+  };
+
+  // 문항 수: exam.totalQuestions → questionsData 길이 순. 둘 다 없으면 null.
+  // 30 으로 넘겨짚으면 31번 이후 답안이 조용히 누락된 채 채점된다.
+  const resolveTotalQuestions = (): number | null => {
+    const exam = resolveSelectedExam();
+    if (!exam) return null;
+    if (exam.totalQuestions) return Number(exam.totalQuestions);
+    if (Array.isArray(exam.questionsData) && exam.questionsData.length > 0) {
+      return exam.questionsData.length;
+    }
+    return null;
+  };
+
   const handleAnswerSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
 
-    // Get exam info from either distributionStudents or allDistributionStudents
-    let totalQuestions = 30; // default
-    if (distributionStudents?.exam?.totalQuestions) {
-      totalQuestions = distributionStudents.exam.totalQuestions;
-    } else if (selectedAttempt?.distributionId && allDistributionStudents) {
-      const distData = allDistributionStudents.find((d: any) => d.distribution.id === selectedAttempt.distributionId);
-      if (distData?.exam?.totalQuestions) {
-        totalQuestions = distData.exam.totalQuestions;
-      }
+    const totalQuestions = resolveTotalQuestions();
+    if (!totalQuestions) {
+      toast.error('시험의 문항 수를 확인할 수 없습니다. 페이지를 새로고침한 뒤 다시 시도해주세요.');
+      return;
     }
 
     // Build answers object from form data
@@ -373,7 +394,7 @@ export default function BranchDashboard({ user }: { user: User }) {
     }
 
     if (Object.keys(answers).length === 0) {
-      alert('최소 1개 이상의 답안을 입력해주세요.');
+      toast.error('최소 1개 이상의 답안을 입력해주세요.');
       return;
     }
 
@@ -383,7 +404,7 @@ export default function BranchDashboard({ user }: { user: User }) {
     } else {
       // 답안이 없는 경우: 새 답안 생성 후 답안 입력
       if (!selectedAttempt.studentId || !selectedAttempt.distributionId) {
-        alert('학생 정보가 올바르지 않습니다.');
+        toast.error('학생 정보가 올바르지 않습니다.');
         return;
       }
 
@@ -400,7 +421,7 @@ export default function BranchDashboard({ user }: { user: User }) {
             if (newAttemptId) {
               gradeAttemptMutation.mutate({ attemptId: newAttemptId, answers });
             } else {
-              alert('답안지 생성은 성공했으나 ID를 찾을 수 없습니다.');
+              toast.error('답안지 생성은 성공했으나 ID를 찾을 수 없습니다.');
             }
           },
         }
@@ -676,7 +697,7 @@ export default function BranchDashboard({ user }: { user: User }) {
                                               setShowAnswerModal(true);
                                             } catch (error: any) {
                                               console.error('답안 조회 실패:', error);
-                                              alert(error.response?.data?.message || '답안 정보를 불러오는데 실패했습니다.');
+                                              toast.error(error.response?.data?.message || '답안 정보를 불러오는데 실패했습니다.');
                                             }
                                           }}
                                           className="border-line text-ink-secondary hover:bg-surface-subtle"
@@ -696,10 +717,10 @@ export default function BranchDashboard({ user }: { user: User }) {
                                               api.delete(`/exam-attempts/${student.attemptId}`)
                                                 .then(() => {
                                                   refetchAllDistributionStudents();
-                                                  alert('답안이 삭제되었습니다.');
+                                                  toast.success('답안이 삭제되었습니다.');
                                                 })
                                                 .catch((error) => {
-                                                  alert(error.response?.data?.message || '답안 삭제에 실패했습니다.');
+                                                  toast.error(error.response?.data?.message || '답안 삭제에 실패했습니다.');
                                                 });
                                             }
                                           }}
@@ -745,7 +766,7 @@ export default function BranchDashboard({ user }: { user: User }) {
                                           size="sm"
                                           onClick={(e) => {
                                             e.stopPropagation();
-                                            alert(`${student.studentName} 학생의 답안 입력을 시작합니다.`);
+                                            toast.info(`${student.studentName} 학생의 답안 입력을 시작합니다.`);
                                             console.log('답안 입력 버튼 클릭!', student);
                                             console.log('distData:', distData);
 
@@ -886,7 +907,7 @@ export default function BranchDashboard({ user }: { user: User }) {
                                           setShowAnswerModal(true);
                                         } catch (error: any) {
                                           console.error('답안 조회 실패:', error);
-                                          alert(error.response?.data?.message || '답안 정보를 불러오는데 실패했습니다.');
+                                          toast.error(error.response?.data?.message || '답안 정보를 불러오는데 실패했습니다.');
                                         }
                                       }}
                                       className="border-line text-ink-secondary hover:bg-surface-subtle"
@@ -906,10 +927,10 @@ export default function BranchDashboard({ user }: { user: User }) {
                                           api.delete(`/exam-attempts/${student.attemptId}`)
                                             .then(() => {
                                               refetchAllDistributionStudents();
-                                              alert('답안이 삭제되었습니다.');
+                                              toast.success('답안이 삭제되었습니다.');
                                             })
                                             .catch((error) => {
-                                              alert(error.response?.data?.message || '답안 삭제에 실패했습니다.');
+                                              toast.error(error.response?.data?.message || '답안 삭제에 실패했습니다.');
                                             });
                                         }
                                       }}
@@ -1590,7 +1611,7 @@ export default function BranchDashboard({ user }: { user: User }) {
                                 refetchDistributions();
                               } catch (error) {
                                 console.error('삭제 실패:', error);
-                                alert('삭제에 실패했습니다.');
+                                toast.error('삭제에 실패했습니다.');
                               }
                             }
                           }}
@@ -1819,10 +1840,10 @@ export default function BranchDashboard({ user }: { user: User }) {
                                       .then(() => {
                                         refetchDistributionStudents();
                                         refetchAllDistributionStudents();
-                                        alert('답안이 삭제되었습니다.');
+                                        toast.success('답안이 삭제되었습니다.');
                                       })
                                       .catch((error) => {
-                                        alert(error.response?.data?.message || '답안 삭제에 실패했습니다.');
+                                        toast.error(error.response?.data?.message || '답안 삭제에 실패했습니다.');
                                       });
                                   }
                                 }}
@@ -1985,6 +2006,11 @@ export default function BranchDashboard({ user }: { user: User }) {
                 {user.name}님 환영합니다
               </p>
             </div>
+
+            {/* 야간 모드 토글 (DESIGN.md 6장) */}
+            <div className="ml-auto flex flex-shrink-0 items-center gap-2">
+              <ThemeToggle />
+            </div>
           </div>
         </header>
 
@@ -2035,14 +2061,10 @@ export default function BranchDashboard({ user }: { user: User }) {
                     onClick={(e) => {
                       const form = document.getElementById('answer-form') as HTMLFormElement;
                       if (form) {
-                        let totalQuestions = 30;
-                        if (distributionStudents?.exam?.totalQuestions) {
-                          totalQuestions = distributionStudents.exam.totalQuestions;
-                        } else if (selectedAttempt?.distributionId && allDistributionStudents) {
-                          const distData = allDistributionStudents.find((d: any) => d.distribution.id === selectedAttempt.distributionId);
-                          if (distData?.exam?.totalQuestions) {
-                            totalQuestions = distData.exam.totalQuestions;
-                          }
+                        const totalQuestions = resolveTotalQuestions();
+                        if (!totalQuestions) {
+                          toast.error('시험의 문항 수를 확인할 수 없습니다. 페이지를 새로고침한 뒤 다시 시도해주세요.');
+                          return;
                         }
 
                         for (let i = 1; i <= totalQuestions; i++) {
@@ -2062,14 +2084,10 @@ export default function BranchDashboard({ user }: { user: User }) {
                     onClick={(e) => {
                       const form = document.getElementById('answer-form') as HTMLFormElement;
                       if (form) {
-                        let totalQuestions = 30;
-                        if (distributionStudents?.exam?.totalQuestions) {
-                          totalQuestions = distributionStudents.exam.totalQuestions;
-                        } else if (selectedAttempt?.distributionId && allDistributionStudents) {
-                          const distData = allDistributionStudents.find((d: any) => d.distribution.id === selectedAttempt.distributionId);
-                          if (distData?.exam?.totalQuestions) {
-                            totalQuestions = distData.exam.totalQuestions;
-                          }
+                        const totalQuestions = resolveTotalQuestions();
+                        if (!totalQuestions) {
+                          toast.error('시험의 문항 수를 확인할 수 없습니다. 페이지를 새로고침한 뒤 다시 시도해주세요.');
+                          return;
                         }
 
                         for (let i = 1; i <= totalQuestions; i++) {
@@ -2089,14 +2107,10 @@ export default function BranchDashboard({ user }: { user: User }) {
                     onClick={(e) => {
                       const form = document.getElementById('answer-form') as HTMLFormElement;
                       if (form) {
-                        let totalQuestions = 30;
-                        if (distributionStudents?.exam?.totalQuestions) {
-                          totalQuestions = distributionStudents.exam.totalQuestions;
-                        } else if (selectedAttempt?.distributionId && allDistributionStudents) {
-                          const distData = allDistributionStudents.find((d: any) => d.distribution.id === selectedAttempt.distributionId);
-                          if (distData?.exam?.totalQuestions) {
-                            totalQuestions = distData.exam.totalQuestions;
-                          }
+                        const totalQuestions = resolveTotalQuestions();
+                        if (!totalQuestions) {
+                          toast.error('시험의 문항 수를 확인할 수 없습니다. 페이지를 새로고침한 뒤 다시 시도해주세요.');
+                          return;
                         }
 
                         for (let i = 1; i <= totalQuestions; i++) {
@@ -2119,14 +2133,15 @@ export default function BranchDashboard({ user }: { user: User }) {
                 <form id="answer-form" onSubmit={handleAnswerSubmit}>
                   <div className="divide-y divide-line-subtle">
                     {(() => {
-                      let totalQuestions = 30;
-                      if (distributionStudents?.exam?.totalQuestions) {
-                        totalQuestions = distributionStudents.exam.totalQuestions;
-                      } else if (selectedAttempt?.distributionId && allDistributionStudents) {
-                        const distData = allDistributionStudents.find((d: any) => d.distribution.id === selectedAttempt.distributionId);
-                        if (distData?.exam?.totalQuestions) {
-                          totalQuestions = distData.exam.totalQuestions;
-                        }
+                      const totalQuestions = resolveTotalQuestions();
+                      if (!totalQuestions) {
+                        return (
+                          <div className="p-6 text-center text-sm text-ink-secondary">
+                            시험의 문항 수를 확인할 수 없어 채점표를 표시할 수 없습니다.
+                            <br />
+                            페이지를 새로고침한 뒤 다시 시도해주세요.
+                          </div>
+                        );
                       }
 
                       // Get questions data for correct answers

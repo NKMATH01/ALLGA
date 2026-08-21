@@ -24,19 +24,15 @@ function App() {
     refetchOnWindowFocus: false,
   });
 
-  if (isLoading) {
-    return (
-      <div className="flex h-screen items-center justify-center">
-        <div className="text-xl">로딩 중...</div>
-      </div>
-    );
-  }
-
-  if (!user) {
-    return <LoginPage />;
-  }
-
-  return (
+  // Toaster 는 로그인 화면과 로딩 화면에서도 필요하다.
+  // (로그인 실패 알림이 여기서 뜬다) 그래서 분기 밖에서 항상 렌더한다.
+  const content = isLoading ? (
+    <div className="flex h-screen items-center justify-center">
+      <div className="text-xl">로딩 중...</div>
+    </div>
+  ) : !user ? (
+    <LoginPage />
+  ) : (
     <Router>
       <Switch>
         <Route path="/" nest>
@@ -51,8 +47,14 @@ function App() {
           </div>
         </Route>
       </Switch>
-      <Toaster />
     </Router>
+  );
+
+  return (
+    <>
+      {content}
+      <Toaster />
+    </>
   );
 }
 

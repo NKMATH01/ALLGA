@@ -1,6 +1,9 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
+import { toast } from '../components/ui/toast';
+import { ThemeToggle } from '../components/ui/theme-toggle';
+import { useTheme } from '../lib/useTheme';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
@@ -218,7 +221,7 @@ function WrongQuestionsModal({ attemptId, examTitle }: { attemptId: string; exam
       setWrongQuestions(wrong);
     } catch (error) {
       console.error('Error fetching wrong questions:', error);
-      alert('틀린 문항 정보를 불러오는데 실패했습니다.');
+      toast.error('틀린 문항 정보를 불러오는데 실패했습니다.');
     } finally {
       setLoading(false);
     }
@@ -424,14 +427,14 @@ function AIReportButton({ attemptId }: { attemptId: string }) {
           newWindow.document.close();
         }
       } else {
-        alert('AI 보고서가 아직 생성되지 않았습니다.');
+        toast.info('AI 보고서가 아직 생성되지 않았습니다.');
       }
     } catch (error: any) {
       console.error('Error fetching report:', error);
       if (error.response?.status === 404) {
-        alert('AI 보고서가 아직 생성되지 않았습니다. 잠시 후 다시 시도해주세요.');
+        toast.error('AI 보고서가 아직 생성되지 않았습니다. 잠시 후 다시 시도해주세요.');
       } else {
-        alert(error.response?.data?.message || 'AI 보고서를 불러오는데 실패했습니다.');
+        toast.error(error.response?.data?.message || 'AI 보고서를 불러오는데 실패했습니다.');
       }
     } finally {
       setLoading(false);
@@ -624,10 +627,10 @@ function ExamTakingModal({
     setSubmitting(true);
     try {
       await api.post(`/exam-attempts/${attemptId}/submit`, { answers });
-      alert('시험이 제출되었습니다!');
+      toast.success('시험이 제출되었습니다!');
       onSubmit();
     } catch (error: any) {
-      alert(error.response?.data?.message || '시험 제출에 실패했습니다.');
+      toast.error(error.response?.data?.message || '시험 제출에 실패했습니다.');
     } finally {
       setSubmitting(false);
     }
@@ -791,6 +794,8 @@ export default function StudentDashboard({ user }: { user: User }) {
   const [activeSection, setActiveSection] = useState<MenuSection>('dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [activeExamTab, setActiveExamTab] = useState<ExamTab>('available');
+  // 차트 색은 readToken() 으로 CSS 변수를 읽으므로, 테마가 바뀌면 다시 계산해야 한다.
+  const { theme } = useTheme();
   const [examModal, setExamModal] = useState<{
     exam: any;
     distribution: any;
@@ -848,7 +853,7 @@ export default function StudentDashboard({ user }: { user: User }) {
       queryClient.invalidateQueries({ queryKey: ['student', 'exams'] });
     },
     onError: (error: any) => {
-      alert(error.response?.data?.message || '시험 시작에 실패했습니다.');
+      toast.error(error.response?.data?.message || '시험 시작에 실패했습니다.');
     },
   });
 
@@ -864,7 +869,7 @@ export default function StudentDashboard({ user }: { user: User }) {
         attemptId: item.attempt!.id,
       });
     } catch (error: any) {
-      alert(error.response?.data?.message || '시험 정보를 불러오는데 실패했습니다.');
+      toast.error(error.response?.data?.message || '시험 정보를 불러오는데 실패했습니다.');
     }
   };
 
@@ -915,7 +920,7 @@ export default function StudentDashboard({ user }: { user: User }) {
         pointHoverRadius: 8,
       },
     ],
-  }), [completedExams, scores, highestScore]);
+  }), [completedExams, scores, highestScore, theme]);
 
   // Chart data - Grade distribution doughnut
   const gradeChartData = useMemo(() => ({
@@ -929,7 +934,7 @@ export default function StudentDashboard({ user }: { user: User }) {
         borderColor: readToken('--surface'),
       },
     ],
-  }), [gradeDistribution]);
+  }), [gradeDistribution, theme]);
 
   const chartOptions = {
     responsive: true,
@@ -1189,6 +1194,8 @@ export default function StudentDashboard({ user }: { user: User }) {
               >
                 <RefreshCw className="w-4 h-4" strokeWidth={1.5} />
               </Button>
+              {/* 야간 모드 토글 (DESIGN.md 6장) */}
+              <ThemeToggle />
             </div>
           </div>
         </header>
@@ -1310,7 +1317,9 @@ export default function StudentDashboard({ user }: { user: User }) {
                   <CardContent className="p-6">
                     {completedExams.length > 0 ? (
                       <div className="h-72">
-                        <Line data={chartData} options={chartOptions} />
+                        {/* key 에 테마를 넣어 Chart.js 인스턴스를 새로 만든다.
+                            옵션 객체만 바꾸면 축·툴팁 색이 갱신되지 않는다 */}
+                        <Line key={`line-${theme}`} data={chartData} options={chartOptions} />
                       </div>
                     ) : (
                       <div className="h-72 flex flex-col items-center justify-center text-ink-tertiary">
@@ -1332,7 +1341,7 @@ export default function StudentDashboard({ user }: { user: User }) {
                   <CardContent className="p-6">
                     {completedExams.length > 0 ? (
                       <div className="h-72">
-                        <Doughnut data={gradeChartData} options={doughnutOptions} />
+                        <Doughnut key={`doughnut-${theme}`} data={gradeChartData} options={doughnutOptions} />
                       </div>
                     ) : (
                       <div className="h-72 flex flex-col items-center justify-center text-ink-tertiary">
