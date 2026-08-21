@@ -4,7 +4,7 @@
   "description": "OLGA Academy Management System - 올가 미수등 시스템",
   "type": "module",
   "engines": {
-    "//": "Node 24 에서 vite build 가 rollup 네이티브 바인딩 크래시(0xC0000409)로 실패한다. 분석서 §9.5 참고.",
+    "//": "빌드는 Node 22 LTS 사용 (nvm use 22). Node 24 에서는 vite build 가 rollup 네이티브 바인딩 크래시(0xC0000409)로 실패 — Node 22.23.2 에서 성공 실측. 분석서 §9.5 참고.",
     "node": ">=20 <23"
   },
   "scripts": {
