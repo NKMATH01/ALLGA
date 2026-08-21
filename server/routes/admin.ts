@@ -1,7 +1,7 @@
 import express from 'express';
 import { db } from '../db/index';
 import { students, branches, exams, examAttempts } from '../db/schema';
-import { eq, sql, and } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { requireAdmin } from '../middleware/auth';
 
 const router = express.Router();
@@ -38,62 +38,62 @@ router.get('/stats', requireAdmin, async (req, res) => {
     // Branch stats
     const branchList = await db.select().from(branches);
 
-    const branchStats = [];
-    for (const branch of branchList) {
-      // Count students in branch
-      let branchStudentQuery: any = db
-        .select({ count: sql<number>`count(*)` })
-        .from(students)
-        .where(eq(students.branchId, branch.id));
+    // 지점별 집계를 지점 수만큼 반복 조회하면 N+1(지점당 3쿼리)이 된다.
+    // GROUP BY 한 번씩으로 모아 받고 메모리에서 매핑한다.
+    const studentCountRows = await db
+      .select({
+        branchId: students.branchId,
+        count: sql<number>`count(*)`,
+      })
+      .from(students)
+      .where(grade && grade !== 'all' ? eq(students.grade, grade as string) : undefined)
+      .groupBy(students.branchId);
 
-      if (grade && grade !== 'all') {
-        branchStudentQuery = db
-          .select({ count: sql<number>`count(*)` })
-          .from(students)
-          .where(and(eq(students.branchId, branch.id), eq(students.grade, grade as string)));
-      }
+    const attemptAggRows = await db
+      .select({
+        branchId: students.branchId,
+        attemptCount: sql<number>`count(*)`,
+        avgScore: sql<number>`avg(${examAttempts.score}) filter (where ${examAttempts.submittedAt} is not null)`,
+      })
+      .from(examAttempts)
+      .innerJoin(students, eq(examAttempts.studentId, students.id))
+      .groupBy(students.branchId);
 
-      const [branchStudentCount] = await branchStudentQuery;
+    const studentCountByBranch = new Map(
+      studentCountRows.map((r) => [r.branchId, Number(r.count) || 0])
+    );
+    const attemptAggByBranch = new Map(
+      attemptAggRows.map((r) => [
+        r.branchId,
+        { count: Number(r.attemptCount) || 0, avg: r.avgScore === null ? 0 : Number(r.avgScore) },
+      ])
+    );
 
-      // Count exam attempts
-      const [branchExamCount] = await db
-        .select({ count: sql<number>`count(*)` })
-        .from(examAttempts)
-        .innerJoin(students, eq(examAttempts.studentId, students.id))
-        .where(eq(students.branchId, branch.id));
-
-      // Average score for branch
-      const [branchAvgScore] = await db
-        .select({
-          avg: sql<number>`avg(${examAttempts.score})`,
-        })
-        .from(examAttempts)
-        .innerJoin(students, eq(examAttempts.studentId, students.id))
-        .where(
-          and(eq(students.branchId, branch.id), sql`${examAttempts.submittedAt} IS NOT NULL`)
-        );
-
-      branchStats.push({
+    const branchStats = branchList.map((branch) => {
+      const agg = attemptAggByBranch.get(branch.id);
+      return {
         branchName: branch.name,
-        studentCount: branchStudentCount.count || 0,
-        examCount: branchExamCount.count || 0,
-        averageScore: branchAvgScore.avg ? Math.round(branchAvgScore.avg) : 0,
-      });
-    }
+        studentCount: studentCountByBranch.get(branch.id) || 0,
+        examCount: agg?.count || 0,
+        averageScore: agg?.avg ? Math.round(agg.avg) : 0,
+      };
+    });
 
-    // Grade distribution (1-9)
-    const gradeDistribution = [];
-    for (let g = 1; g <= 9; g++) {
-      const [count] = await db
-        .select({ count: sql<number>`count(*)` })
-        .from(examAttempts)
-        .where(and(eq(examAttempts.grade, g), sql`${examAttempts.submittedAt} IS NOT NULL`));
+    // Grade distribution (1-9) — 9번 조회 대신 GROUP BY 한 번
+    const gradeRows = await db
+      .select({
+        grade: examAttempts.grade,
+        count: sql<number>`count(*)`,
+      })
+      .from(examAttempts)
+      .where(sql`${examAttempts.submittedAt} IS NOT NULL`)
+      .groupBy(examAttempts.grade);
 
-      gradeDistribution.push({
-        grade: g,
-        count: count.count || 0,
-      });
-    }
+    const countByGrade = new Map(gradeRows.map((r) => [Number(r.grade), Number(r.count) || 0]));
+    const gradeDistribution = Array.from({ length: 9 }, (_, i) => ({
+      grade: i + 1,
+      count: countByGrade.get(i + 1) || 0,
+    }));
 
     res.json({
       success: true,

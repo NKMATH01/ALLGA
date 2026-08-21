@@ -1,8 +1,25 @@
 import express from 'express';
 import { db } from '../db/index';
-import { examDistributions, exams, distributionStudents, students, studentClasses, examAttempts, users, aiReports } from '../db/schema';
+import { examDistributions, exams, distributionStudents, students, studentClasses, examAttempts, users, aiReports, branches, classes } from '../db/schema';
 import { eq, and, inArray } from 'drizzle-orm';
 import { requireAdminOrBranch, requireBranchManager } from '../middleware/auth';
+import { parseLocalDateStart, parseLocalDateEnd } from '../utils/helpers';
+
+/**
+ * studentIds 가 전부 지정한 지점 소속인지 검증한다.
+ * 문제가 있으면 오류 메시지를, 정상이면 null 을 돌려준다.
+ */
+async function validateStudentsInBranch(studentIds: string[], branchId: string): Promise<string | null> {
+  const rows = await db
+    .select({ id: students.id })
+    .from(students)
+    .where(and(inArray(students.id, studentIds), eq(students.branchId, branchId)));
+
+  if (rows.length !== studentIds.length) {
+    return '본인 지점에 속하지 않은 학생이 포함되어 있습니다.';
+  }
+  return null;
+}
 
 const router = express.Router();
 
@@ -81,17 +98,40 @@ router.post('/', requireAdminOrBranch, async (req, res) => {
       return res.status(400).json({ message: '필수 정보를 모두 입력해주세요.' });
     }
 
-    // Validate dates
-    if (new Date(startDate) >= new Date(endDate)) {
+    // 날짜 파싱 (KST 기준 로컬 자정 / 당일 23:59:59) + NaN 거부
+    const start = parseLocalDateStart(startDate);
+    const end = parseLocalDateEnd(endDate);
+
+    if (!start || !end) {
+      return res.status(400).json({ message: '날짜 형식이 올바르지 않습니다. (예: 2026-08-20)' });
+    }
+
+    if (start >= end) {
       return res.status(400).json({ message: '시작일은 종료일보다 이전이어야 합니다.' });
+    }
+
+    // 시험 존재 검증
+    const [exam] = await db.select().from(exams).where(eq(exams.id, examId)).limit(1);
+    if (!exam) {
+      return res.status(404).json({ message: '시험을 찾을 수 없습니다.' });
     }
 
     const distributions = [];
 
     if (user.role === 'admin') {
       // Admin can distribute to multiple branches
-      if (!branchIds || branchIds.length === 0) {
+      if (!branchIds || !Array.isArray(branchIds) || branchIds.length === 0) {
         return res.status(400).json({ message: '지점을 선택해주세요.' });
+      }
+
+      // 지점 존재 검증
+      const foundBranches = await db
+        .select({ id: branches.id })
+        .from(branches)
+        .where(inArray(branches.id, branchIds));
+
+      if (foundBranches.length !== branchIds.length) {
+        return res.status(404).json({ message: '존재하지 않는 지점이 포함되어 있습니다.' });
       }
 
       for (const branchId of branchIds) {
@@ -102,8 +142,8 @@ router.post('/', requireAdminOrBranch, async (req, res) => {
             branchId,
             classId: classId || null,
             parentDistributionId: null,
-            startDate: new Date(startDate),
-            endDate: new Date(endDate),
+            startDate: start,
+            endDate: end,
             distributedBy: user.id,
           })
           .returning();
@@ -119,14 +159,21 @@ router.post('/', requireAdminOrBranch, async (req, res) => {
           branchId: user.branchId!,
           classId: classId || null,
           parentDistributionId: parentDistributionId || null,
-          startDate: new Date(startDate),
-          endDate: new Date(endDate),
+          startDate: start,
+          endDate: end,
           distributedBy: user.id,
         })
         .returning();
 
       // If specific students are selected, create student assignments
       if (studentIds && Array.isArray(studentIds) && studentIds.length > 0) {
+        // 지정 학생이 전부 본인 지점 소속인지 검증
+        const studentError = await validateStudentsInBranch(studentIds, user.branchId!);
+        if (studentError) {
+          await db.delete(examDistributions).where(eq(examDistributions.id, distribution.id));
+          return res.status(403).json({ message: studentError });
+        }
+
         const studentAssignments = studentIds.map((studentId: string) => ({
           distributionId: distribution.id,
           studentId,
@@ -199,6 +246,28 @@ router.put('/:id', requireAdminOrBranch, async (req, res) => {
     // Branch manager can only update their branch distributions
     if (user.role === 'branch' && distribution.branchId !== user.branchId) {
       return res.status(403).json({ message: '권한이 없습니다.' });
+    }
+
+    // 배정 대상이 배포 지점 소속인지 검증 (admin 도 배포 지점 기준으로 확인)
+    const targetBranchId: string = distribution.branchId;
+
+    if (classId) {
+      const [cls] = await db
+        .select()
+        .from(classes)
+        .where(and(eq(classes.id, classId), eq(classes.branchId, targetBranchId)))
+        .limit(1);
+
+      if (!cls) {
+        return res.status(403).json({ message: '해당 지점의 반이 아닙니다.' });
+      }
+    }
+
+    if (studentIds && Array.isArray(studentIds) && studentIds.length > 0) {
+      const studentError = await validateStudentsInBranch(studentIds, targetBranchId);
+      if (studentError) {
+        return res.status(403).json({ message: studentError });
+      }
     }
 
     // Update distribution with classId
@@ -343,6 +412,8 @@ router.get('/:id/students', requireBranchManager, async (req, res) => {
       }
     }
 
+    // TODO(N+1): 학생마다 examAttempts·aiReports 를 개별 조회한다.
+    // studentIds 로 한 번에 받아 매핑해야 한다. (iteration 3 범위 외)
     // Get attempts for each student
     const result = [];
     for (const row of studentsList) {

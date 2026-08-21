@@ -2,7 +2,7 @@ import express from 'express';
 import crypto from 'crypto';
 import { db } from '../db/index';
 import { students, users, parents, studentParents, examAttempts, exams } from '../db/schema';
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, and, desc, inArray, isNotNull } from 'drizzle-orm';
 import { requireBranchManager } from '../middleware/auth';
 import { hashPassword } from '../utils/helpers';
 
@@ -85,19 +85,33 @@ router.get('/', requireBranchManager, async (req, res) => {
       .where(eq(students.branchId, branchId))
       .orderBy(students.enrollmentDate);
 
-    // Get parent info for each student
+    // 학부모 정보를 학생마다 조회하면 N+1 이므로 한 번에 가져와 매핑한다
+    const listStudentIds = studentList.map((row) => row.student.id);
+
+    const parentRows = listStudentIds.length
+      ? await db
+          .select({
+            studentId: studentParents.studentId,
+            parent: parents,
+            user: users,
+          })
+          .from(studentParents)
+          .innerJoin(parents, eq(studentParents.parentId, parents.id))
+          .innerJoin(users, eq(parents.userId, users.id))
+          .where(inArray(studentParents.studentId, listStudentIds))
+      : [];
+
+    // 학생당 첫 학부모만 사용 (기존 limit(1) 과 동일한 동작)
+    const parentByStudent = new Map<string, (typeof parentRows)[number]>();
+    for (const row of parentRows) {
+      if (!parentByStudent.has(row.studentId)) {
+        parentByStudent.set(row.studentId, row);
+      }
+    }
+
     const result = [];
     for (const row of studentList) {
-      const [parentInfo] = await db
-        .select({
-          parent: parents,
-          user: users,
-        })
-        .from(studentParents)
-        .innerJoin(parents, eq(studentParents.parentId, parents.id))
-        .innerJoin(users, eq(parents.userId, users.id))
-        .where(eq(studentParents.studentId, row.student.id))
-        .limit(1);
+      const parentInfo = parentByStudent.get(row.student.id);
 
       result.push({
         ...row.student,
@@ -291,19 +305,39 @@ router.get('/branch-students', requireBranchManager, async (req, res) => {
       .innerJoin(users, eq(students.userId, users.id))
       .where(eq(students.branchId, branchId));
 
+    // 학생마다 쿼리를 돌리면 N+1 이 되므로 지점 전체 응시 기록을 한 번에 가져온다.
+    // 미제출(submittedAt IS NULL) 은 "최신 응시"가 아니므로 제외한다.
+    // (DESC 정렬은 NULL 을 먼저 놓기 때문에 필터 없이는 미제출이 최신으로 잡힌다)
+    const studentIds = studentList.map((row) => row.student.id);
+
+    const attemptRows = studentIds.length
+      ? await db
+          .select({
+            attempt: examAttempts,
+            exam: exams,
+          })
+          .from(examAttempts)
+          .innerJoin(exams, eq(examAttempts.examId, exams.id))
+          .where(
+            and(
+              inArray(examAttempts.studentId, studentIds),
+              isNotNull(examAttempts.submittedAt)
+            )
+          )
+          .orderBy(desc(examAttempts.submittedAt))
+      : [];
+
+    // 정렬이 최신순이므로 학생별 첫 항목이 최신 응시
+    const latestByStudent = new Map<string, (typeof attemptRows)[number]>();
+    for (const row of attemptRows) {
+      if (!latestByStudent.has(row.attempt.studentId)) {
+        latestByStudent.set(row.attempt.studentId, row);
+      }
+    }
+
     const result = [];
     for (const row of studentList) {
-      // Get latest exam attempt
-      const [latestAttempt] = await db
-        .select({
-          attempt: examAttempts,
-          exam: exams,
-        })
-        .from(examAttempts)
-        .innerJoin(exams, eq(examAttempts.examId, exams.id))
-        .where(eq(examAttempts.studentId, row.student.id))
-        .orderBy(desc(examAttempts.submittedAt))
-        .limit(1);
+      const latestAttempt = latestByStudent.get(row.student.id);
 
       result.push({
         id: row.student.id,

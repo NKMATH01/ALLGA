@@ -3,6 +3,10 @@
   "version": "1.0.0",
   "description": "OLGA Academy Management System - 올가 미수등 시스템",
   "type": "module",
+  "engines": {
+    "//": "Node 24 에서 vite build 가 rollup 네이티브 바인딩 크래시(0xC0000409)로 실패한다. 분석서 §9.5 참고.",
+    "node": ">=20 <23"
+  },
   "scripts": {
     "dev": "npm run dev:server & npm run dev:client",
     "dev:client": "vite",
@@ -10,7 +14,7 @@
     "build": "npm run build:client && npm run build:server",
     "build:client": "vite build",
     "build:server": "tsc --project tsconfig.server.json",
-    "start": "node dist/server/index.js",
+    "start": "tsx server/index.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx server/db/migrate.ts",
     "db:studio": "drizzle-kit studio",
@@ -38,6 +42,7 @@
     "dotenv": "^17.2.3",
     "drizzle-orm": "^0.33.0",
     "express": "^4.19.2",
+    "express-rate-limit": "^8.6.2",
     "express-session": "^1.18.0",
     "lucide-react": "^0.441.0",
     "multer": "^1.4.5-lts.1",

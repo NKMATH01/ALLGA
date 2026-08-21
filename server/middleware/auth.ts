@@ -1,14 +1,18 @@
 import { Request, Response, NextFunction } from 'express';
 
+export interface SessionUser {
+  id: string;
+  username: string;
+  name: string;
+  role: 'admin' | 'branch' | 'student' | 'parent';
+  branchId?: string;
+}
+
 declare module 'express-session' {
   interface SessionData {
-    user?: {
-      id: string;
-      username: string;
-      name: string;
-      role: 'admin' | 'branch' | 'student' | 'parent';
-      branchId?: string;
-    };
+    user?: SessionUser;
+    /** impersonation 시작 전의 원 신원. 복귀(restore) 용도로 보존한다. */
+    originalUser?: SessionUser;
   }
 }
 

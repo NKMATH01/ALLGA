@@ -1,7 +1,7 @@
 import express from 'express';
 import { db } from '../db/index';
-import { branches, users } from '../db/schema';
-import { eq, asc } from 'drizzle-orm';
+import { branches, users, students, examAttempts } from '../db/schema';
+import { eq, asc, and, inArray } from 'drizzle-orm';
 import { requireAdmin } from '../middleware/auth';
 import { hashPassword } from '../utils/helpers';
 
@@ -17,8 +17,9 @@ router.get('/', requireAdmin, async (_req, res) => {
         manager: users,
       })
       .from(branches)
-      .leftJoin(users, eq(users.branchId, branches.id))
-      .where(eq(users.role, 'branch'))
+      // role 조건을 on 절에 둔다. where 로 빼면 지점장 계정이 없는 지점이
+      // LEFT JOIN 인데도 결과에서 통째로 빠진다(사실상 INNER JOIN).
+      .leftJoin(users, and(eq(users.branchId, branches.id), eq(users.role, 'branch')))
       .orderBy(asc(branches.displayOrder));
 
     // Group by branch
@@ -135,12 +136,54 @@ router.put('/:id', requireAdmin, async (req, res) => {
 router.delete('/:id', requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
+    const force = req.query.force === 'true';
+
+    // 존재하지 않는 id 에 성공 응답하지 않는다
+    const [branch] = await db.select().from(branches).where(eq(branches.id, id)).limit(1);
+    if (!branch) {
+      return res.status(404).json({ message: '지점을 찾을 수 없습니다.' });
+    }
+
+    // 지점 소속 학생과 그 응시 기록 규모 확인
+    const branchStudents = await db
+      .select({ id: students.id })
+      .from(students)
+      .where(eq(students.branchId, id));
+
+    const studentIds = branchStudents.map((s) => s.id);
+    const attempts = studentIds.length
+      ? await db
+          .select({ id: examAttempts.id })
+          .from(examAttempts)
+          .where(inArray(examAttempts.studentId, studentIds))
+      : [];
+
+    if (attempts.length > 0 && !force) {
+      return res.status(409).json({
+        message: `응시 기록 ${attempts.length}건이 존재합니다. 삭제하면 학생 ${studentIds.length}명의 성적과 AI 보고서도 함께 삭제됩니다.`,
+        attemptCount: attempts.length,
+        studentCount: studentIds.length,
+        hint: '그래도 삭제하려면 force=true 로 다시 요청하세요.',
+      });
+    }
+
+    // users.branchId 에는 FK 가 없어 지점 삭제 시 고아행이 남는다.
+    // 계정을 지우면 감사 추적이 끊기므로 비활성 처리만 한다.
+    const orphanRoles = ['branch', 'student', 'parent'];
+    const deactivated = await db
+      .update(users)
+      .set({ isActive: false })
+      .where(and(eq(users.branchId, id), inArray(users.role, orphanRoles)))
+      .returning({ id: users.id });
 
     await db.delete(branches).where(eq(branches.id, id));
 
     res.json({
       success: true,
       message: '지점이 삭제되었습니다.',
+      deletedAttempts: attempts.length,
+      deletedStudents: studentIds.length,
+      deactivatedUsers: deactivated.length,
     });
   } catch (error) {
     console.error('Delete branch error:', error);

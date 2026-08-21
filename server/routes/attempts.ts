@@ -12,7 +12,7 @@ import {
 } from '../db/schema';
 import { eq, and, isNotNull } from 'drizzle-orm';
 import { requireStudent, requireBranchManager } from '../middleware/auth';
-import { calculateGrade } from '../utils/helpers';
+import { calculateGrade, endOfLocalDay } from '../utils/helpers';
 
 const router = express.Router();
 
@@ -39,6 +39,9 @@ router.get('/my-exams', requireStudent, async (req, res) => {
       .innerJoin(exams, eq(examDistributions.examId, exams.id))
       .where(eq(examDistributions.branchId, student.branchId));
 
+    // TODO(N+1): 배포마다 distributionStudents·studentClasses·examAttempts·aiReports 를
+    // 개별 조회한다. 배포 수가 늘면 요청당 쿼리가 선형으로 증가하므로
+    // inArray 배치 조회로 묶어야 한다. (iteration 3 범위 외)
     // Filter distributions that apply to this student
     const result = [];
     for (const row of allDistributions) {
@@ -124,9 +127,10 @@ router.get('/my-exams', requireStudent, async (req, res) => {
       // Check if exam is available (within date range)
       // But don't override 'completed' status for submitted exams
       if (status !== 'completed') {
+        // 마감일은 그 날 23:59:59 까지 허용 (UTC 자정으로 저장된 레코드 보정)
         if (now < row.distribution.startDate) {
           status = 'upcoming';
-        } else if (now > row.distribution.endDate) {
+        } else if (now > endOfLocalDay(row.distribution.endDate)) {
           status = 'expired';
         }
       }
@@ -405,6 +409,11 @@ router.post('/exam-attempts/:id/submit', requireStudent, async (req, res) => {
     const { answers } = req.body;
     const userId = req.session.user!.id;
 
+    // answers 누락 시 채점 루프에서 500 이 나므로 400 으로 먼저 거른다
+    if (!answers || typeof answers !== 'object' || Array.isArray(answers)) {
+      return res.status(400).json({ message: '답안 데이터가 올바르지 않습니다.' });
+    }
+
     // 현재 로그인한 학생 정보 조회
     const [student] = await db.select().from(students).where(eq(students.userId, userId)).limit(1);
 
@@ -439,8 +448,7 @@ router.post('/exam-attempts/:id/submit', requireStudent, async (req, res) => {
       return res.status(404).json({ message: '배포를 찾을 수 없습니다.' });
     }
 
-    const deadline = new Date(distribution.endDate);
-    deadline.setHours(23, 59, 59, 999);
+    const deadline = endOfLocalDay(distribution.endDate);
     if (new Date() > deadline) {
       return res.status(400).json({ message: '응시 기간이 종료되었습니다.' });
     }
@@ -469,6 +477,15 @@ router.post('/exam-attempts/:id/submit', requireStudent, async (req, res) => {
     }
 
     const maxScore = exam.totalScore;
+
+    // totalScore 가 0 이하면 백분율이 NaN/Infinity 가 되어 9등급으로 저장된다.
+    // 시험 데이터 자체의 문제이므로 채점하지 않고 400 으로 알린다.
+    if (!maxScore || maxScore <= 0) {
+      return res.status(400).json({
+        message: '시험의 총점이 올바르지 않아 채점할 수 없습니다. 관리자에게 문의해주세요.',
+      });
+    }
+
     const percentage = (score / maxScore) * 100;
     const grade = calculateGrade(percentage);
 
@@ -529,14 +546,16 @@ router.get('/branch/completed', async (req, res) => {
       .innerJoin(exams, eq(examAttempts.examId, exams.id))
       .innerJoin(students, eq(examAttempts.studentId, students.id))
       .innerJoin(users, eq(students.userId, users.id))
+      // admin 은 전체 지점을 본다. branchId 로 무조건 필터하면
+      // admin 의 branchId 가 undefined 라 결과가 비어버린다.
       .where(
-        and(
-          eq(students.branchId, branchId!),
-          isNotNull(examAttempts.submittedAt)
-        )
+        user.role === 'admin'
+          ? isNotNull(examAttempts.submittedAt)
+          : and(eq(students.branchId, branchId!), isNotNull(examAttempts.submittedAt))
       );
 
-    // Check if AI report exists for each attempt
+    // TODO(N+1): 응시 건마다 aiReports 를 개별 조회한다.
+    // attemptId 목록으로 inArray 배치 조회 후 매핑해야 한다. (iteration 3 범위 외)
     const result = [];
     for (const row of completedAttempts) {
       if (!row.attempt.submittedAt) continue;
