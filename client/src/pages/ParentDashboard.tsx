@@ -5,6 +5,8 @@ import { Button } from '../components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
 import { ThemeToggle } from '../components/ui/theme-toggle';
 import { toast } from '../components/ui/toast';
+import { ensureReport, openFullReport, prefersSummaryView } from '../lib/reportClient';
+import { ReportSummaryModal } from '../components/ReportSummaryModal';
 import {
   LayoutDashboard,
   BarChart3,
@@ -55,9 +57,14 @@ const gradeBadgeClass = (grade?: number | null): string => {
 export default function ParentDashboard({ user }: { user: User }) {
   const queryClient = useQueryClient();
   const [activeSection, setActiveSection] = useState<MenuSection>('dashboard');
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  // 데스크톱은 열림, 모바일은 닫힘으로 시작한다.
+  // true 로 고정하면 390px 진입 시 드로어가 첫 화면을 덮는다.
+  const [sidebarOpen, setSidebarOpen] = useState(
+    () => typeof window === 'undefined' || window.matchMedia('(min-width: 768px)').matches
+  );
   const [selectedChildId, setSelectedChildId] = useState<string | null>(null);
   const [openingReportFor, setOpeningReportFor] = useState<string | null>(null);
+  const [summaryReportId, setSummaryReportId] = useState<string | null>(null);
 
   const logoutMutation = useMutation({
     mutationFn: async () => {
@@ -68,7 +75,12 @@ export default function ParentDashboard({ user }: { user: User }) {
     },
   });
 
-  const { data: children, isLoading: childrenLoading } = useQuery({
+  const {
+    data: children,
+    isLoading: childrenLoading,
+    isError: childrenError,
+    refetch: refetchChildren,
+  } = useQuery({
     queryKey: ['parent', 'children'],
     queryFn: async () => {
       const res = await api.get('/parents/me/children');
@@ -99,43 +111,25 @@ export default function ParentDashboard({ user }: { user: User }) {
     return graded.reduce((best, a) => (a.grade! < best.grade! ? a : best), graded[0]).attemptId;
   })();
 
-  // 보고서 열람: 기존 reports API 재사용 (attempt -> HTML).
-  // 아직 생성 전이면(404) 이 자리에서 생성까지 진행한다.
+  // 보고서 열람.
+  // 생성 전이면 서버 큐에 적재하고 완료까지 폴링한다(reportClient).
+  // 모바일에서는 8쪽 지면 대신 요약 뷰를 먼저 띄운다.
   const openReport = async (attemptId: string) => {
     setOpeningReportFor(attemptId);
     try {
-      let html: string | undefined;
-
-      try {
-        const res = await api.get(`/reports/attempt/${attemptId}`);
-        html = res.data.data?.htmlContent;
-      } catch (error: any) {
-        // 404 = 아직 미생성. 그 외 오류는 아래 catch 로 넘긴다.
-        if (error.response?.status !== 404) throw error;
-      }
-
-      if (!html) {
-        // Gemini 호출이라 수십 초 걸릴 수 있다. 버튼은 이미 스피너 + disabled 상태.
-        toast.info('보고서를 생성하는 중입니다...', 'AI 분석에 시간이 걸릴 수 있습니다.');
-
-        const gen = await api.post(`/reports/generate/${attemptId}`);
-        html = gen.data.report?.htmlContent;
-
-        if (!html) {
-          toast.error('보고서를 생성하지 못했습니다.');
-          return;
+      const ref = await ensureReport(attemptId, (stage) => {
+        if (stage === 'generating') {
+          toast.info('보고서를 생성하는 중입니다...', 'AI 분석에 시간이 걸릴 수 있습니다.');
         }
-      }
+      });
 
-      const win = window.open('', '_blank');
-      if (!win) {
-        toast.error('팝업이 차단되어 보고서를 열 수 없습니다.', '브라우저의 팝업 차단을 해제해주세요.');
-        return;
+      if (prefersSummaryView()) {
+        setSummaryReportId(ref.reportId);
+      } else {
+        await openFullReport(ref);
       }
-      win.document.write(html);
-      win.document.close();
     } catch (error: any) {
-      toast.error(error.response?.data?.message || '보고서를 불러오지 못했습니다.');
+      toast.error(error.response?.data?.message || error.message || '보고서를 불러오지 못했습니다.');
     } finally {
       setOpeningReportFor(null);
     }
@@ -254,6 +248,17 @@ export default function ParentDashboard({ user }: { user: User }) {
               <CardContent>
                 {childrenLoading ? (
                   <p className="py-8 text-center text-sm text-ink-secondary">불러오는 중입니다.</p>
+                ) : childrenError ? (
+                  <div className="py-8 text-center">
+                    <p className="text-sm font-semibold text-fn-error">불러오지 못했습니다</p>
+                    <button
+                      type="button"
+                      onClick={() => refetchChildren()}
+                      className="mt-2 text-xs font-semibold text-ink-secondary underline underline-offset-2 hover:text-ink"
+                    >
+                      재시도
+                    </button>
+                  </div>
                 ) : childList.length === 0 ? (
                   <p className="py-8 text-center text-sm text-ink-secondary">
                     연결된 자녀가 없습니다. 지점에 문의해주세요.
@@ -389,6 +394,10 @@ export default function ParentDashboard({ user }: { user: User }) {
           )}
         </main>
       </div>
+
+      {summaryReportId && (
+        <ReportSummaryModal reportId={summaryReportId} onClose={() => setSummaryReportId(null)} />
+      )}
     </div>
   );
 }

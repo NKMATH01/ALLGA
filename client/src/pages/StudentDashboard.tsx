@@ -4,6 +4,9 @@ import { api } from '../lib/api';
 import { toast } from '../components/ui/toast';
 import { ThemeToggle } from '../components/ui/theme-toggle';
 import { useTheme } from '../lib/useTheme';
+import { StatValue } from '../components/ui/stat-value';
+import { ensureReport, openFullReport, prefersSummaryView } from '../lib/reportClient';
+import { ReportSummaryModal } from '../components/ReportSummaryModal';
 import { Button } from '../components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog';
@@ -385,6 +388,7 @@ function WrongQuestionsModal({ attemptId, examTitle }: { attemptId: string; exam
 function AIReportButton({ attemptId }: { attemptId: string }) {
   const [loading, setLoading] = useState(false);
   const [reportStatus, setReportStatus] = useState<'checking' | 'completed' | 'none'>('checking');
+  const [summaryReportId, setSummaryReportId] = useState<string | null>(null);
 
   useEffect(() => {
     const checkReportStatus = async () => {
@@ -405,28 +409,27 @@ function AIReportButton({ attemptId }: { attemptId: string }) {
     checkReportStatus();
   }, [attemptId]);
 
+  // 생성 전이면 큐에 적재하고 완료까지 폴링한다. 모바일은 요약 뷰 우선.
   const handleViewReport = async () => {
     setLoading(true);
     try {
-      const response = await api.get(`/reports/attempt/${attemptId}`);
-      const reportData = response.data.data;
-
-      if (reportData && reportData.htmlContent) {
-        const newWindow = window.open('', '_blank');
-        if (newWindow) {
-          newWindow.document.write(reportData.htmlContent);
-          newWindow.document.close();
+      const ref = await ensureReport(attemptId, (stage) => {
+        if (stage === 'generating') {
+          toast.info('AI 보고서를 생성하는 중입니다...', '분석에 시간이 걸릴 수 있습니다.');
         }
+      });
+
+      setReportStatus('completed');
+
+      if (prefersSummaryView()) {
+        setSummaryReportId(ref.reportId);
       } else {
-        toast.info('AI 보고서가 아직 생성되지 않았습니다.');
+        await openFullReport(ref);
       }
     } catch (error: any) {
-      console.error('Error fetching report:', error);
-      if (error.response?.status === 404) {
-        toast.error('AI 보고서가 아직 생성되지 않았습니다. 잠시 후 다시 시도해주세요.');
-      } else {
-        toast.error(error.response?.data?.message || 'AI 보고서를 불러오는데 실패했습니다.');
-      }
+      toast.error(
+        error.response?.data?.message || error.message || 'AI 보고서를 불러오는데 실패했습니다.'
+      );
     } finally {
       setLoading(false);
     }
@@ -460,10 +463,16 @@ function AIReportButton({ attemptId }: { attemptId: string }) {
   }
 
   return (
+    <>
+
     <Button disabled variant="outline" className="opacity-50">
       <Clock className="w-4 h-4 mr-2" />
       보고서 대기 중
     </Button>
+      {summaryReportId && (
+        <ReportSummaryModal reportId={summaryReportId} onClose={() => setSummaryReportId(null)} />
+      )}
+    </>
   );
 }
 
@@ -783,7 +792,11 @@ function ExamTakingModal({
 export default function StudentDashboard({ user }: { user: User }) {
   const queryClient = useQueryClient();
   const [activeSection, setActiveSection] = useState<MenuSection>('dashboard');
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  // 데스크톱은 열림, 모바일은 닫힘으로 시작한다.
+  // true 로 고정하면 390px 진입 시 드로어가 첫 화면을 덮는다.
+  const [sidebarOpen, setSidebarOpen] = useState(
+    () => typeof window === 'undefined' || window.matchMedia('(min-width: 768px)').matches
+  );
   const [activeExamTab, setActiveExamTab] = useState<ExamTab>('available');
   // 차트 색은 readToken() 으로 CSS 변수를 읽으므로, 테마가 바뀌면 다시 계산해야 한다.
   const { theme } = useTheme();
@@ -804,7 +817,12 @@ export default function StudentDashboard({ user }: { user: User }) {
   });
 
   // Fetch distributed exams
-  const { data: examsData, refetch: refetchExams } = useQuery({
+  const {
+    data: examsData,
+    refetch: refetchExams,
+    isLoading: examsLoading,
+    isError: examsError,
+  } = useQuery({
     queryKey: ['student', 'exams'],
     queryFn: async () => {
       const res = await api.get('/my-exams');
@@ -1253,9 +1271,14 @@ export default function StudentDashboard({ user }: { user: User }) {
                 <Card>
                   <CardContent className="p-5 pt-5">
                     <p className="text-xs font-semibold tracking-[0.08em] text-ink-tertiary">평균 점수</p>
-                    <p className="mt-3 text-4xl font-bold leading-none tracking-[-0.03em] text-ink">
-                      {averageScore}<span className="ml-1 text-xs font-medium tracking-normal text-ink-tertiary">점</span>
-                    </p>
+                    <StatValue
+                      value={averageScore}
+                      suffix="점"
+                      isLoading={examsLoading}
+                      isError={examsError}
+                      onRetry={() => refetchExams()}
+                      valueClassName="mt-3 text-4xl font-bold leading-none tracking-[-0.03em] text-ink"
+                    />
                     <p className="mt-3 text-xs text-ink-secondary">{completedExams.length}회 응시 기준</p>
                   </CardContent>
                 </Card>
@@ -1263,9 +1286,14 @@ export default function StudentDashboard({ user }: { user: User }) {
                 <Card className="border-t-[3px] border-t-accent">
                   <CardContent className="p-5 pt-5">
                     <p className="text-xs font-semibold tracking-[0.08em] text-ink-tertiary">최고 점수</p>
-                    <p className="mt-3 text-4xl font-bold leading-none tracking-[-0.03em] text-accent-strong">
-                      {highestScore}<span className="ml-1 text-xs font-medium tracking-normal text-ink-tertiary">점</span>
-                    </p>
+                    <StatValue
+                      value={highestScore}
+                      suffix="점"
+                      isLoading={examsLoading}
+                      isError={examsError}
+                      onRetry={() => refetchExams()}
+                      valueClassName="mt-3 text-4xl font-bold leading-none tracking-[-0.03em] text-accent-strong"
+                    />
                     <p className="mt-3 text-xs text-ink-secondary">지금까지의 최고 기록</p>
                   </CardContent>
                 </Card>
@@ -1273,9 +1301,14 @@ export default function StudentDashboard({ user }: { user: User }) {
                 <Card>
                   <CardContent className="p-5 pt-5">
                     <p className="text-xs font-semibold tracking-[0.08em] text-ink-tertiary">응시 횟수</p>
-                    <p className="mt-3 text-4xl font-bold leading-none tracking-[-0.03em] text-ink">
-                      {completedExams.length}<span className="ml-1 text-xs font-medium tracking-normal text-ink-tertiary">회</span>
-                    </p>
+                    <StatValue
+                      value={completedExams.length}
+                      suffix="회"
+                      isLoading={examsLoading}
+                      isError={examsError}
+                      onRetry={() => refetchExams()}
+                      valueClassName="mt-3 text-4xl font-bold leading-none tracking-[-0.03em] text-ink"
+                    />
                     <p className="mt-3 text-xs text-ink-secondary">완료한 시험</p>
                   </CardContent>
                 </Card>

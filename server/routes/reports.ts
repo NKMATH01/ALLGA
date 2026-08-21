@@ -91,7 +91,239 @@ const genAI = process.env.GEMINI_API_KEY
 
 console.log('🤖 Gemini 초기화:', genAI ? '성공 ✅' : '실패 ❌');
 
-// POST /api/reports/generate/:attemptId - AI 분석 보고서 생성
+/* ===========================================================================
+ * 시험별 코호트 통계 캐시
+ *
+ * 보고서 1건을 만들 때마다 같은 시험의 전체 응시 기록을 다시 읽고
+ * (응시자 x 문항) 만큼 정오를 다시 계산한다. 한 시험의 보고서를 연속으로
+ * 생성할 때 이 비용이 그대로 반복된다.
+ *
+ * 시험 단위로만 달라지는 값(순위 목록·영역 평균·문항별 정답 수·참고치 표본)을
+ * 한 번 계산해 5분간 재사용한다. 순위 자체는 attempt 마다 목록에서 찾는다.
+ *
+ * 절충: TTL 안에 새로 제출된 응시는 다음 계산 때까지 통계에 반영되지 않는다.
+ * 일괄 생성 구간의 비용 절감을 위해 이 정도 지연은 허용한다.
+ * =========================================================================== */
+
+interface CohortStats {
+  completedAttempts: any[];
+  sortedAttemptIds: string[];
+  attemptCount: number;
+  scores: number[];
+  domainAverages: Map<string, { earnedScore: number; maxScore: number; correct: number; total: number }>;
+  perQuestionCorrect: Map<number, number>;
+  referenceCategorySamples: Map<string, number[]>;
+  referenceDifficultySamples: Map<string, number[]>;
+  referenceTotalSamples: number[];
+  computedAt: number;
+}
+
+const COHORT_TTL_MS = 5 * 60 * 1000;
+const cohortCache = new Map<string, CohortStats>();
+
+async function getCohortStats(examId: string, questionsData: any[]): Promise<CohortStats> {
+  const cached = cohortCache.get(examId);
+  if (cached && Date.now() - cached.computedAt < COHORT_TTL_MS) {
+    return cached;
+  }
+
+  const allAttempts = await db
+    .select()
+    .from(examAttempts)
+    .where(eq(examAttempts.examId, examId));
+
+  const completedAttempts = allAttempts.filter(
+    (a) => a.score !== null && a.submittedAt !== null
+  );
+
+  const sortedAttemptIds = [...completedAttempts]
+    .sort((a, b) => (b.score || 0) - (a.score || 0))
+    .map((a) => a.id);
+
+  const domainAverages = new Map<
+    string,
+    { earnedScore: number; maxScore: number; correct: number; total: number }
+  >();
+  const perQuestionCorrect = new Map<number, number>();
+  questionsData.forEach((q: any, idx: number) => {
+    perQuestionCorrect.set(q.number || idx + 1, 0);
+  });
+  const referenceCategorySamples = new Map<string, number[]>();
+  const referenceDifficultySamples = new Map<string, number[]>();
+  const referenceTotalSamples: number[] = [];
+
+  // 세 종류의 집계를 응시자당 한 번의 순회로 함께 만든다.
+  for (const other of completedAttempts) {
+    const otherAnswers = (other.answers as any) || {};
+    const otherIsOx = otherAnswers._gradingMode === 'ox';
+    const catTally = new Map<string, { correct: number; total: number }>();
+    const diffTally = new Map<string, { correct: number; total: number }>();
+    let correctTally = 0;
+
+    questionsData.forEach((q: any, idx: number) => {
+      const qNum = q.number || idx + 1;
+      const otherAnswer = otherAnswers[qNum.toString()];
+      const correct = otherIsOx
+        ? Number(otherAnswer) === 1
+        : otherAnswer === q.correctAnswer;
+
+      // (a) 영역별 평균
+      const domain = q.domain || q.category || '독서';
+      const qScore = q.score || 2;
+      if (!domainAverages.has(domain)) {
+        domainAverages.set(domain, { earnedScore: 0, maxScore: 0, correct: 0, total: 0 });
+      }
+      const acc = domainAverages.get(domain)!;
+      acc.maxScore += qScore;
+      acc.total += 1;
+      if (correct) {
+        acc.earnedScore += qScore;
+        acc.correct += 1;
+      }
+
+      // (b) 문항별 전체 정답 수
+      if (correct) {
+        perQuestionCorrect.set(qNum, (perQuestionCorrect.get(qNum) || 0) + 1);
+      }
+
+      // (c) 참고치 표본용 항목별 집계
+      const category = q.category || q.domain || '미분류';
+      const level = q.difficulty || '중';
+      if (!catTally.has(category)) catTally.set(category, { correct: 0, total: 0 });
+      if (!diffTally.has(level)) diffTally.set(level, { correct: 0, total: 0 });
+      catTally.get(category)!.total += 1;
+      diffTally.get(level)!.total += 1;
+      if (correct) {
+        catTally.get(category)!.correct += 1;
+        diffTally.get(level)!.correct += 1;
+        correctTally += 1;
+      }
+    });
+
+    for (const [name, t] of catTally) {
+      if (!referenceCategorySamples.has(name)) referenceCategorySamples.set(name, []);
+      referenceCategorySamples.get(name)!.push((t.correct / t.total) * 100);
+    }
+    for (const [level, t] of diffTally) {
+      if (!referenceDifficultySamples.has(level)) referenceDifficultySamples.set(level, []);
+      referenceDifficultySamples.get(level)!.push((t.correct / t.total) * 100);
+    }
+    if (questionsData.length > 0) {
+      referenceTotalSamples.push((correctTally / questionsData.length) * 100);
+    }
+  }
+
+  const stats: CohortStats = {
+    completedAttempts,
+    sortedAttemptIds,
+    attemptCount: completedAttempts.length,
+    scores: completedAttempts.map((a) => a.score || 0),
+    domainAverages,
+    perQuestionCorrect,
+    referenceCategorySamples,
+    referenceDifficultySamples,
+    referenceTotalSamples,
+    computedAt: Date.now(),
+  };
+
+  cohortCache.set(examId, stats);
+  return stats;
+}
+
+/* ===========================================================================
+ * AI 보고서 생성 큐
+ *
+ * Gemini 호출은 수십 초가 걸리고 비용도 든다. 요청마다 즉시 호출하면
+ *   - 동시 응시 후 일괄 생성 시 외부 API 로 부하가 그대로 전달되고
+ *   - 같은 attempt 를 두 번 누르면 같은 보고서를 두 번 만든다.
+ * 그래서 동시 실행을 2개로 제한하고, attempt 단위로 잠금을 건다.
+ *
+ * 전제: 단일 인스턴스. 큐가 프로세스 메모리에 있으므로 여러 인스턴스로
+ * 수평 확장하면 인스턴스마다 별도 큐가 생겨 중복 잠금이 깨진다.
+ * 다중 인스턴스가 필요해지면 DB 잠금(예: aiReports 선삽입 + 상태 컬럼)이나
+ * 외부 큐로 옮겨야 한다.
+ * =========================================================================== */
+
+const MAX_CONCURRENT_REPORTS = 2;
+
+/** 4xx 로 사용자에게 그대로 알려야 하는 실패 (재시도 무의미) */
+class ReportError extends Error {
+  constructor(public status: number, message: string) {
+    super(message);
+  }
+}
+
+let runningReports = 0;
+const waitingReports: Array<() => void> = [];
+
+function acquireSlot(): Promise<void> {
+  if (runningReports < MAX_CONCURRENT_REPORTS) {
+    runningReports++;
+    return Promise.resolve();
+  }
+  return new Promise((resolve) => {
+    waitingReports.push(() => {
+      runningReports++;
+      resolve();
+    });
+  });
+}
+
+function releaseSlot() {
+  runningReports--;
+  const next = waitingReports.shift();
+  if (next) next();
+}
+
+interface ReportJob {
+  attemptId: string;
+  state: 'queued' | 'processing';
+  promise: Promise<string>;
+}
+
+/** attempt 별 진행 중 작업. 존재 = 잠금. */
+const reportJobs = new Map<string, ReportJob>();
+
+async function runWithRetry(attemptId: string): Promise<string> {
+  try {
+    return await runReportGeneration(attemptId);
+  } catch (error: any) {
+    // 데이터 문제(4xx)는 다시 해도 같으므로 재시도하지 않는다
+    if (error instanceof ReportError) throw error;
+    console.warn('[report-queue] 1차 실패, 1회 재시도:', attemptId, error?.message);
+    return await runReportGeneration(attemptId);
+  }
+}
+
+/** 이미 진행 중이면 그 작업을 그대로 돌려준다(새 Gemini 호출 없음). */
+function enqueueReport(attemptId: string): ReportJob {
+  const existing = reportJobs.get(attemptId);
+  if (existing) return existing;
+
+  const job: ReportJob = { attemptId, state: 'queued', promise: undefined as any };
+
+  job.promise = (async () => {
+    await acquireSlot();
+    job.state = 'processing';
+    console.log('[report-queue] 생성 시작:', attemptId, `(동시 ${runningReports}/${MAX_CONCURRENT_REPORTS})`);
+    try {
+      const reportId = await runWithRetry(attemptId);
+      console.log('[report-queue] 생성 완료:', attemptId);
+      return reportId;
+    } finally {
+      releaseSlot();
+      // 성공·실패 모두 잠금 해제. 실패했다면 사용자가 다시 시도할 수 있어야 한다.
+      reportJobs.delete(attemptId);
+    }
+  })();
+
+  // 폴링으로 결과를 확인하므로 여기서 rejection 을 삼켜 unhandled 를 막는다
+  job.promise.catch(() => {});
+  reportJobs.set(attemptId, job);
+  return job;
+}
+
+// POST /api/reports/generate/:attemptId - AI 분석 보고서 생성 (큐 적재 후 즉시 응답)
 router.post('/generate/:attemptId', requireAuth, async (req, res) => {
   try {
     const { attemptId } = req.params;
@@ -110,19 +342,47 @@ router.post('/generate/:attemptId', requireAuth, async (req, res) => {
       .limit(1);
 
     if (existingReport) {
-      console.log('✓ 이미 보고서가 존재합니다. 스킵:', attemptId);
+      // 기존 계약 유지: report 필드를 그대로 두고 status/reportId 를 추가한다
       return res.status(200).json({
         success: true,
+        status: 'done',
+        reportId: existingReport.id,
         message: '이미 보고서가 생성되었습니다.',
-        report: existingReport
+        report: existingReport,
       });
     }
 
+    const alreadyRunning = reportJobs.get(attemptId);
+    if (alreadyRunning) {
+      return res.status(202).json({
+        success: true,
+        status: alreadyRunning.state,
+        message: '보고서를 생성하고 있습니다.',
+      });
+    }
+
+    const job = enqueueReport(attemptId);
+    return res.status(202).json({
+      success: true,
+      status: job.state,
+      message: '보고서 생성을 시작했습니다.',
+    });
+  } catch (error) {
+    console.error('Generate report error:', error);
+    res.status(500).json({ message: 'AI 보고서 생성 중 오류가 발생했습니다.' });
+  }
+});
+
+/**
+ * 실제 보고서 생성. 큐 워커에서만 호출한다. 완료 시 reportId 를 돌려준다.
+ */
+async function runReportGeneration(attemptId: string): Promise<string> {
+  {
     // Get attempt with exam and student info
     const [attempt] = await db.select().from(examAttempts).where(eq(examAttempts.id, attemptId)).limit(1);
 
     if (!attempt || !attempt.submittedAt) {
-      return res.status(404).json({ message: '제출된 시험을 찾을 수 없습니다.' });
+      throw new ReportError(404, '제출된 시험을 찾을 수 없습니다.');
     }
 
     const [exam] = await db.select().from(exams).where(eq(exams.id, attempt.examId)).limit(1);
@@ -137,11 +397,11 @@ router.post('/generate/:attemptId', requireAuth, async (req, res) => {
       .limit(1);
 
     if (!exam || !student) {
-      return res.status(404).json({ message: '시험 또는 학생 정보를 찾을 수 없습니다.' });
+      throw new ReportError(404, '시험 또는 학생 정보를 찾을 수 없습니다.');
     }
 
     if (!genAI) {
-      return res.status(500).json({ message: 'AI 분석 서비스가 설정되지 않았습니다.' });
+      throw new ReportError(500, 'AI 분석 서비스가 설정되지 않았습니다.');
     }
 
     // Prepare data for AI analysis
@@ -184,55 +444,15 @@ router.post('/generate/:attemptId', requireAuth, async (req, res) => {
       percentage: Math.round((d.correct / d.total) * 100),
     }));
 
-    // Get all completed attempts for ranking
-    const allAttempts = await db
-      .select()
-      .from(examAttempts)
-      .where(eq(examAttempts.examId, attempt.examId));
+    // 시험 단위 코호트 통계 (5분 캐시). 순위·영역평균·문항정답수·참고치 표본을 함께 얻는다.
+    const cohort = await getCohortStats(attempt.examId, questionsData);
+    const completedAttempts = cohort.completedAttempts;
 
-    const completedAttempts = allAttempts
-      .filter(a => a.score !== null && a.submittedAt !== null);
-
-    const sortedAttempts = completedAttempts
-      .sort((a, b) => (b.score || 0) - (a.score || 0));
-
-    const rankIndex = sortedAttempts.findIndex(a => a.id === attemptId);
+    const rankIndex = cohort.sortedAttemptIds.indexOf(attemptId);
     const rank = rankIndex + 1; // 못 찾으면 0
 
-    // 같은 시험 응시자 전체의 영역별 실제 평균. (기존에는 65% 하드코딩)
-    // 각 응시 기록의 채점 방식(_gradingMode)을 존중해 정오를 판정한다.
-    const domainAverageMap = new Map<
-      string,
-      { earnedScore: number; maxScore: number; correct: number; total: number }
-    >();
-
-    for (const other of completedAttempts) {
-      const otherAnswers = (other.answers as any) || {};
-      const otherIsOx = otherAnswers._gradingMode === 'ox';
-
-      questionsData.forEach((q: any, idx: number) => {
-        const domain = q.domain || q.category || '독서';
-        const qNum = q.number || idx + 1;
-        const studentAnswer = otherAnswers[qNum.toString()];
-        const correct = otherIsOx
-          ? Number(studentAnswer) === 1
-          : studentAnswer === q.correctAnswer;
-        const qScore = q.score || 2;
-
-        if (!domainAverageMap.has(domain)) {
-          domainAverageMap.set(domain, { earnedScore: 0, maxScore: 0, correct: 0, total: 0 });
-        }
-        const acc = domainAverageMap.get(domain)!;
-        acc.maxScore += qScore;
-        acc.total += 1;
-        if (correct) {
-          acc.earnedScore += qScore;
-          acc.correct += 1;
-        }
-      });
-    }
-
-    const attemptCount = completedAttempts.length;
+    const domainAverageMap = cohort.domainAverages;
+    const attemptCount = cohort.attemptCount;
 
     /** 영역별 실제 평균 점수/정답률. 표본이 없으면 null (임의 값을 만들지 않는다) */
     function domainAverage(domainName: string): { avgScore: number | null; avgPercentage: number | null } {
@@ -342,9 +562,7 @@ router.post('/generate/:attemptId', requireAuth, async (req, res) => {
 [입력 데이터]
 ${JSON.stringify(userData, null, 2)}`;
 
-    // DEBUG: Log user data structure
-    console.log('[DEBUG][USER_DATA]', JSON.stringify(userData, null, 2));
-    console.log('[DEBUG][PROMPT_LENGTH]', prompt.length, 'characters');
+    // 학생명·학년·점수·틀린문항·학생답안이 담긴 userData 를 로그로 남기지 않는다(PII).
 
     // Call Gemini API (Gemini 2.5 Flash)
     console.log('🤖 Google Gemini 2.5 Flash로 전문 보고서 생성 중...');
@@ -458,26 +676,8 @@ ${JSON.stringify(userData, null, 2)}`;
     // 표본이 없으면 null 을 반환하고, 임의의 평균이나 곡선을 만들지 않는다.
     // =====================================================================
 
-    /** 문항별 전체 응시자 정답 수. O/X 수동 채점 기록은 값이 정답 번호가 아니라 O=1 이다. */
-    const perQuestionCorrect = new Map<number, number>();
-    questionsData.forEach((q: any, idx: number) => {
-      perQuestionCorrect.set(q.number || idx + 1, 0);
-    });
-    for (const other of completedAttempts) {
-      const otherAnswers = (other.answers as any) || {};
-      const otherIsOx = otherAnswers._gradingMode === 'ox';
-      questionsData.forEach((q: any, idx: number) => {
-        const qNum = q.number || idx + 1;
-        const otherAnswer = otherAnswers[qNum.toString()];
-        const correct = otherIsOx
-          ? Number(otherAnswer) === 1
-          : otherAnswer === q.correctAnswer;
-        if (correct) {
-          perQuestionCorrect.set(qNum, (perQuestionCorrect.get(qNum) || 0) + 1);
-        }
-      });
-    }
-
+    /** 문항별 전체 응시자 정답 수 (코호트 캐시에서). */
+    const perQuestionCorrect = cohort.perQuestionCorrect;
     /** 문항별 분석. 학생 정오 + 전체 응시자 정답률. */
     const questionAnalysis = questionsData.map((q: any, idx: number) => {
       const qNum = q.number || idx + 1;
@@ -578,50 +778,10 @@ ${JSON.stringify(userData, null, 2)}`;
       };
     }
 
-    /** 응시자 한 명 한 명의 항목별 정답률. 참고치 구간의 표본이 된다. */
-    const referenceCategorySamples = new Map<string, number[]>();
-    const referenceDifficultySamples = new Map<string, number[]>();
-    const referenceTotalSamples: number[] = [];
-
-    for (const other of completedAttempts) {
-      const otherAnswers = (other.answers as any) || {};
-      const otherIsOx = otherAnswers._gradingMode === 'ox';
-      const catTally = new Map<string, { correct: number; total: number }>();
-      const diffTally = new Map<string, { correct: number; total: number }>();
-      let correctTally = 0;
-
-      questionsData.forEach((q: any, idx: number) => {
-        const qNum = q.number || idx + 1;
-        const otherAnswer = otherAnswers[qNum.toString()];
-        const correct = otherIsOx
-          ? Number(otherAnswer) === 1
-          : otherAnswer === q.correctAnswer;
-        const category = q.category || q.domain || '미분류';
-        const level = q.difficulty || '중';
-
-        if (!catTally.has(category)) catTally.set(category, { correct: 0, total: 0 });
-        if (!diffTally.has(level)) diffTally.set(level, { correct: 0, total: 0 });
-        catTally.get(category)!.total += 1;
-        diffTally.get(level)!.total += 1;
-        if (correct) {
-          catTally.get(category)!.correct += 1;
-          diffTally.get(level)!.correct += 1;
-          correctTally += 1;
-        }
-      });
-
-      for (const [name, t] of catTally) {
-        if (!referenceCategorySamples.has(name)) referenceCategorySamples.set(name, []);
-        referenceCategorySamples.get(name)!.push((t.correct / t.total) * 100);
-      }
-      for (const [level, t] of diffTally) {
-        if (!referenceDifficultySamples.has(level)) referenceDifficultySamples.set(level, []);
-        referenceDifficultySamples.get(level)!.push((t.correct / t.total) * 100);
-      }
-      if (questionsData.length > 0) {
-        referenceTotalSamples.push((correctTally / questionsData.length) * 100);
-      }
-    }
+    /** 참고치 구간 표본 (코호트 캐시에서). */
+    const referenceCategorySamples = cohort.referenceCategorySamples;
+    const referenceDifficultySamples = cohort.referenceDifficultySamples;
+    const referenceTotalSamples = cohort.referenceTotalSamples;
 
     const categoryReference = categoryPointsMap.map((c) => ({
       name: c.name,
@@ -823,8 +983,7 @@ ${JSON.stringify(userData, null, 2)}`;
       },
     };
 
-    // DEBUG 로그
-    console.log('[DEBUG][REPORT_DATA]', JSON.stringify(reportData, null, 2));
+    // reportData 에는 학생명·학교·성적이 들어 있으므로 로그로 남기지 않는다(PII).
 
     // metaVersion 검증
     if (reportData.metaVersion !== 'v3') {
@@ -847,13 +1006,128 @@ ${JSON.stringify(userData, null, 2)}`;
       })
       .returning();
 
+    return report.id;
+  }
+}
+
+/**
+ * GET /api/reports/:reportId/summary - 모바일 요약 뷰용 데이터
+ *
+ * 저장된 analysis JSON 에서 이미 계산된 값만 골라 낸다. 새로 계산하거나
+ * 없는 값을 채우지 않는다(참고치가 없으면 없는 대로 내려보낸다).
+ * 라우트 순서 주의: '/:reportId' 보다 먼저 등록해야 한다.
+ */
+router.get('/:reportId/summary', requireAuth, async (req, res) => {
+  try {
+    const [report] = await db
+      .select({
+        id: aiReports.id,
+        attemptId: aiReports.attemptId,
+        analysis: aiReports.analysis,
+        generatedAt: aiReports.generatedAt,
+      })
+      .from(aiReports)
+      .where(eq(aiReports.id, req.params.reportId))
+      .limit(1);
+
+    if (!report) {
+      return res.status(404).json({ message: '보고서를 찾을 수 없습니다.' });
+    }
+
+    const access = await checkAttemptAccess(req.session.user, report.attemptId);
+    if (!access.ok) {
+      return res.status(access.status).json({ message: access.message });
+    }
+
+    const a = (report.analysis as any) || {};
+    const score = a.scoreSummary || {};
+
+    // ① 판정 — 이번 검사에서 측정된 값만 옮긴다
+    const verdict = {
+      grade: score.grade ?? null,
+      rawScore: score.rawScore ?? null,
+      rawScoreMax: score.rawScoreMax ?? null,
+      percentile: score.percentile ?? null,
+      studentName: a.studentInfo?.name ?? null,
+      examDate: a.studentInfo?.date ?? null,
+      overallReference: a.overallReference ?? null,
+    };
+
+    // ② 이상 항목 — 참고치(제10~90백분위) 를 벗어난 항목만
+    const abnormal: Array<{
+      name: string;
+      kind: 'category' | 'difficulty';
+      studentRate: number;
+      low: number;
+      high: number;
+      direction: 'below' | 'above';
+    }> = [];
+
+    const categoryRates = new Map<string, number>(
+      (a.categoryPointsMap || []).map((c: any) => [c.name, c.studentRate])
+    );
+    for (const ref of a.categoryReference || []) {
+      if (!ref?.available) continue;
+      const rate = categoryRates.get(ref.name);
+      if (typeof rate !== 'number') continue;
+      if (rate < ref.low) {
+        abnormal.push({ name: ref.name, kind: 'category', studentRate: rate, low: ref.low, high: ref.high, direction: 'below' });
+      } else if (rate > ref.high) {
+        abnormal.push({ name: ref.name, kind: 'category', studentRate: rate, low: ref.low, high: ref.high, direction: 'above' });
+      }
+    }
+
+    const difficultyRates = new Map<string, number>(
+      (a.difficultyStats || []).map((d: any) => [d.level, d.studentRate])
+    );
+    for (const ref of a.difficultyReference || []) {
+      if (!ref?.available) continue;
+      const rate = difficultyRates.get(ref.level);
+      if (typeof rate !== 'number') continue;
+      if (rate < ref.low) {
+        abnormal.push({ name: `난이도 ${ref.level}`, kind: 'difficulty', studentRate: rate, low: ref.low, high: ref.high, direction: 'below' });
+      } else if (rate > ref.high) {
+        abnormal.push({ name: `난이도 ${ref.level}`, kind: 'difficulty', studentRate: rate, low: ref.low, high: ref.high, direction: 'above' });
+      }
+    }
+
+    // 미달을 먼저, 그 안에서 이탈 폭이 큰 순서로
+    abnormal.sort((x, y) => {
+      if (x.direction !== y.direction) return x.direction === 'below' ? -1 : 1;
+      const dx = x.direction === 'below' ? x.low - x.studentRate : x.studentRate - x.high;
+      const dy = y.direction === 'below' ? y.low - y.studentRate : y.studentRate - y.high;
+      return dy - dx;
+    });
+
+    // ③ 핵심 소견
+    const keyFinding = a.analysis?.olgaSummary ?? null;
+
+    // ④ 권고 상위 3 — 약점 소견을 우선, 부족하면 진학 대비 소견으로 보충
+    const recommendations: Array<{ title: string; detail: string | null }> = [];
+    for (const w of a.analysis?.weaknesses || []) {
+      if (recommendations.length >= 3) break;
+      if (!w?.name) continue;
+      recommendations.push({ title: w.name, detail: w.analysisText ?? null });
+    }
+    if (recommendations.length < 3 && a.analysis?.highSchoolPrep?.summary) {
+      recommendations.push({ title: '진학 대비', detail: a.analysis.highSchoolPrep.summary });
+    }
+
     res.json({
       success: true,
-      report,
+      data: {
+        reportId: report.id,
+        attemptId: report.attemptId,
+        generatedAt: report.generatedAt,
+        verdict,
+        abnormal,
+        keyFinding,
+        recommendations,
+      },
     });
   } catch (error) {
-    console.error('Generate report error:', error);
-    res.status(500).json({ message: 'AI 보고서 생성 중 오류가 발생했습니다.' });
+    console.error('Get report summary error:', error);
+    res.status(500).json({ message: '보고서 요약 조회 중 오류가 발생했습니다.' });
   }
 });
 

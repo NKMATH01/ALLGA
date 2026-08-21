@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import { toast } from '../components/ui/toast';
 import { ThemeToggle } from '../components/ui/theme-toggle';
+import { StatValue } from '../components/ui/stat-value';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
@@ -20,7 +21,11 @@ type MenuSection = 'dashboard' | 'branches' | 'exams' | 'distributions';
 export default function AdminDashboard({ user }: { user: User }) {
   const queryClient = useQueryClient();
   const [activeSection, setActiveSection] = useState<MenuSection>('dashboard');
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  // 데스크톱은 열림, 모바일은 닫힘으로 시작한다.
+  // true 로 고정하면 390px 진입 시 드로어가 첫 화면을 덮는다.
+  const [sidebarOpen, setSidebarOpen] = useState(
+    () => typeof window === 'undefined' || window.matchMedia('(min-width: 768px)').matches
+  );
   const [showBranchModal, setShowBranchModal] = useState(false);
   const [editingBranch, setEditingBranch] = useState<any>(null);
   const [uploadingFile, setUploadingFile] = useState(false);
@@ -30,7 +35,12 @@ export default function AdminDashboard({ user }: { user: User }) {
   const [showDistributionModal, setShowDistributionModal] = useState(false);
   const [selectedBranches, setSelectedBranches] = useState<string[]>([]);
 
-  const { data: stats } = useQuery({
+  const {
+    data: stats,
+    refetch: refetchStats,
+    isLoading: statsLoading,
+    isError: statsError,
+  } = useQuery({
     queryKey: ['admin', 'stats'],
     queryFn: async () => {
       const res = await api.get('/admin/stats');
@@ -380,7 +390,15 @@ export default function AdminDashboard({ user }: { user: User }) {
         <Card>
           <CardContent className="p-5 pt-5">
             <p className="text-xs font-semibold tracking-[0.08em] text-ink-tertiary">총 학생 수</p>
-            <div className="mt-3 text-4xl font-bold leading-none tracking-[-0.03em] text-ink">{stats?.totalStudents || 0}</div>
+            <div className="mt-3">
+              <StatValue
+                value={stats?.totalStudents}
+                isLoading={statsLoading}
+                isError={statsError}
+                onRetry={() => refetchStats()}
+                valueClassName="text-4xl font-bold leading-none tracking-[-0.03em] text-ink"
+              />
+            </div>
             <p className="text-xs text-ink-secondary mt-3">전체 등록 학생</p>
           </CardContent>
         </Card>
@@ -388,7 +406,15 @@ export default function AdminDashboard({ user }: { user: User }) {
         <Card>
           <CardContent className="p-5 pt-5">
             <p className="text-xs font-semibold tracking-[0.08em] text-ink-tertiary">총 지점 수</p>
-            <div className="mt-3 text-4xl font-bold leading-none tracking-[-0.03em] text-ink">{stats?.totalBranches || 0}</div>
+            <div className="mt-3">
+              <StatValue
+                value={stats?.totalBranches}
+                isLoading={statsLoading}
+                isError={statsError}
+                onRetry={() => refetchStats()}
+                valueClassName="text-4xl font-bold leading-none tracking-[-0.03em] text-ink"
+              />
+            </div>
             <p className="text-xs text-ink-secondary mt-3">운영 중인 지점</p>
           </CardContent>
         </Card>
@@ -396,7 +422,15 @@ export default function AdminDashboard({ user }: { user: User }) {
         <Card>
           <CardContent className="p-5 pt-5">
             <p className="text-xs font-semibold tracking-[0.08em] text-ink-tertiary">총 시험 수</p>
-            <div className="mt-3 text-4xl font-bold leading-none tracking-[-0.03em] text-ink">{stats?.totalExams || 0}</div>
+            <div className="mt-3">
+              <StatValue
+                value={stats?.totalExams}
+                isLoading={statsLoading}
+                isError={statsError}
+                onRetry={() => refetchStats()}
+                valueClassName="text-4xl font-bold leading-none tracking-[-0.03em] text-ink"
+              />
+            </div>
             <p className="text-xs text-ink-secondary mt-3">생성된 시험</p>
           </CardContent>
         </Card>
@@ -404,7 +438,15 @@ export default function AdminDashboard({ user }: { user: User }) {
         <Card className="border-t-[3px] border-t-accent">
           <CardContent className="p-5 pt-5">
             <p className="text-xs font-semibold tracking-[0.08em] text-ink-tertiary">평균 점수</p>
-            <div className="mt-3 text-4xl font-bold leading-none tracking-[-0.03em] text-accent-strong">{stats?.averageScore || 0}</div>
+            <div className="mt-3">
+              <StatValue
+                value={stats?.averageScore}
+                isLoading={statsLoading}
+                isError={statsError}
+                onRetry={() => refetchStats()}
+                valueClassName="text-4xl font-bold leading-none tracking-[-0.03em] text-accent-strong"
+              />
+            </div>
             <p className="text-xs text-ink-secondary mt-3">전체 평균</p>
           </CardContent>
         </Card>

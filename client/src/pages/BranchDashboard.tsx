@@ -3,6 +3,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import { toast } from '../components/ui/toast';
 import { ThemeToggle } from '../components/ui/theme-toggle';
+import { StatValue } from '../components/ui/stat-value';
+import { ensureReport } from '../lib/reportClient';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
@@ -32,7 +34,11 @@ const gradeBadgeClass = (grade?: number | string | null): string => {
 export default function BranchDashboard({ user }: { user: User }) {
   const queryClient = useQueryClient();
   const [activeSection, setActiveSection] = useState<MenuSection>('dashboard');
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  // 데스크톱은 열림, 모바일은 닫힘으로 시작한다.
+  // true 로 고정하면 390px 진입 시 드로어가 첫 화면을 덮는다.
+  const [sidebarOpen, setSidebarOpen] = useState(
+    () => typeof window === 'undefined' || window.matchMedia('(min-width: 768px)').matches
+  );
   const [showStudentModal, setShowStudentModal] = useState(false);
   const [showClassModal, setShowClassModal] = useState(false);
   const [editingStudent, setEditingStudent] = useState<any>(null);
@@ -60,7 +66,12 @@ export default function BranchDashboard({ user }: { user: User }) {
     enabled: !!user.branchId,
   });
 
-  const { data: students, refetch: refetchStudents } = useQuery({
+  const {
+    data: students,
+    refetch: refetchStudents,
+    isLoading: studentsLoading,
+    isError: studentsError,
+  } = useQuery({
     queryKey: ['students', user.branchId],
     queryFn: async () => {
       const res = await api.get('/students');
@@ -68,7 +79,12 @@ export default function BranchDashboard({ user }: { user: User }) {
     },
   });
 
-  const { data: classes, refetch: refetchClasses } = useQuery({
+  const {
+    data: classes,
+    refetch: refetchClasses,
+    isLoading: classesLoading,
+    isError: classesError,
+  } = useQuery({
     queryKey: ['classes', user.branchId],
     queryFn: async () => {
       const res = await api.get('/classes');
@@ -76,7 +92,12 @@ export default function BranchDashboard({ user }: { user: User }) {
     },
   });
 
-  const { data: distributions, refetch: refetchDistributions } = useQuery({
+  const {
+    data: distributions,
+    refetch: refetchDistributions,
+    isLoading: distributionsLoading,
+    isError: distributionsError,
+  } = useQuery({
     queryKey: ['distributions', user.branchId],
     queryFn: async () => {
       const res = await api.get('/distributions');
@@ -95,7 +116,12 @@ export default function BranchDashboard({ user }: { user: User }) {
   });
 
   // 대시보드용: 모든 배포의 학생 정보 가져오기
-  const { data: allDistributionStudents, refetch: refetchAllDistributionStudents } = useQuery({
+  const {
+    data: allDistributionStudents,
+    refetch: refetchAllDistributionStudents,
+    isLoading: allDistLoading,
+    isError: allDistError,
+  } = useQuery({
     queryKey: ['all-distribution-students', user.branchId],
     queryFn: async () => {
       if (!distributions || distributions.length === 0) return [];
@@ -258,17 +284,22 @@ export default function BranchDashboard({ user }: { user: User }) {
   });
 
   const generateReportMutation = useMutation({
+    // 서버가 큐에 적재만 하고 즉시 응답하므로, 완료까지 폴링해야
+    // "완료" 알림이 실제 완료를 의미한다.
     mutationFn: async (attemptId: string) => {
-      const res = await api.post(`/reports/generate/${attemptId}`);
-      return res.data;
+      return await ensureReport(attemptId, (stage) => {
+        if (stage === 'generating') {
+          toast.info('AI 분석을 시작했습니다...', '완료까지 시간이 걸릴 수 있습니다.');
+        }
+      });
     },
-    onSuccess: (data) => {
+    onSuccess: () => {
       refetchDistributionStudents();
       refetchAllDistributionStudents();
-      toast.success(data.message || 'AI 분석이 완료되었습니다.');
+      toast.success('AI 분석이 완료되었습니다.');
     },
     onError: (error: any) => {
-      toast.error(error.response?.data?.message || 'AI 분석에 실패했습니다.');
+      toast.error(error.response?.data?.message || error.message || 'AI 분석에 실패했습니다.');
     },
   });
 
@@ -456,7 +487,15 @@ export default function BranchDashboard({ user }: { user: User }) {
         >
           <CardContent className="p-5 pt-5">
             <p className="text-xs font-semibold tracking-[0.08em] text-ink-tertiary">총 학생 수</p>
-            <div className="mt-3 text-4xl font-bold leading-none tracking-[-0.03em] text-ink">{students?.length || 0}</div>
+            <div className="mt-3">
+              <StatValue
+                value={students?.length}
+                isLoading={studentsLoading}
+                isError={studentsError}
+                onRetry={() => refetchStudents()}
+                valueClassName="text-4xl font-bold leading-none tracking-[-0.03em] text-ink"
+              />
+            </div>
             <p className="text-xs text-ink-secondary mt-3">등록된 학생. 눌러서 목록 보기</p>
           </CardContent>
         </Card>
@@ -464,11 +503,20 @@ export default function BranchDashboard({ user }: { user: User }) {
         <Card>
           <CardContent className="p-5 pt-5">
             <p className="text-xs font-semibold tracking-[0.08em] text-ink-tertiary">보고서 완료</p>
-            <div className="mt-3 text-4xl font-bold leading-none tracking-[-0.03em] text-ink">
-              {allDistributionStudents?.reduce((total: number, distData: any) => {
-                const studentsWithReports = distData.students?.filter((s: any) => s.hasReport) || [];
-                return total + studentsWithReports.length;
-              }, 0) || 0}
+            <div className="mt-3">
+              <StatValue
+                value={allDistributionStudents?.reduce((total: number, distData: any) => {
+                  const studentsWithReports = distData.students?.filter((s: any) => s.hasReport) || [];
+                  return total + studentsWithReports.length;
+                }, 0)}
+                isLoading={distributionsLoading || allDistLoading}
+                isError={distributionsError || allDistError}
+                onRetry={() => {
+                  refetchDistributions();
+                  refetchAllDistributionStudents();
+                }}
+                valueClassName="text-4xl font-bold leading-none tracking-[-0.03em] text-ink"
+              />
             </div>
             <p className="text-xs text-ink-secondary mt-3">AI 분석 완료 학생</p>
           </CardContent>
@@ -482,7 +530,15 @@ export default function BranchDashboard({ user }: { user: User }) {
         >
           <CardContent className="p-5 pt-5">
             <p className="text-xs font-semibold tracking-[0.08em] text-ink-tertiary">총 반 수</p>
-            <div className="mt-3 text-4xl font-bold leading-none tracking-[-0.03em] text-ink">{classes?.length || 0}</div>
+            <div className="mt-3">
+              <StatValue
+                value={classes?.length}
+                isLoading={classesLoading}
+                isError={classesError}
+                onRetry={() => refetchClasses()}
+                valueClassName="text-4xl font-bold leading-none tracking-[-0.03em] text-ink"
+              />
+            </div>
             <p className="text-xs text-ink-secondary mt-3">운영 중인 반. 눌러서 목록 보기</p>
           </CardContent>
         </Card>
@@ -495,11 +551,20 @@ export default function BranchDashboard({ user }: { user: User }) {
         >
           <CardContent className="p-5 pt-5">
             <p className="text-xs font-semibold tracking-[0.08em] text-ink-tertiary">시험</p>
-            <div className="mt-3 text-4xl font-bold leading-none tracking-[-0.03em] text-ink">
-              {allDistributionStudents?.reduce((total: number, distData: any) => {
-                const studentsWithAttempts = distData.students?.filter((s: any) => s.hasAttempt) || [];
-                return total + studentsWithAttempts.length;
-              }, 0) || 0}
+            <div className="mt-3">
+              <StatValue
+                value={allDistributionStudents?.reduce((total: number, distData: any) => {
+                  const studentsWithAttempts = distData.students?.filter((s: any) => s.hasAttempt) || [];
+                  return total + studentsWithAttempts.length;
+                }, 0)}
+                isLoading={distributionsLoading || allDistLoading}
+                isError={distributionsError || allDistError}
+                onRetry={() => {
+                  refetchDistributions();
+                  refetchAllDistributionStudents();
+                }}
+                valueClassName="text-4xl font-bold leading-none tracking-[-0.03em] text-ink"
+              />
             </div>
             <p className="text-xs text-ink-secondary mt-3">응시와 채점 학생. 눌러서 목록 보기</p>
           </CardContent>

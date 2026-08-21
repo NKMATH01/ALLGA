@@ -1933,8 +1933,6 @@ export function generateReportHTML(data: any): string {
             // ===== INJECT REPORT DATA =====
             const reportData = ${reportDataJson};
 
-            console.log('[DEBUG] reportData injected:', reportData);
-
             // 도판 색도 DESIGN.md 토큰을 따른다. 캔버스에는 CSS 클래스를 적용할 수 없으므로
             // :root 의 CSS 변수 계산값을 읽어서 넘긴다 (새 hex 를 만들지 않는다).
             const token = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
