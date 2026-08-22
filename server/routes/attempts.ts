@@ -661,19 +661,28 @@ router.get('/branch/completed', async (req, res) => {
           : and(eq(students.branchId, branchId!), isNotNull(examAttempts.submittedAt))
       );
 
-    // TODO(N+1): 응시 건마다 aiReports 를 개별 조회한다.
-    // attemptId 목록으로 inArray 배치 조회 후 매핑해야 한다. (iteration 3 범위 외)
-    const result = [];
-    for (const row of completedAttempts) {
-      if (!row.attempt.submittedAt) continue;
+    // 응시 건마다 aiReports 를 직렬 조회하면 목록 길이만큼 왕복이 생기므로 한 번에 배치 조회한다.
+    const submittedRows = completedAttempts.filter((row) => row.attempt.submittedAt);
+    // 존재 여부와 id 만 필요하다. select() 로 전체 행을 가져오면
+    // htmlContent(수십~수백 KB)가 매 행마다 네트워크로 실려 온다.
+    const submittedAttemptIds = submittedRows.map((row) => row.attempt.id);
+    const reportRows = submittedAttemptIds.length
+      ? await db
+          .select({ id: aiReports.id, attemptId: aiReports.attemptId })
+          .from(aiReports)
+          .where(inArray(aiReports.attemptId, submittedAttemptIds))
+      : [];
+    // 기존 .limit(1) 과 동일하게 attempt 당 한 건만 남긴다(먼저 들어온 것 유지).
+    const reportIdByAttemptId = new Map<string, string>();
+    for (const report of reportRows) {
+      if (!reportIdByAttemptId.has(report.attemptId)) {
+        reportIdByAttemptId.set(report.attemptId, report.id);
+      }
+    }
 
-      // 존재 여부와 id 만 필요하다. select() 로 전체 행을 가져오면
-      // htmlContent(수십~수백 KB)가 매 행마다 네트워크로 실려 온다.
-      const [report] = await db
-        .select({ id: aiReports.id })
-        .from(aiReports)
-        .where(eq(aiReports.attemptId, row.attempt.id))
-        .limit(1);
+    const result = [];
+    for (const row of submittedRows) {
+      const reportId = reportIdByAttemptId.get(row.attempt.id);
 
       result.push({
         attemptId: row.attempt.id,
@@ -686,8 +695,8 @@ router.get('/branch/completed', async (req, res) => {
         maxScore: row.attempt.maxScore,
         grade: row.attempt.grade,
         submittedAt: row.attempt.submittedAt,
-        hasReport: !!report,
-        reportId: report?.id || null,
+        hasReport: !!reportId,
+        reportId: reportId || null,
       });
     }
 

@@ -53,31 +53,38 @@ router.get('/', requireAdminOrBranch, async (req, res) => {
     }
 
     // Get parent distributions for those that have one
-    const result = await Promise.all(
-      distributionList.map(async (row) => {
-        let parentDistribution = null;
-        if (row.distribution.parentDistributionId) {
-          const [parent] = await db
-            .select()
-            .from(examDistributions)
-            .where(eq(examDistributions.id, row.distribution.parentDistributionId))
-            .limit(1);
-          parentDistribution = parent || null;
-        }
-
-        return {
-          ...row.distribution,
-          exam: {
-            id: row.exam.id,
-            title: row.exam.title,
-            subject: row.exam.subject,
-            totalQuestions: row.exam.totalQuestions,
-            totalScore: row.exam.totalScore,
-          },
-          parentDistribution,
-        };
-      })
+    // 행마다 개별 조회하면 목록 길이만큼 왕복이 생기므로 id 중복 제거 후 한 번에 조회한다.
+    const parentIds = Array.from(
+      new Set(
+        distributionList
+          .map((row) => row.distribution.parentDistributionId)
+          .filter((id): id is string => !!id)
+      )
     );
+    const parentRows = parentIds.length
+      ? await db.select().from(examDistributions).where(inArray(examDistributions.id, parentIds))
+      : [];
+    const parentById = new Map(parentRows.map((parent) => [parent.id, parent]));
+
+    const result = distributionList.map((row) => {
+      const parentDistributionId = row.distribution.parentDistributionId;
+      // 상위 배포가 없거나 참조가 끊겼으면 기존과 동일하게 null.
+      const parentDistribution = parentDistributionId
+        ? parentById.get(parentDistributionId) ?? null
+        : null;
+
+      return {
+        ...row.distribution,
+        exam: {
+          id: row.exam.id,
+          title: row.exam.title,
+          subject: row.exam.subject,
+          totalQuestions: row.exam.totalQuestions,
+          totalScore: row.exam.totalScore,
+        },
+        parentDistribution,
+      };
+    });
 
     res.json({
       success: true,
