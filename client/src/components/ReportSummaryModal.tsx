@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { X, ExternalLink, Loader2 } from 'lucide-react';
 import { fetchReportSummary, openFullReport, type ReportSummary } from '../lib/reportClient';
 import { toast } from './ui/toast';
+import { useModalA11y } from '../lib/useModalA11y';
 
 /*
   모바일 보고서 요약 뷰.
@@ -22,6 +23,8 @@ export function ReportSummaryModal({
   const [summary, setSummary] = useState<ReportSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [opening, setOpening] = useState(false);
+
+  const dialogRef = useModalA11y<HTMLDivElement>({ active: true, onClose });
 
   useEffect(() => {
     let cancelled = false;
@@ -55,7 +58,13 @@ export function ReportSummaryModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-[var(--overlay)] sm:items-center">
-      <div className="flex max-h-[92dvh] w-full max-w-lg flex-col rounded-t-lg border border-line bg-surface sm:rounded-lg">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="검사 결과 요약"
+        className="flex max-h-[92dvh] w-full max-w-lg flex-col rounded-t-lg border border-line bg-surface sm:rounded-lg"
+      >
         <div className="flex flex-shrink-0 items-center justify-between border-b border-line px-4 py-3">
           <div className="min-w-0">
             <h2 className="truncate text-base font-semibold text-ink">검사 결과 요약</h2>

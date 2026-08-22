@@ -1,14 +1,15 @@
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import { toast } from '../components/ui/toast';
 import { ThemeToggle } from '../components/ui/theme-toggle';
 import { StatValue } from '../components/ui/stat-value';
-import { ensureReport } from '../lib/reportClient';
+import { ensureReport, openFullReport } from '../lib/reportClient';
+import { useModalA11y, isMobileViewport } from '../lib/useModalA11y';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
-import { Users, GraduationCap, FileText, BarChart3, LogOut, LayoutDashboard, Menu, X, Home, Plus, Trash2, LogIn, CheckCircle, XCircle, Edit, Sparkles, ArrowLeft } from 'lucide-react';
+import { Users, GraduationCap, FileText, BarChart3, LogOut, LayoutDashboard, Menu, Home, Plus, Trash2, CheckCircle, XCircle, Edit, Sparkles, ArrowLeft, Search } from 'lucide-react';
 
 interface User {
   id: string;
@@ -20,15 +21,28 @@ interface User {
 
 type MenuSection = 'dashboard' | 'students' | 'classes' | 'exams' | 'distributions' | 'reports';
 
-// DESIGN.md 2.4 등급 매핑. 1-2 우수 / 3-4 양호 / 5-6 보통 / 7-9 보완 필요.
-// 등급은 시스템 오류가 아니므로 낮은 등급에도 --fn-error 를 쓰지 않는다.
-const gradeBadgeClass = (grade?: number | string | null): string => {
+// 상단 GNB 3탭. 학생 점수를 보는 화면이 첫 탭이다 (DESIGN.md 11.6)
+type TopTab = 'grades' | 'manage' | 'exams';
+type StudentTab = 'history' | 'trend' | 'reports';
+
+const TOP_TABS: { id: TopTab; label: string; sections: MenuSection[] }[] = [
+  { id: 'grades', label: '성적 관리', sections: ['dashboard'] },
+  { id: 'manage', label: '학생·반 관리', sections: ['students', 'classes'] },
+  { id: 'exams', label: '시험 배포', sections: ['exams', 'distributions', 'reports'] },
+];
+
+/**
+ * 교사 관리 화면 전용 등급 스케일 (DESIGN.md 2.4 예외).
+ * 학생·학부모 화면과 AI 보고서 지면은 gradeBadgeClass 를 그대로 쓴다.
+ * 교사는 명단을 훑으며 성적 차이를 즉시 읽어야 하므로 등급대별 대비를 준다.
+ */
+const gradeBadgeOperate = (grade?: number | string | null): string => {
   const g = Number(grade);
   if (!g || Number.isNaN(g)) return 'border-line bg-surface-subtle text-ink-secondary';
-  if (g <= 2) return 'border-fn-success-border bg-fn-success-surface text-fn-success';
-  if (g <= 4) return 'border-fn-info-border bg-fn-info-surface text-fn-info';
-  if (g <= 6) return 'border-line bg-surface-subtle text-ink-secondary';
-  return 'border-fn-warning-border bg-fn-warning-surface text-fn-warning';
+  if (g <= 2) return 'border-fn-success bg-fn-success text-ink-inverse';
+  if (g <= 4) return 'border-fn-success-border bg-fn-success-surface text-fn-success';
+  if (g <= 6) return 'border-fn-warning-border bg-fn-warning-surface text-fn-warning';
+  return 'border-line-strong bg-surface-subtle text-ink-secondary';
 };
 
 export default function BranchDashboard({ user }: { user: User }) {
@@ -54,7 +68,72 @@ export default function BranchDashboard({ user }: { user: User }) {
   const [selectedDashboardView, setSelectedDashboardView] = useState<'students' | 'classes' | 'distributions' | 'exam-attempts' | null>(null);
   const [selectedDistributionId, setSelectedDistributionId] = useState<string | null>(null);
   const [selectedClassStudents, setSelectedClassStudents] = useState<string[]>([]);
+  const [classRosterLoading, setClassRosterLoading] = useState(false);
   const [gradeFilter, setGradeFilter] = useState<string>('');
+
+  // 학생 관리 목록 도구 상태 (DESIGN.md 11.2). 서버 호출은 늘리지 않고 전부 클라이언트에서 건다.
+  const [studentSearch, setStudentSearch] = useState('');
+  const [studentGradeTab, setStudentGradeTab] = useState<string>('all');
+  const [studentSort, setStudentSort] = useState<{ key: 'name' | 'grade'; dir: 'asc' | 'desc' }>({
+    key: 'name',
+    dir: 'asc',
+  });
+  const [studentPage, setStudentPage] = useState(1);
+  const STUDENTS_PER_PAGE = 20;
+
+  // ---- 학생 중심 네비게이션 (DESIGN.md 11.6) ----
+  // 상단 GNB 3탭 + 좌측 학생 패널 + 학생 컨텍스트 탭.
+  // 데이터 호출은 늘리지 않고 기존 쿼리 결과를 학생 기준으로 다시 묶기만 한다.
+  const [topTab, setTopTab] = useState<TopTab>('grades');
+  const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
+  const [studentTab, setStudentTab] = useState<StudentTab>('history');
+  const [panelSearch, setPanelSearch] = useState('');
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
+  const [panelOpen, setPanelOpen] = useState(false);
+  const [panelSort, setPanelSort] = useState<'name' | 'unattempted'>('name');
+
+  // 관리 목록 툴바 상태 (DESIGN.md 11.2). 전부 클라이언트 필터라 서버 호출이 늘지 않는다.
+  const [classSearch, setClassSearch] = useState('');
+  const [classRosterUnavailable, setClassRosterUnavailable] = useState(false);
+  const [distSearch, setDistSearch] = useState('');
+  const [distStatus, setDistStatus] = useState<'all' | 'upcoming' | 'ongoing' | 'ended'>('all');
+
+  // 응시 행을 펼쳐 보는 문항별 답안 패널 (DESIGN.md 11.6.5).
+  // 서버는 그대로 두고 기존 GET /api/exam-attempts/:id 만 쓴다.
+  const [openAttemptId, setOpenAttemptId] = useState<string | null>(null);
+  const [answerCache, setAnswerCache] = useState<Record<string, any>>({});
+  const [answerLoading, setAnswerLoading] = useState<string | null>(null);
+
+  // 모달 닫기 핸들러. Esc 와 취소 버튼이 동일 경로를 타도록 한 곳에 둔다.
+  const closeStudentModal = () => {
+    setShowStudentModal(false);
+    setEditingStudent(null);
+  };
+  const closeClassModal = () => {
+    setShowClassModal(false);
+    setEditingClass(null);
+    setSelectedClassStudents([]);
+    setGradeFilter('');
+  };
+  const closeRedistributeModal = () => {
+    setShowRedistributeModal(false);
+    setSelectedDistribution(null);
+    setSelectedClassId('');
+    setSelectedStudentIds([]);
+  };
+  const closeAnswerModal = () => {
+    setShowAnswerModal(false);
+    setSelectedAttempt(null);
+  };
+
+  const studentModalRef = useModalA11y<HTMLDivElement>({ active: showStudentModal, onClose: closeStudentModal });
+  const classModalRef = useModalA11y<HTMLDivElement>({ active: showClassModal, onClose: closeClassModal });
+  const redistributeModalRef = useModalA11y<HTMLDivElement>({ active: showRedistributeModal, onClose: closeRedistributeModal });
+  const answerModalRef = useModalA11y<HTMLDivElement>({ active: showAnswerModal, onClose: closeAnswerModal });
+  const drawerRef = useModalA11y<HTMLElement>({
+    active: sidebarOpen && isMobileViewport(),
+    onClose: () => setSidebarOpen(false),
+  });
 
   // 결과값은 쓰지 않지만 캐시 예열 목적으로 조회는 유지한다 (구독을 없애면 요청 자체가 사라진다)
   useQuery({
@@ -343,6 +422,14 @@ export default function BranchDashboard({ user }: { user: User }) {
 
   const handleClassSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+
+    // 현재 배정을 못 불러온 상태로 저장하면 서버가 studentIds 를 "전체 배정"으로
+    // 받아들여 기존 배정이 전부 해제된다. 그 경우 저장을 막는다.
+    if (editingClass && (classRosterUnavailable || classRosterLoading)) {
+      toast.error('배정 학생을 불러오는 중이거나 불러오지 못했습니다. 잠시 후 다시 시도해주세요.');
+      return;
+    }
+
     const formData = new FormData(e.currentTarget);
     const data = {
       name: formData.get('name'),
@@ -573,34 +660,29 @@ export default function BranchDashboard({ user }: { user: User }) {
 
       {/* 상세 정보 표 */}
       {selectedDashboardView === 'students' && (
-        <Card className="border-0 shadow-xl bg-surface mb-8">
-          <CardHeader className="border-b border-line-subtle bg-surface-subtle">
-            <CardTitle className="text-xl font-bold text-ink flex items-center gap-2">
-              <Users className="w-5 h-5 text-ink-secondary" />
-              학생 목록
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-6">
+        <section className="mb-6">
+          <h2 className="mb-2 border-l-[3px] border-action pl-2 text-sm font-bold tracking-wide text-ink">학생 목록</h2>
+          <div>
             {students && students.length > 0 ? (
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[640px] text-sm [&_td]:whitespace-nowrap [&_thead_th:first-child]:sticky [&_thead_th:first-child]:left-0 [&_thead_th:first-child]:z-10 [&_tbody_td:first-child]:sticky [&_tbody_td:first-child]:left-0 [&_tbody_td:first-child]:bg-surface">
+                <table className="w-full min-w-[640px] text-sm [&_td]:whitespace-nowrap">
                   <thead>
                     <tr className="border-b border-line-strong">
-                      <th className="text-left px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">이름</th>
-                      <th className="text-left px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">학년</th>
-                      <th className="text-left px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">학교</th>
-                      <th className="text-left px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">연락처</th>
-                      <th className="text-left px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">학부모 연락처</th>
+                      <th className="text-left px-3 py-2 text-xs font-semibold text-ink-secondary whitespace-nowrap">이름</th>
+                      <th className="text-left px-3 py-2 text-xs font-semibold text-ink-secondary whitespace-nowrap">학년</th>
+                      <th className="text-left px-3 py-2 text-xs font-semibold text-ink-secondary whitespace-nowrap">학교</th>
+                      <th className="text-left px-3 py-2 text-xs font-semibold text-ink-secondary whitespace-nowrap">연락처</th>
+                      <th className="text-left px-3 py-2 text-xs font-semibold text-ink-secondary whitespace-nowrap">학부모 연락처</th>
                     </tr>
                   </thead>
                   <tbody>
                     {students.map((student: any) => (
                       <tr key={student.id} className="border-b border-line-subtle hover:bg-surface-subtle transition-colors duration-150 ease-out">
-                        <td className="px-4 py-3 font-medium text-ink">{student.user?.name}</td>
-                        <td className="px-4 py-3 text-ink">{student.grade || '-'}</td>
-                        <td className="px-4 py-3 text-ink">{student.school || '-'}</td>
-                        <td className="px-4 py-3 text-ink">{student.user?.phone || '-'}</td>
-                        <td className="px-4 py-3 text-ink">{student.parentPhone || '-'}</td>
+                        <td className="px-3 py-1.5 font-medium text-ink">{student.user?.name}</td>
+                        <td className="px-3 py-1.5 text-ink">{student.grade || '-'}</td>
+                        <td className="px-3 py-1.5 text-ink">{student.school || '-'}</td>
+                        <td className="px-3 py-1.5 text-ink">{student.user?.phone || '-'}</td>
+                        <td className="px-3 py-1.5 text-ink">{student.parentPhone || '-'}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -612,37 +694,32 @@ export default function BranchDashboard({ user }: { user: User }) {
                 <p className="text-ink-secondary">등록된 학생이 없습니다.</p>
               </div>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </section>
       )}
 
       {selectedDashboardView === 'classes' && (
-        <Card className="border-0 shadow-xl bg-surface mb-8">
-          <CardHeader className="border-b border-line-subtle bg-surface-subtle">
-            <CardTitle className="text-xl font-bold text-ink flex items-center gap-2">
-              <Home className="w-5 h-5 text-fn-success" />
-              반 목록
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-6">
+        <section className="mb-6">
+          <h2 className="mb-2 border-l-[3px] border-action pl-2 text-sm font-bold tracking-wide text-ink">반 목록</h2>
+          <div>
             {classes && classes.length > 0 ? (
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[640px] text-sm [&_td]:whitespace-nowrap [&_thead_th:first-child]:sticky [&_thead_th:first-child]:left-0 [&_thead_th:first-child]:z-10 [&_tbody_td:first-child]:sticky [&_tbody_td:first-child]:left-0 [&_tbody_td:first-child]:bg-surface">
+                <table className="w-full min-w-[640px] text-sm [&_td]:whitespace-nowrap">
                   <thead>
                     <tr className="border-b border-line-strong">
-                      <th className="text-left px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">반 이름</th>
-                      <th className="text-left px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">학년</th>
-                      <th className="text-left px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">설명</th>
-                      <th className="text-left px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">생성일</th>
+                      <th className="text-left px-3 py-2 text-xs font-semibold text-ink-secondary whitespace-nowrap">반 이름</th>
+                      <th className="text-left px-3 py-2 text-xs font-semibold text-ink-secondary whitespace-nowrap">학년</th>
+                      <th className="text-left px-3 py-2 text-xs font-semibold text-ink-secondary whitespace-nowrap">설명</th>
+                      <th className="text-left px-3 py-2 text-xs font-semibold text-ink-secondary whitespace-nowrap">생성일</th>
                     </tr>
                   </thead>
                   <tbody>
                     {classes.map((cls: any) => (
                       <tr key={cls.id} className="border-b border-line-subtle hover:bg-surface-subtle transition-colors duration-150 ease-out">
-                        <td className="px-4 py-3 font-medium text-ink">{cls.name}</td>
-                        <td className="px-4 py-3 text-ink">{cls.grade || '-'}</td>
-                        <td className="px-4 py-3 text-ink">{cls.description || '-'}</td>
-                        <td className="px-4 py-3 text-ink">{new Date(cls.createdAt).toLocaleDateString('ko-KR')}</td>
+                        <td className="px-3 py-1.5 font-medium text-ink">{cls.name}</td>
+                        <td className="px-3 py-1.5 text-ink">{cls.grade || '-'}</td>
+                        <td className="px-3 py-1.5 text-ink">{cls.description || '-'}</td>
+                        <td className="px-3 py-1.5 text-ink">{new Date(cls.createdAt).toLocaleDateString('ko-KR')}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -654,19 +731,14 @@ export default function BranchDashboard({ user }: { user: User }) {
                 <p className="text-ink-secondary">등록된 반이 없습니다.</p>
               </div>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </section>
       )}
 
       {selectedDashboardView === 'exam-attempts' && (
-        <Card className="border-0 shadow-xl bg-surface mb-8">
-          <CardHeader className="border-b border-line-subtle bg-surface-subtle">
-            <CardTitle className="text-xl font-bold text-ink flex items-center gap-2">
-              <BarChart3 className="w-5 h-5 text-fn-info" />
-              시험 응시 및 채점 학생
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-6">
+        <section className="mb-6">
+          <h2 className="mb-2 border-l-[3px] border-action pl-2 text-sm font-bold tracking-wide text-ink">시험 응시 및 채점 학생</h2>
+          <div>
             {allDistributionStudents && allDistributionStudents.length > 0 ? (
               <div className="space-y-6">
                 {allDistributionStudents
@@ -692,40 +764,40 @@ export default function BranchDashboard({ user }: { user: User }) {
                       </div>
 
                       <div className="overflow-x-auto">
-                        <table className="w-full min-w-[640px] text-sm [&_td]:whitespace-nowrap [&_thead_th:first-child]:sticky [&_thead_th:first-child]:left-0 [&_thead_th:first-child]:z-10 [&_tbody_td:first-child]:sticky [&_tbody_td:first-child]:left-0 [&_tbody_td:first-child]:bg-surface">
+                        <table className="w-full min-w-[640px] text-sm [&_td]:whitespace-nowrap">
                           <thead>
                             <tr className="border-b border-line-subtle">
-                              <th className="text-left px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">학생</th>
-                              <th className="text-center px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">점수</th>
-                              <th className="text-center px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">등급</th>
-                              <th className="text-center px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">상태</th>
-                              <th className="text-center px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">작업</th>
+                              <th className="text-left px-3 py-2 text-xs font-semibold text-ink-secondary whitespace-nowrap">학생</th>
+                              <th className="text-left px-3 py-2 text-xs font-semibold text-ink-secondary whitespace-nowrap">점수</th>
+                              <th className="text-left px-3 py-2 text-xs font-semibold text-ink-secondary whitespace-nowrap">등급</th>
+                              <th className="text-left px-3 py-2 text-xs font-semibold text-ink-secondary whitespace-nowrap">상태</th>
+                              <th className="text-left px-3 py-2 text-xs font-semibold text-ink-secondary whitespace-nowrap">작업</th>
                             </tr>
                           </thead>
                           <tbody>
                             {allStudents.map((student: any) => (
                               <tr key={student.studentId} className="border-b border-line-subtle hover:bg-surface-subtle transition-colors duration-150 ease-out">
-                                <td className="px-4 py-3 font-medium text-ink">{student.studentName}</td>
-                                <td className="px-4 py-3 text-center text-ink">
+                                <td className="px-3 py-1.5 font-medium text-ink">{student.studentName}</td>
+                                <td className="px-3 py-1.5 text-center text-ink">
                                   {student.hasAttempt ? `${student.score || 0} / ${student.maxScore || 0}` : '- / -'}
                                 </td>
-                                <td className="px-4 py-3 text-center">
+                                <td className="px-3 py-1.5 text-center">
                                   {student.hasAttempt && student.grade ? (
-                                    <span className={`inline-block rounded-sm border px-2 py-0.5 text-xs font-semibold ${gradeBadgeClass(student.grade)}`}>
+                                    <span className={`inline-block rounded-sm border px-2 py-0.5 text-xs font-semibold ${gradeBadgeOperate(student.grade)}`}>
                                       {student.grade}등급
                                     </span>
                                   ) : (
                                     '-'
                                   )}
                                 </td>
-                                <td className="px-4 py-3 text-center">
+                                <td className="px-3 py-1.5 text-center">
                                   {student.hasAttempt ? (
                                     student.isSubmitted ? (
-                                      <span className="inline-block px-2 py-1 bg-fn-success-surface text-fn-success rounded text-xs font-medium">
+                                      <span className="text-xs text-ink-secondary">
                                         제출 완료
                                       </span>
                                     ) : (
-                                      <span className="inline-block px-2 py-1 bg-fn-warning-surface text-fn-warning rounded text-xs font-medium">
+                                      <span className="text-xs text-fn-warning">
                                         작성 중
                                       </span>
                                     )
@@ -735,7 +807,7 @@ export default function BranchDashboard({ user }: { user: User }) {
                                     </span>
                                   )}
                                 </td>
-                                <td className="px-4 py-3">
+                                <td className="px-3 py-1.5">
                                   <div className="flex gap-1 justify-center flex-wrap">
                                     {student.hasAttempt ? (
                                       <>
@@ -790,7 +862,7 @@ export default function BranchDashboard({ user }: { user: User }) {
                                                 });
                                             }
                                           }}
-                                          className="border-fn-error-border text-fn-error hover:bg-fn-error-surface"
+                                          className="border-fn-error-border text-fn-error hover:bg-surface-subtle"
                                         >
                                           <Trash2 className="w-3 h-3 mr-1" />
                                           삭제
@@ -874,20 +946,15 @@ export default function BranchDashboard({ user }: { user: User }) {
                 <p className="text-ink-secondary">배부된 시험이 없습니다.</p>
               </div>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </section>
       )}
 
       {/* 최근 활동 - 시험 응시 학생 */}
       {!selectedDashboardView && (
-        <Card className="border-0 shadow-xl bg-surface">
-          <CardHeader className="border-b border-line-subtle bg-surface-subtle">
-            <CardTitle className="text-xl font-bold text-ink flex items-center gap-2">
-              <BarChart3 className="w-5 h-5 text-ink-secondary" />
-              시험 응시 학생
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-6">
+        <section className="mb-6">
+          <h2 className="mb-2 border-l-[3px] border-action pl-2 text-sm font-bold tracking-wide text-ink">시험 응시 학생</h2>
+          <div>
             {allDistributionStudents && allDistributionStudents.length > 0 ? (
               <div className="space-y-6">
                 {allDistributionStudents.map((distData: any) => {
@@ -896,7 +963,7 @@ export default function BranchDashboard({ user }: { user: User }) {
                   if (studentsWithAttempts.length === 0) return null;
 
                   return (
-                    <div key={distData.distribution.id} className="border-2 border-line rounded-lg p-4">
+                    <div key={distData.distribution.id} className="border border-line p-4">
                       <div className="flex items-center justify-between mb-4">
                         <div>
                           <h3 className="text-lg font-bold text-ink">{distData.exam?.title}</h3>
@@ -911,44 +978,44 @@ export default function BranchDashboard({ user }: { user: User }) {
                       </div>
 
                       <div className="overflow-x-auto">
-                        <table className="w-full min-w-[640px] text-sm [&_td]:whitespace-nowrap [&_thead_th:first-child]:sticky [&_thead_th:first-child]:left-0 [&_thead_th:first-child]:z-10 [&_tbody_td:first-child]:sticky [&_tbody_td:first-child]:left-0 [&_tbody_td:first-child]:bg-surface">
+                        <table className="w-full min-w-[640px] text-sm [&_td]:whitespace-nowrap">
                           <thead>
                             <tr className="border-b border-line">
-                              <th className="text-left px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">학생</th>
-                              <th className="text-center px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">점수</th>
-                              <th className="text-center px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">등급</th>
-                              <th className="text-center px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">상태</th>
-                              <th className="text-center px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">작업</th>
+                              <th className="text-left px-3 py-2 text-xs font-semibold text-ink-secondary whitespace-nowrap">학생</th>
+                              <th className="text-left px-3 py-2 text-xs font-semibold text-ink-secondary whitespace-nowrap">점수</th>
+                              <th className="text-left px-3 py-2 text-xs font-semibold text-ink-secondary whitespace-nowrap">등급</th>
+                              <th className="text-left px-3 py-2 text-xs font-semibold text-ink-secondary whitespace-nowrap">상태</th>
+                              <th className="text-left px-3 py-2 text-xs font-semibold text-ink-secondary whitespace-nowrap">작업</th>
                             </tr>
                           </thead>
                           <tbody>
                             {studentsWithAttempts.map((student: any) => (
                               <tr key={student.studentId} className="border-b border-line-subtle hover:bg-surface-subtle transition-colors duration-150 ease-out">
-                                <td className="px-4 py-3 font-medium text-ink">{student.studentName}</td>
-                                <td className="px-4 py-3 text-center text-ink">
+                                <td className="px-3 py-1.5 font-medium text-ink">{student.studentName}</td>
+                                <td className="px-3 py-1.5 text-center text-ink">
                                   {student.score || 0} / {student.maxScore || 0}
                                 </td>
-                                <td className="px-4 py-3 text-center">
+                                <td className="px-3 py-1.5 text-center">
                                   {student.grade ? (
-                                    <span className={`inline-block rounded-sm border px-2 py-0.5 text-xs font-semibold ${gradeBadgeClass(student.grade)}`}>
+                                    <span className={`inline-block rounded-sm border px-2 py-0.5 text-xs font-semibold ${gradeBadgeOperate(student.grade)}`}>
                                       {student.grade}등급
                                     </span>
                                   ) : (
                                     '-'
                                   )}
                                 </td>
-                                <td className="px-4 py-3 text-center">
+                                <td className="px-3 py-1.5 text-center">
                                   {student.isSubmitted ? (
-                                    <span className="inline-block px-2 py-1 bg-fn-success-surface text-fn-success rounded text-xs font-medium">
+                                    <span className="text-xs text-ink-secondary">
                                       제출 완료
                                     </span>
                                   ) : (
-                                    <span className="inline-block px-2 py-1 bg-fn-warning-surface text-fn-warning rounded text-xs font-medium">
+                                    <span className="text-xs text-fn-warning">
                                       작성 중
                                     </span>
                                   )}
                                 </td>
-                                <td className="px-4 py-3">
+                                <td className="px-3 py-1.5">
                                   <div className="flex gap-1 justify-center flex-wrap">
                                     {/* 수정 버튼 */}
                                     <Button
@@ -1000,7 +1067,7 @@ export default function BranchDashboard({ user }: { user: User }) {
                                             });
                                         }
                                       }}
-                                      className="border-fn-error-border text-fn-error hover:bg-fn-error-surface"
+                                      className="border-fn-error-border text-fn-error hover:bg-surface-subtle"
                                     >
                                       <Trash2 className="w-3 h-3 mr-1" />
                                       삭제
@@ -1051,174 +1118,1018 @@ export default function BranchDashboard({ user }: { user: User }) {
                 <p className="text-sm text-ink-tertiary mt-2">위의 카드를 클릭하여 상세 정보를 확인하세요.</p>
               </div>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </section>
       )}
     </>
   );
 
-  const renderStudents = () => (
-    <>
-      <Card className="border-0 shadow-xl bg-surface">
-        <CardHeader className="border-b border-line-subtle bg-surface-subtle">
-          <div className="flex justify-between items-center">
-            <CardTitle className="text-xl font-bold text-ink flex items-center gap-2">
-              <Users className="w-5 h-5 text-ink-secondary" />
-              학생 관리
-            </CardTitle>
-            <Button
-              onClick={() => {
-                setEditingStudent(null);
-                setShowStudentModal(true);
-              }}
-              className="bg-action hover:bg-action-hover"
+  // ---- 학생 목록 파생 데이터. 원본 배열은 건드리지 않는다. ----
+  const studentList: any[] = Array.isArray(students) ? students : [];
+
+  // 학년 세그먼트는 실제 데이터에서 뽑는다 (없는 학년 버튼을 만들지 않는다)
+  const gradeTabs = Array.from(
+    new Set(studentList.map((s: any) => String(s.grade || '').trim()).filter(Boolean))
+  ).sort((a, b) => a.localeCompare(b, 'ko'));
+
+  const filteredStudents = studentList.filter((s: any) => {
+    if (studentGradeTab !== 'all' && String(s.grade || '').trim() !== studentGradeTab) return false;
+    const q = studentSearch.trim().toLowerCase();
+    if (!q) return true;
+    return [s.user?.name, s.user?.phone, s.user?.username, s.school, s.parentPhone, s.parent?.user?.name]
+      .some((v: any) => String(v || '').toLowerCase().includes(q));
+  });
+
+  const sortedStudents = filteredStudents.slice().sort((a: any, b: any) => {
+    const dir = studentSort.dir === 'asc' ? 1 : -1;
+    if (studentSort.key === 'grade') {
+      return String(a.grade || '').localeCompare(String(b.grade || ''), 'ko') * dir;
+    }
+    return String(a.user?.name || '').localeCompare(String(b.user?.name || ''), 'ko') * dir;
+  });
+
+  const studentPageCount = Math.max(1, Math.ceil(sortedStudents.length / STUDENTS_PER_PAGE));
+  const currentStudentPage = Math.min(studentPage, studentPageCount);
+  const pagedStudents = sortedStudents.slice(
+    (currentStudentPage - 1) * STUDENTS_PER_PAGE,
+    currentStudentPage * STUDENTS_PER_PAGE
+  );
+
+  /** 필터가 바뀌면 1쪽으로 돌린다 (DESIGN.md 11.2) */
+  const resetStudentPage = () => setStudentPage(1);
+
+  const toggleStudentSort = (key: 'name' | 'grade') =>
+    setStudentSort((prev) => ({
+      key,
+      dir: prev.key === key && prev.dir === 'asc' ? 'desc' : 'asc',
+    }));
+
+  const sortMark = (key: 'name' | 'grade') =>
+    studentSort.key !== key ? '' : studentSort.dir === 'asc' ? ' ▲' : ' ▼';
+
+  const openStudentEditor = (student: any) => {
+    setEditingStudent(student);
+    setShowStudentModal(true);
+  };
+
+  const impersonateStudent = (student: any) => {
+    if (confirm(`${student.user?.name} 학생으로 로그인하시겠습니까?`)) {
+      loginAsStudentMutation.mutate(student.id);
+    }
+  };
+
+  // ===================================================================
+  // 학생 중심 뷰 (DESIGN.md 11.6).
+  // allDistributionStudents 는 배포 기준으로 묶여 있다. 같은 데이터를
+  // 학생 기준으로 뒤집기만 하고 새 API 를 부르지 않는다.
+  // ===================================================================
+  type ExamRow = {
+    distributionId: string;
+    examTitle: string;
+    subject: string;
+    score: number | null;
+    maxScore: number | null;
+    grade: number | null;
+    submittedAt: string | null;
+    isSubmitted: boolean;
+    hasAttempt: boolean;
+    hasReport: boolean;
+    attemptId: string | null;
+  };
+
+  const examsByStudent = new Map<string, ExamRow[]>();
+  (Array.isArray(allDistributionStudents) ? allDistributionStudents : []).forEach((distData: any) => {
+    const dist = distData?.distribution;
+    if (!dist) return;
+    (distData.students || []).forEach((row: any) => {
+      if (!examsByStudent.has(row.studentId)) examsByStudent.set(row.studentId, []);
+      examsByStudent.get(row.studentId)!.push({
+        distributionId: dist.id,
+        examTitle: distData.exam?.title || dist.exam?.title || '-',
+        subject: distData.exam?.subject || dist.exam?.subject || '',
+        score: row.score ?? null,
+        maxScore: row.maxScore ?? null,
+        grade: row.grade ?? null,
+        submittedAt: row.submittedAt ?? null,
+        isSubmitted: !!row.isSubmitted,
+        hasAttempt: !!row.hasAttempt,
+        hasReport: !!row.hasReport,
+        attemptId: row.attemptId ?? null,
+      });
+    });
+  });
+  // 최신 응시가 위로 오도록 정렬 (제출일 없으면 뒤로)
+  examsByStudent.forEach((rows) =>
+    rows.sort((a, b) => {
+      const ta = a.submittedAt ? new Date(a.submittedAt).getTime() : 0;
+      const tb = b.submittedAt ? new Date(b.submittedAt).getTime() : 0;
+      return tb - ta;
+    })
+  );
+
+  const selectedStudent = studentList.find((s: any) => s.id === selectedStudentId) || null;
+  const selectedStudentExams = selectedStudentId ? examsByStudent.get(selectedStudentId) || [] : [];
+
+  // 패널용 학년 그룹. 반 정보는 학생 목록 API 가 주지 않으므로 이번에는 학년만 쓴다.
+  const panelFiltered = studentList.filter((s: any) => {
+    const q = panelSearch.trim().toLowerCase();
+    if (!q) return true;
+    return String(s.user?.name || '').toLowerCase().includes(q);
+  });
+  const panelGroups = Array.from(
+    panelFiltered.reduce((m: Map<string, any[]>, s: any) => {
+      const key = String(s.grade || '').trim() || '학년 미지정';
+      if (!m.has(key)) m.set(key, []);
+      m.get(key)!.push(s);
+      return m;
+    }, new Map<string, any[]>())
+  ).sort((a, b) => a[0].localeCompare(b[0], 'ko'));
+
+  const pickStudent = (id: string) => {
+    setSelectedStudentId(id);
+    setStudentTab('history');
+    setPanelOpen(false);
+    setOpenAttemptId(null);
+  };
+
+  /** 패널 정렬: 이름순 또는 미응시 우선 (미응시가 많은 학생을 위로) */
+  const unattemptedCount = (studentId: string) =>
+    (examsByStudent.get(studentId) || []).filter((r) => !r.isSubmitted).length;
+
+  const allGroupsCollapsed =
+    panelGroups.length > 0 && panelGroups.every(([name]) => collapsedGroups[name]);
+
+  const toggleAllGroups = () => {
+    if (allGroupsCollapsed) {
+      setCollapsedGroups({});
+    } else {
+      const next: Record<string, boolean> = {};
+      panelGroups.forEach(([name]) => {
+        next[name] = true;
+      });
+      setCollapsedGroups(next);
+    }
+  };
+
+  const sortPanelStudents = (rows: any[]) =>
+    rows.slice().sort((a: any, b: any) => {
+      if (panelSort === 'unattempted') {
+        const d = unattemptedCount(b.id) - unattemptedCount(a.id);
+        if (d !== 0) return d;
+      }
+      return String(a.user?.name || '').localeCompare(String(b.user?.name || ''), 'ko');
+    });
+
+  /** 학생 헤더 요약 지표. 제출 완료 건만 집계한다. */
+  const studentSummary = (() => {
+    if (!selectedStudentId) return null;
+    const submitted = (examsByStudent.get(selectedStudentId) || []).filter((r) => r.isSubmitted);
+    if (submitted.length === 0) return null;
+    const scores = submitted.map((r) => Number(r.score) || 0);
+    const avg = Math.round(scores.reduce((s, v) => s + v, 0) / scores.length);
+    const best = Math.max(...scores);
+    const latest = submitted.find((r) => r.grade !== null);
+    return { count: submitted.length, avg, best, grade: latest ? Number(latest.grade) : null };
+  })();
+
+  /** 답안 입력/수정 모달을 성적 관리 탭에서 바로 연다. 기존 핸들러와 같은 형태로 넘긴다. */
+  const openAnswerEditor = async (r: ExamRow) => {
+    if (!selectedStudent) return;
+    const base: any = {
+      studentId: selectedStudent.id,
+      studentName: selectedStudent.user?.name,
+      attemptId: r.attemptId,
+      hasAttempt: r.hasAttempt,
+      isSubmitted: r.isSubmitted,
+      score: r.score,
+      maxScore: r.maxScore,
+      submittedAt: r.submittedAt,
+      distributionId: r.distributionId,
+      answers: {},
+    };
+    if (r.attemptId) {
+      try {
+        const res = await api.get(`/exam-attempts/${r.attemptId}`);
+        base.answers = (res.data.data || res.data)?.answers || {};
+      } catch (error: any) {
+        toast.error(error.response?.data?.message || '답안 정보를 불러오는데 실패했습니다.');
+        return;
+      }
+    }
+    setSelectedAttempt(base);
+    setShowAnswerModal(true);
+  };
+
+  const renderStudentPanel = () => (
+    <div className="flex h-full flex-col bg-surface">
+      <div className="border-b border-line px-4 py-3">
+        <p className="text-xs font-semibold tracking-wide text-ink-tertiary">학생 성적</p>
+        <p className="mt-0.5 truncate text-base font-semibold text-ink">
+          {selectedStudent ? selectedStudent.user?.name : '학생을 선택하세요'}
+        </p>
+      </div>
+      <div className="border-b border-line px-4 py-2.5">
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-tertiary" strokeWidth={1.5} />
+          <Input
+            value={panelSearch}
+            onChange={(e) => setPanelSearch(e.target.value)}
+            placeholder="학생 이름 검색"
+            aria-label="학생 이름 검색"
+            className="h-9 pl-9"
+          />
+        </div>
+      </div>
+      {/* 패널 보조 컨트롤 (DESIGN.md 11.6.2) */}
+      <div className="flex items-center gap-1 border-b border-line px-3 py-1.5">
+        <button
+          type="button"
+          onClick={toggleAllGroups}
+          className="h-7 rounded-sm border border-line px-2 text-xs text-ink-secondary transition-colors duration-150 ease-out hover:bg-surface-subtle hover:text-ink"
+        >
+          {allGroupsCollapsed ? '전체 펴기' : '전체 접기'}
+        </button>
+        <button
+          type="button"
+          onClick={() => setPanelSort((p) => (p === 'name' ? 'unattempted' : 'name'))}
+          title="눌러서 정렬 기준을 바꿉니다"
+          className="ml-auto h-7 rounded-sm border border-line px-2 text-xs text-ink-secondary transition-colors duration-150 ease-out hover:bg-surface-subtle hover:text-ink"
+        >
+          정렬 · {panelSort === 'name' ? '이름순' : '미응시 우선'}
+        </button>
+      </div>
+      <nav className="flex-1 overflow-y-auto py-1" aria-label="학생 목록">
+        {panelGroups.length === 0 && (
+          <p className="px-4 py-6 text-center text-xs text-ink-tertiary">일치하는 학생이 없습니다.</p>
+        )}
+        {panelGroups.map(([groupName, groupStudents]) => {
+          const collapsed = !!collapsedGroups[groupName];
+          return (
+            <div key={groupName}>
+              <button
+                type="button"
+                onClick={() => setCollapsedGroups((p) => ({ ...p, [groupName]: !p[groupName] }))}
+                aria-expanded={!collapsed}
+                className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-ink-secondary transition-colors duration-150 ease-out hover:bg-surface-subtle"
+              >
+                <span className="w-3 flex-shrink-0 text-xs text-ink-tertiary">{collapsed ? '▸' : '▾'}</span>
+                <span className="font-semibold text-ink">{groupName}</span>
+                <span className="ml-auto tabular-nums text-xs text-ink-tertiary">{groupStudents.length}명</span>
+              </button>
+              {!collapsed &&
+                sortPanelStudents(groupStudents)
+                  .map((s: any) => {
+                    const active = s.id === selectedStudentId;
+                    return (
+                      <button
+                        key={s.id}
+                        type="button"
+                        onClick={() => pickStudent(s.id)}
+                        aria-current={active ? 'true' : undefined}
+                        className={`flex w-full items-center py-1.5 pl-9 pr-3 text-left text-sm transition-colors duration-150 ease-out ${
+                          active
+                            ? 'bg-surface-subtle font-semibold text-ink'
+                            : 'text-ink-secondary hover:bg-surface-subtle'
+                        }`}
+                      >
+                        {/* 사이드는 이름만. 성적은 본문에서 본다 (DESIGN.md 11.6.2) */}
+                        <span className="truncate">{s.user?.name}</span>
+                      </button>
+                    );
+                  })}
+            </div>
+          );
+        })}
+      </nav>
+    </div>
+  );
+
+  /**
+   * 보고서 확보 후 실제로 연다. ensureReport 는 참조만 돌려주므로
+   * 그것만 부르면 사용자에게는 아무 일도 일어나지 않는다 (학생·학부모 화면과 같은 흐름).
+   */
+  const openStudentReport = async (attemptId: string) => {
+    try {
+      const ref = await ensureReport(attemptId, (stage) => {
+        if (stage === 'generating') {
+          toast.info('AI 분석을 시작했습니다...', '완료까지 시간이 걸릴 수 있습니다.');
+        }
+      });
+      await openFullReport(ref);
+      refetchAllDistributionStudents();
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || error.message || '보고서를 열 수 없습니다.');
+    }
+  };
+
+  /** 배포 id 로 시험 원본(questionsData 포함)을 찾는다. 이미 받아 둔 응답에서만 꺼낸다. */
+  const examOfDistribution = (distributionId: string): any | null => {
+    const found = (Array.isArray(allDistributionStudents) ? allDistributionStudents : []).find(
+      (d: any) => d?.distribution?.id === distributionId
+    );
+    return found?.exam || null;
+  };
+
+  const CIRCLED = ['①', '②', '③', '④', '⑤', '⑥', '⑦', '⑧', '⑨', '⑩'];
+  /** 객관식 번호는 원문자로, 그 밖(주관식 등)은 값 그대로 보여 준다. */
+  const answerLabel = (v: any): string => {
+    if (v === null || v === undefined || v === '') return '-';
+    const n = Number(v);
+    if (Number.isInteger(n) && n >= 1 && n <= CIRCLED.length) return CIRCLED[n - 1];
+    return String(v);
+  };
+
+  const toggleAnswerPanel = async (row: ExamRow) => {
+    if (!row.isSubmitted || !row.attemptId) return;
+    if (openAttemptId === row.attemptId) {
+      setOpenAttemptId(null);
+      return;
+    }
+    setOpenAttemptId(row.attemptId);
+    if (answerCache[row.attemptId]) return;
+    setAnswerLoading(row.attemptId);
+    try {
+      const res = await api.get(`/exam-attempts/${row.attemptId}`);
+      const data = res.data.data || res.data;
+      setAnswerCache((prev) => ({ ...prev, [row.attemptId!]: data }));
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || '답안 정보를 불러오지 못했습니다.');
+      setOpenAttemptId(null);
+    } finally {
+      setAnswerLoading(null);
+    }
+  };
+
+  const renderAnswerPanel = (row: ExamRow) => {
+    const attempt = row.attemptId ? answerCache[row.attemptId] : null;
+    if (answerLoading === row.attemptId) {
+      return <p className="px-3 py-6 text-center text-sm text-ink-secondary">답안을 불러오는 중입니다.</p>;
+    }
+    if (!attempt) return null;
+
+    const answers: any = attempt.answers || {};
+    // O/X 수동 채점 기록은 값이 정답 번호가 아니라 O=1 / X=0 이다.
+    const isOx = answers._gradingMode === 'ox';
+    const exam = examOfDistribution(row.distributionId);
+    const questions: any[] = Array.isArray(exam?.questionsData) ? exam.questionsData : [];
+
+    const items = (questions.length > 0
+      ? questions.map((q: any, i: number) => {
+          const num = q.number || i + 1;
+          const raw = answers[String(num)];
+          const correct = isOx ? Number(raw) === 1 : raw === q.correctAnswer;
+          return {
+            num,
+            raw,
+            correctAnswer: q.correctAnswer ?? null,
+            points: Number(q.points ?? q.score) || 0,
+            answered: raw !== undefined && raw !== null && raw !== '' && Number(raw) !== 0,
+            correct,
+          };
+        })
+      : Object.keys(answers)
+          .filter((k) => !k.startsWith('_'))
+          .map((k) => ({
+            num: Number(k),
+            raw: answers[k],
+            correctAnswer: null,
+            points: 0,
+            answered: true,
+            correct: isOx ? Number(answers[k]) === 1 : false,
+          }))
+          .sort((a, b) => a.num - b.num));
+
+    const correctCount = items.filter((it) => it.correct).length;
+    const earned = items.reduce((s, it) => s + (it.correct ? it.points : 0), 0);
+
+    return (
+      <div className="border-t border-line bg-surface-subtle px-3 py-3">
+        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 pb-2">
+          <p className="text-sm font-semibold text-ink">{row.examTitle}</p>
+          <span className="text-xs text-ink-tertiary">
+            {row.submittedAt ? new Date(row.submittedAt).toLocaleString('ko-KR') : '-'} 제출
+          </span>
+          {row.grade ? (
+            <span className={`rounded-sm border px-1.5 py-0.5 text-[10px] font-semibold ${gradeBadgeOperate(row.grade)}`}>
+              {row.grade}등급
+            </span>
+          ) : null}
+          <span className="ml-auto flex items-baseline gap-1">
+            <span className="text-xl font-bold tabular-nums text-ink">{row.score ?? 0}</span>
+            <span className="text-xs text-ink-tertiary">/ {row.maxScore ?? 0}점</span>
+          </span>
+          <button
+            type="button"
+            onClick={() => setOpenAttemptId(null)}
+            aria-label="답안 패널 닫기"
+            className="h-7 w-7 rounded-sm border border-line text-ink-secondary transition-colors duration-150 ease-out hover:bg-surface hover:text-ink"
+          >
+            ×
+          </button>
+        </div>
+
+        <p className="mb-2 border-y border-line bg-surface px-2 py-1.5 text-xs text-ink-secondary">
+          {items.length}문항 중 <b className="text-ink">{correctCount}문항</b> 정답
+          {items.length > 0 && earned > 0 ? ` · 취득 ${earned}점` : ''}
+          {isOx ? ' · 지점에서 O/X 수동 채점한 기록이라 선택 답안이 없습니다.' : ''}
+        </p>
+
+        {/* 45문항을 세로로 나열하면 지면이 길어진다. 폭에 따라 2~3열로 접는다 */}
+        <div className="grid grid-cols-1 gap-x-3 gap-y-1 sm:grid-cols-2 xl:grid-cols-3">
+          {items.map((it) => (
+            <div
+              key={it.num}
+              className={`flex items-center gap-2 border-l-[3px] px-2 py-1.5 text-sm ${
+                it.correct
+                  ? 'border-fn-success bg-fn-success-surface'
+                  : it.answered
+                    ? 'border-fn-error bg-surface'
+                    : 'border-line bg-surface'
+              }`}
             >
-              <Plus className="w-4 h-4 mr-2" />
-              학생 추가
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent className="p-6">
-          {students && students.length > 0 ? (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[640px] text-sm [&_td]:whitespace-nowrap [&_thead_th:first-child]:sticky [&_thead_th:first-child]:left-0 [&_thead_th:first-child]:z-10 [&_tbody_td:first-child]:sticky [&_tbody_td:first-child]:left-0 [&_tbody_td:first-child]:bg-surface">
-                <thead>
-                  <tr className="border-b border-line-strong">
-                    <th className="text-left px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">이름</th>
-                    <th className="text-left px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">학년</th>
-                    <th className="text-left px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">학교</th>
-                    <th className="text-left px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">아이디</th>
-                    <th className="text-left px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">연락처</th>
-                    <th className="text-center px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">작업</th>
+              <span className="w-8 flex-shrink-0 text-xs tabular-nums text-ink-tertiary">{it.num}번</span>
+              <span className="w-8 flex-shrink-0 text-center font-semibold text-ink">
+                {isOx ? (Number(it.raw) === 1 ? 'O' : 'X') : it.answered ? answerLabel(it.raw) : '-'}
+              </span>
+              {!isOx && (
+                <span className="w-14 flex-shrink-0 text-xs text-ink-tertiary">
+                  정답 {answerLabel(it.correctAnswer)}
+                </span>
+              )}
+              <span
+                className={`ml-auto flex-shrink-0 text-sm font-bold ${
+                  it.correct ? 'text-fn-success' : 'text-fn-error'
+                }`}
+              >
+                {it.correct ? 'O' : 'X'}
+              </span>
+              {it.points > 0 && (
+                <span className="w-8 flex-shrink-0 text-right text-xs tabular-nums text-ink-tertiary">
+                  {it.points}점
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {questions.length === 0 && (
+          <p className="mt-2 text-xs text-ink-tertiary">
+            이 시험의 문항 정보가 없어 정답 대조 없이 제출한 답만 표시했습니다.
+          </p>
+        )}
+      </div>
+    );
+  };
+
+  const renderStudentContext = () => {
+    if (!selectedStudent) return renderDashboard();
+    const submitted = selectedStudentExams.filter((r) => r.isSubmitted);
+    const tabs: { id: StudentTab; label: string }[] = [
+      { id: 'history', label: '응시 이력' },
+      { id: 'trend', label: '성적 추이' },
+      { id: 'reports', label: '보고서' },
+    ];
+    return (
+      <>
+        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+          <h1 className="text-xl font-semibold tracking-[-0.015em] text-ink">{selectedStudent.user?.name}</h1>
+          <span className="text-sm text-ink-tertiary">
+            {selectedStudent.grade || '학년 미지정'} · {selectedStudent.school || '학교 미등록'}
+          </span>
+          <button
+            type="button"
+            onClick={() => impersonateStudent(selectedStudent)}
+            className="ml-auto h-8 rounded-sm border border-line px-3 text-xs text-ink-secondary transition-colors duration-150 ease-out hover:bg-surface-subtle hover:text-ink"
+          >
+            학생 화면
+          </button>
+        </div>
+        {/* 요약 지표: 제출 완료 건만 집계 (DESIGN.md 11.6.3) */}
+        <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-ink-secondary">
+          {studentSummary ? (
+            <>
+              <span>응시 <b className="tabular-nums text-ink">{studentSummary.count}</b>회</span>
+              <span className="text-ink-tertiary">·</span>
+              <span>평균 <b className="tabular-nums text-ink">{studentSummary.avg}</b>점</span>
+              <span className="text-ink-tertiary">·</span>
+              <span>최고 <b className="tabular-nums text-ink">{studentSummary.best}</b>점</span>
+              {studentSummary.grade !== null && (
+                <>
+                  <span className="text-ink-tertiary">·</span>
+                  <span className="flex items-center gap-1">
+                    최근
+                    <span className={`rounded-sm border px-1.5 py-0.5 text-xs font-semibold ${gradeBadgeOperate(studentSummary.grade)}`}>
+                      {studentSummary.grade}등급
+                    </span>
+                  </span>
+                </>
+              )}
+            </>
+          ) : (
+            <span className="text-ink-tertiary">응시 기록 없음</span>
+          )}
+        </p>
+
+        {/* 학생 컨텍스트 탭 */}
+        <div className="mt-3 flex gap-1 overflow-x-auto border-b border-line">
+          {tabs.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => setStudentTab(t.id)}
+              aria-current={studentTab === t.id ? 'page' : undefined}
+              className={`-mb-px whitespace-nowrap border-b-2 px-3 py-2 text-sm transition-colors duration-150 ease-out ${
+                studentTab === t.id
+                  ? 'border-action font-semibold text-ink'
+                  : 'border-transparent text-ink-secondary hover:text-ink'
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        {studentTab === 'history' && (
+          selectedStudentExams.length === 0 ? (
+            <p className="mt-4 border border-line bg-surface-subtle py-10 text-center text-sm text-ink-secondary">
+              배포된 시험이 없습니다.
+            </p>
+          ) : (
+            <table className="mt-3 w-full text-sm">
+              <thead>
+                <tr className="border-b border-line-strong">
+                  <th className="px-3 py-2 text-left text-xs font-semibold text-ink-secondary">시험</th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold text-ink-secondary">응시일</th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold text-ink-secondary">상태</th>
+                  <th className="px-3 py-2 text-right text-xs font-semibold text-ink-secondary">등급</th>
+                  <th className="w-32 px-3 py-2 text-right text-xs font-semibold text-ink-secondary">점수</th>
+                  <th className="w-44 px-3 py-2 text-left text-xs font-semibold text-ink-secondary">작업</th>
+                </tr>
+              </thead>
+              <tbody>
+                {selectedStudentExams.map((r) => (
+                  <Fragment key={r.distributionId}>
+                  <tr
+                    onClick={() => toggleAnswerPanel(r)}
+                    aria-expanded={r.attemptId ? openAttemptId === r.attemptId : undefined}
+                    className={`border-b border-line-subtle ${
+                      r.isSubmitted ? 'cursor-pointer hover:bg-surface-subtle' : 'cursor-default'
+                    } ${openAttemptId && openAttemptId === r.attemptId ? 'bg-surface-subtle' : ''}`}
+                  >
+                    <td className="px-3 py-1.5">
+                      <span className="block leading-tight font-medium text-ink">
+                        {r.isSubmitted && (
+                          <span className="mr-1.5 text-xs text-ink-tertiary">
+                            {openAttemptId === r.attemptId ? '▾' : '▸'}
+                          </span>
+                        )}
+                        {r.examTitle}
+                      </span>
+                      {r.subject && <span className="block text-xs leading-tight text-ink-tertiary">{r.subject}</span>}
+                    </td>
+                    <td className="px-3 py-1.5 tabular-nums text-ink-secondary">
+                      {r.submittedAt ? new Date(r.submittedAt).toLocaleDateString('ko-KR') : '-'}
+                    </td>
+                    <td className="px-3 py-1.5">
+                      {/* 제출은 정상 상태다. 성공색은 예외 상황에만 쓴다 (DESIGN.md 2.4) */}
+                      {r.isSubmitted ? (
+                        <span className="text-xs text-ink-secondary">제출 완료</span>
+                      ) : r.hasAttempt ? (
+                        <span className="text-xs text-fn-warning">작성 중</span>
+                      ) : (
+                        <span className="text-xs text-ink-tertiary">미응시</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-1.5 text-right">
+                      {r.grade ? (
+                        <span className={`inline-block rounded-sm border px-2 py-0.5 text-xs font-semibold ${gradeBadgeOperate(r.grade)}`}>
+                          {r.grade}등급
+                        </span>
+                      ) : (
+                        <span className="text-xs text-ink-tertiary">-</span>
+                      )}
+                    </td>
+                    {/* 점수가 시선의 종착점 (11.6.3) */}
+                    <td className="px-3 py-1.5 text-right">
+                      {r.isSubmitted ? (
+                        <>
+                          <span className="text-xl font-bold tabular-nums text-ink">{r.score ?? 0}</span>
+                          <span className="text-[11px] text-ink-tertiary"> / {r.maxScore ?? 0}</span>
+                        </>
+                      ) : (
+                        <span className="text-sm text-ink-tertiary">-</span>
+                      )}
+                    </td>
+                    {/* 행 액션: 무채색 아웃라인 (11.2). 기존 핸들러를 그대로 부른다 */}
+                    <td className="px-3 py-1.5" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex gap-1.5">
+                        <button
+                          type="button"
+                          disabled={!r.isSubmitted || !r.attemptId}
+                          onClick={() => r.attemptId && openStudentReport(r.attemptId)}
+                          className="h-7 rounded-sm border border-line px-2.5 text-xs text-ink-secondary transition-colors duration-150 ease-out hover:bg-surface-subtle hover:text-ink disabled:opacity-40"
+                        >
+                          {r.hasReport ? '보고서' : 'AI 분석'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => openAnswerEditor(r)}
+                          className="h-7 rounded-sm border border-line px-2.5 text-xs text-ink-secondary transition-colors duration-150 ease-out hover:bg-surface-subtle hover:text-ink"
+                        >
+                          답안 입력
+                        </button>
+                      </div>
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {students.map((student: any) => (
-                    <tr key={student.id} className="border-b border-line-subtle hover:bg-surface-subtle transition-colors duration-150 ease-out">
-                      <td className="px-4 py-3 font-medium text-ink">{student.user?.name}</td>
-                      <td className="px-4 py-3 text-ink">{student.grade || '-'}</td>
-                      <td className="px-4 py-3 text-ink">{student.school || '-'}</td>
-                      <td className="px-4 py-3 text-ink">{student.user?.username}</td>
-                      <td className="px-4 py-3 text-ink">{student.user?.phone || '-'}</td>
-                      <td className="px-4 py-3">
-                        <div className="flex gap-2 justify-center">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                              if (confirm(`${student.user?.name} 학생으로 로그인하시겠습니까?`)) {
-                                loginAsStudentMutation.mutate(student.id);
-                              }
-                            }}
-                            className="border-line-strong text-ink hover:bg-surface-subtle"
-                          >
-                            <LogIn className="w-4 h-4 mr-1" />
-                            로그인
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                              setEditingStudent(student);
-                              setShowStudentModal(true);
-                            }}
-                            className="border-line text-ink-secondary hover:bg-surface-subtle"
-                          >
-                            수정
-                          </Button>
-                        </div>
+                  {openAttemptId && openAttemptId === r.attemptId && (
+                    <tr>
+                      <td colSpan={6} className="p-0">
+                        {renderAnswerPanel(r)}
                       </td>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  )}
+                  </Fragment>
+                ))}
+              </tbody>
+            </table>
+          )
+        )}
+
+        {studentTab === 'trend' && (
+          submitted.length === 0 ? (
+            <p className="mt-4 border border-line bg-surface-subtle py-10 text-center text-sm text-ink-secondary">
+              제출된 응시 기록이 없어 추이를 그릴 수 없습니다.
+            </p>
           ) : (
-            <div className="text-center py-12">
-              <Users className="w-16 h-16 mx-auto text-ink-tertiary mb-4" />
-              <p className="text-ink-secondary">등록된 학생이 없습니다.</p>
+            <div className="mt-4 border border-line p-4">
+              {/* 응시 순서대로(과거 -> 최근) 정답률 막대. 실제 점수만 쓴다. */}
+              <div className="flex items-end gap-3" style={{ height: '180px' }}>
+                {submitted
+                  .slice()
+                  .reverse()
+                  .map((r) => {
+                    const pct = r.maxScore ? Math.round(((r.score ?? 0) / r.maxScore) * 100) : 0;
+                    return (
+                      <div key={r.distributionId} className="flex min-w-0 flex-1 flex-col items-center justify-end gap-1">
+                        <span className="text-xs font-semibold tabular-nums text-ink">{pct}%</span>
+                        <div
+                          className="w-full max-w-[56px] bg-action"
+                          style={{ height: `${Math.max(2, pct * 1.3)}px` }}
+                          aria-hidden="true"
+                        />
+                        <span className="w-full truncate text-center text-[10px] text-ink-tertiary" title={r.examTitle}>
+                          {r.examTitle}
+                        </span>
+                      </div>
+                    );
+                  })}
+              </div>
+              <p className="mt-3 border-t border-line-subtle pt-2 text-xs text-ink-tertiary">
+                제출 완료된 {submitted.length}개 응시의 정답률입니다. 왼쪽이 이전 응시입니다.
+              </p>
             </div>
+          )
+        )}
+
+        {studentTab === 'reports' && (
+          selectedStudentExams.filter((r) => r.isSubmitted).length === 0 ? (
+            <p className="mt-4 border border-line bg-surface-subtle py-10 text-center text-sm text-ink-secondary">
+              제출된 응시 기록이 없습니다.
+            </p>
+          ) : (
+            <div className="mt-3 flex flex-col gap-2">
+              {selectedStudentExams
+                .filter((r) => r.isSubmitted)
+                .map((r) => (
+                  <div key={r.distributionId} className="flex items-center gap-3 border border-line px-3 py-2.5">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium text-ink">{r.examTitle}</p>
+                      <p className="text-xs text-ink-tertiary">
+                        {r.submittedAt ? new Date(r.submittedAt).toLocaleDateString('ko-KR') : '-'} · {r.score ?? 0}/{r.maxScore ?? 0}점
+                      </p>
+                    </div>
+                    <span className={`flex-shrink-0 text-xs ${r.hasReport ? 'text-fn-success' : 'text-ink-tertiary'}`}>
+                      {r.hasReport ? '생성됨' : '미생성'}
+                    </span>
+                    <button
+                      type="button"
+                      disabled={!r.attemptId}
+                      onClick={() => r.attemptId && openStudentReport(r.attemptId)}
+                      className="h-8 flex-shrink-0 rounded-sm border border-line px-3 text-xs text-ink-secondary transition-colors duration-150 ease-out hover:bg-surface-subtle hover:text-ink disabled:opacity-50"
+                    >
+                      {r.hasReport ? '보고서 열기' : '보고서 생성'}
+                    </button>
+                  </div>
+                ))}
+            </div>
+          )
+        )}
+      </>
+    );
+  };
+
+  const renderStudents = () => (
+    <>
+      {/* 툴바 (DESIGN.md 11.2). 페이지 제목은 사이드바 활성 표시로 대체한다. */}
+      <div className="flex flex-col gap-3 border-b border-line pb-3 md:flex-row md:items-center md:gap-4">
+        <div className="flex items-center gap-3 overflow-x-auto md:overflow-visible">
+          <div className="flex flex-shrink-0 rounded-sm border border-line">
+            <button
+              type="button"
+              onClick={() => {
+                setStudentGradeTab('all');
+                resetStudentPage();
+              }}
+              aria-pressed={studentGradeTab === 'all'}
+              className={`h-8 whitespace-nowrap px-3 text-sm transition-colors duration-150 ease-out ${
+                studentGradeTab === 'all'
+                  ? 'bg-surface-subtle font-semibold text-ink'
+                  : 'text-ink-secondary hover:bg-surface-subtle'
+              }`}
+            >
+              전체
+            </button>
+            {gradeTabs.map((g) => (
+              <button
+                key={g}
+                type="button"
+                onClick={() => {
+                  setStudentGradeTab(g);
+                  resetStudentPage();
+                }}
+                aria-pressed={studentGradeTab === g}
+                className={`h-8 whitespace-nowrap border-l border-line px-3 text-sm transition-colors duration-150 ease-out ${
+                  studentGradeTab === g
+                    ? 'bg-surface-subtle font-semibold text-ink'
+                    : 'text-ink-secondary hover:bg-surface-subtle'
+                }`}
+              >
+                {g}
+              </button>
+            ))}
+          </div>
+          <span className="flex-shrink-0 text-sm text-ink-secondary">
+            <strong className="font-semibold text-ink tabular-nums">{sortedStudents.length}</strong>명
+          </span>
+        </div>
+
+        <div className="flex items-center gap-2 md:ml-auto">
+          <div className="relative flex-1 md:w-64 md:flex-none">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-tertiary" strokeWidth={1.5} />
+            <Input
+              value={studentSearch}
+              onChange={(e) => {
+                setStudentSearch(e.target.value);
+                resetStudentPage();
+              }}
+              placeholder="이름 · 연락처 · 학교 검색"
+              aria-label="학생 검색"
+              className="h-9 pl-9"
+            />
+          </div>
+          <Button
+            onClick={() => {
+              setEditingStudent(null);
+              setShowStudentModal(true);
+            }}
+            className="h-9 flex-shrink-0 bg-action hover:bg-action-hover"
+          >
+            <Plus className="mr-1.5 h-4 w-4" strokeWidth={1.5} />
+            학생 추가
+          </Button>
+        </div>
+      </div>
+
+      {sortedStudents.length > 0 ? (
+        <>
+          {/* 데스크톱: 표가 본문 폭 전체를 쓴다. 카드로 감싸지 않는다 (11.2) */}
+          <table className="mt-3 hidden w-full text-sm md:table">
+            <thead>
+              <tr className="border-b border-line-strong">
+                <th className="w-20 whitespace-nowrap px-3 py-2 text-left text-xs font-semibold text-ink-secondary">
+                  <button
+                    type="button"
+                    onClick={() => toggleStudentSort('grade')}
+                    className="hover:text-ink"
+                  >
+                    학년{sortMark('grade')}
+                  </button>
+                </th>
+                <th className="whitespace-nowrap px-3 py-2 text-left text-xs font-semibold text-ink-secondary">
+                  <button
+                    type="button"
+                    onClick={() => toggleStudentSort('name')}
+                    className="hover:text-ink"
+                  >
+                    이름{sortMark('name')}
+                  </button>
+                </th>
+                <th className="whitespace-nowrap px-3 py-2 text-left text-xs font-semibold text-ink-secondary">학교</th>
+                <th className="whitespace-nowrap px-3 py-2 text-left text-xs font-semibold text-ink-secondary">학생 연락처</th>
+                <th className="whitespace-nowrap px-3 py-2 text-left text-xs font-semibold text-ink-secondary">학부모</th>
+                <th className="w-44 whitespace-nowrap px-3 py-2 text-left text-xs font-semibold text-ink-secondary">작업</th>
+              </tr>
+            </thead>
+            <tbody>
+              {pagedStudents.map((student: any) => (
+                <tr
+                  key={student.id}
+                  className="border-b border-line-subtle transition-colors duration-150 ease-out hover:bg-surface-subtle"
+                >
+                  <td className="px-3 py-1.5 text-ink-secondary">{student.grade || '-'}</td>
+                  <td className="px-3 py-1.5 font-semibold text-ink">{student.user?.name}</td>
+                  <td className="px-3 py-1.5 text-ink-secondary">{student.school || '-'}</td>
+                  {/* 한 셀 두 줄: 연락처 + 아이디 (11.2) */}
+                  <td className="px-3 py-1.5">
+                    <span className="block leading-tight tabular-nums text-ink">{student.user?.phone || '-'}</span>
+                    {/* 이 시스템은 연락처가 곧 아이디다. 같은 값이면 둘째 줄을 만들지 않는다. */}
+                    {student.user?.username && student.user.username !== student.user.phone && (
+                      <span className="block text-xs leading-tight text-ink-tertiary">{student.user.username}</span>
+                    )}
+                  </td>
+                  <td className="px-3 py-1.5">
+                    {student.parent?.user?.name || student.parent?.user?.phone || student.parentPhone ? (
+                      <>
+                        <span className="block leading-tight text-ink">{student.parent?.user?.name || '이름 미등록'}</span>
+                        <span className="block text-xs leading-tight tabular-nums text-ink-tertiary">
+                          {student.parent?.user?.phone || student.parentPhone}
+                        </span>
+                      </>
+                    ) : (
+                      <span className="block leading-tight text-ink-tertiary">미등록</span>
+                    )}
+                  </td>
+                  <td className="px-3 py-1.5">
+                    {/* 행 액션은 무채색 아웃라인 (11.2) */}
+                    <div className="flex gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => openStudentEditor(student)}
+                        className="h-7 rounded-sm border border-line px-2.5 text-xs text-ink-secondary transition-colors duration-150 ease-out hover:bg-surface-subtle hover:text-ink"
+                      >
+                        상세
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => impersonateStudent(student)}
+                        className="h-7 rounded-sm border border-line px-2.5 text-xs text-ink-secondary transition-colors duration-150 ease-out hover:bg-surface-subtle hover:text-ink"
+                      >
+                        학생 화면
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          {/* 모바일: 표 대신 카드 리스트 (11.3) */}
+          <div className="mt-3 flex flex-col gap-2 md:hidden">
+            {pagedStudents.map((student: any) => (
+              <div key={student.id} className="rounded-sm border border-line bg-surface p-3">
+                <div className="flex items-baseline gap-2">
+                  <p className="text-base font-semibold text-ink">{student.user?.name}</p>
+                  <span className="text-xs text-ink-tertiary">{student.grade || '-'}</span>
+                </div>
+                <p className="mt-0.5 text-xs text-ink-secondary">{student.school || '학교 미등록'}</p>
+                <p className="mt-1 text-xs tabular-nums text-ink-tertiary">
+                  {student.user?.phone || '-'}
+                  {student.parent?.user?.phone || student.parentPhone
+                    ? ` · 학부모 ${student.parent?.user?.phone || student.parentPhone}`
+                    : ''}
+                </p>
+                <div className="mt-2.5 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => openStudentEditor(student)}
+                    className="h-11 flex-1 rounded-sm border border-line text-sm text-ink-secondary transition-colors duration-150 ease-out hover:bg-surface-subtle"
+                  >
+                    상세
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => impersonateStudent(student)}
+                    className="h-11 flex-1 rounded-sm border border-line text-sm text-ink-secondary transition-colors duration-150 ease-out hover:bg-surface-subtle"
+                  >
+                    학생 화면
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* 페이저 (11.2) */}
+          {studentPageCount > 1 && (
+            <nav className="mt-4 flex items-center justify-center gap-1" aria-label="학생 목록 페이지">
+              {Array.from({ length: studentPageCount }, (_, i) => i + 1).map((p) => (
+                <button
+                  key={p}
+                  type="button"
+                  onClick={() => setStudentPage(p)}
+                  aria-current={p === currentStudentPage ? 'page' : undefined}
+                  className={`h-8 min-w-8 rounded-sm px-2 text-sm tabular-nums transition-colors duration-150 ease-out ${
+                    p === currentStudentPage
+                      ? 'bg-surface-inverse font-semibold text-ink-inverse'
+                      : 'border border-line text-ink-secondary hover:bg-surface-subtle'
+                  }`}
+                >
+                  {p}
+                </button>
+              ))}
+            </nav>
           )}
-        </CardContent>
-      </Card>
+        </>
+      ) : (
+        <div className="mt-3 border border-line bg-surface-subtle py-12 text-center">
+          <p className="text-sm text-ink-secondary">
+            {studentList.length === 0 ? '등록된 학생이 없습니다.' : '조건에 맞는 학생이 없습니다.'}
+          </p>
+        </div>
+      )}
 
       {/* 학생 추가/수정 모달 */}
       {showStudentModal && (
-        <div className="fixed inset-0 bg-[var(--overlay)] flex items-center justify-center z-50">
+        <div
+          ref={studentModalRef}
+          role="dialog"
+          aria-modal="true"
+          aria-label={editingStudent ? '학생 수정' : '학생 등록'}
+          className="fixed inset-0 bg-[var(--overlay)] flex items-center justify-center z-50"
+        >
           <Card className="w-full max-w-2xl mx-4 rounded-lg border-0 bg-surface-raised shadow-lg">
             <CardHeader className="border-b border-line bg-surface-subtle">
-              <CardTitle className="flex items-center gap-2">
-                <Users className="w-5 h-5 text-ink-secondary" />
-                {editingStudent ? '학생 수정' : '학생 추가'}
+              <CardTitle>{editingStudent ? '학생 수정' : '학생 추가'}
               </CardTitle>
             </CardHeader>
-            <CardContent className="p-6">
-              <form onSubmit={handleStudentSubmit} className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
+            <CardContent className="p-0">
+              {/* 섹션 라벨 + 2열 그리드로 밀도를 올린다 (DESIGN.md 11.4) */}
+              <form onSubmit={handleStudentSubmit}>
+                <p className="border-b border-line bg-surface-subtle px-6 py-2 text-xs font-bold tracking-wide text-ink-secondary">
+                  필수 입력 사항
+                </p>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-3 px-6 py-4">
                   <div>
-                    <label className="text-sm font-semibold text-ink">이름 *</label>
-                    <Input name="name" defaultValue={editingStudent?.user?.name} required className="mt-1" />
+                    <label className="text-xs font-semibold text-ink">이름</label>
+                    <Input name="name" defaultValue={editingStudent?.user?.name} required className="mt-1 h-9" />
                   </div>
                   <div>
-                    <label className="text-sm font-semibold text-ink">학년</label>
-                    <Input name="grade" defaultValue={editingStudent?.grade} className="mt-1" placeholder="예: 중3" />
-                  </div>
-                </div>
-                <div>
-                  <label className="text-sm font-semibold text-ink">학교</label>
-                  <Input name="school" defaultValue={editingStudent?.school} className="mt-1" />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-sm font-semibold text-ink">학생 연락처 * (로그인 아이디)</label>
+                    <label className="text-xs font-semibold text-ink">학생 연락처 (로그인 아이디)</label>
                     <Input
                       name="phone"
                       defaultValue={editingStudent?.user?.phone}
                       required
-                      className="mt-1"
+                      className="mt-1 h-9"
                       placeholder="01012345678"
                       disabled={!!editingStudent}
                     />
                     {!editingStudent && (
-                      <p className="text-xs text-ink-secondary mt-1">※ 연락처가 로그인 아이디가 되며, 비밀번호는 끝 4자리로 자동 설정됩니다.</p>
+                      <p className="mt-1 text-xs text-ink-tertiary">연락처가 로그인 아이디가 되며, 비밀번호는 끝 4자리로 자동 설정됩니다.</p>
                     )}
                   </div>
+                </div>
+
+                <p className="border-y border-line bg-surface-subtle px-6 py-2 text-xs font-bold tracking-wide text-ink-secondary">
+                  선택 입력 사항
+                </p>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-3 px-6 py-4">
                   <div>
-                    <label className="text-sm font-semibold text-ink">학부모 연락처 (로그인 아이디)</label>
+                    <label className="text-xs font-semibold text-ink">학년</label>
+                    <Input name="grade" defaultValue={editingStudent?.grade} className="mt-1 h-9" placeholder="예: 중3" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-ink">학교</label>
+                    <Input name="school" defaultValue={editingStudent?.school} className="mt-1 h-9" />
+                  </div>
+                  <div className="col-span-2">
+                    <label className="text-xs font-semibold text-ink">학부모 연락처 (로그인 아이디)</label>
                     <Input
                       name="parentPhone"
                       defaultValue={editingStudent?.parentPhone}
-                      className="mt-1"
+                      className="mt-1 h-9"
                       placeholder="01087654321"
                     />
                   </div>
+                  {editingStudent && (
+                    <div className="col-span-2">
+                      <label className="text-xs font-semibold text-ink">새 비밀번호</label>
+                      <Input
+                        type="password"
+                        name="password"
+                        className="mt-1 h-9"
+                        placeholder="변경하지 않으려면 비워두세요"
+                      />
+                      <p className="mt-1 text-xs text-ink-tertiary">입력하면 새 비밀번호로 변경됩니다.</p>
+                    </div>
+                  )}
                 </div>
-                {editingStudent && (
-                  <div>
-                    <label className="text-sm font-semibold text-ink">새 비밀번호 (선택)</label>
-                    <Input
-                      type="password"
-                      name="password"
-                      className="mt-1"
-                      placeholder="변경하지 않으려면 비워두세요"
-                    />
-                    <p className="text-xs text-ink-secondary mt-1">※ 비밀번호를 입력하면 새 비밀번호로 변경됩니다.</p>
-                  </div>
-                )}
-                <div className="flex gap-2 pt-4">
-                  <Button type="submit" className="flex-1 bg-action hover:bg-action-hover">
-                    {editingStudent ? '수정' : '추가'}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => {
-                      setShowStudentModal(false);
-                      setEditingStudent(null);
-                    }}
-                    className="flex-1"
-                  >
+
+                {/* 좌측 보조 동작 / 우측 주 동작 (11.4) */}
+                <div className="flex items-center justify-between gap-2 border-t border-line px-6 py-4">
+                  <Button type="button" variant="outline" onClick={closeStudentModal}>
                     취소
+                  </Button>
+                  <Button type="submit" className="bg-action hover:bg-action-hover">
+                    {editingStudent ? '저장하기' : '등록하기'}
                   </Button>
                 </div>
               </form>
@@ -1229,15 +2140,184 @@ export default function BranchDashboard({ user }: { user: User }) {
     </>
   );
 
-  const renderClasses = () => (
+  /**
+   * 반 상세/학생 배정 모달.
+   * 반 상세는 이름·학년·설명 수정만 실제로 저장된다.
+   * 학생 배정은 서버 PUT /classes/:id 가 studentIds 를 무시하므로 반영되지 않는다.
+   * 두 사실을 화면에서 숨기지 않고 모달에 적는다.
+   */
+  const openClassEditor = async (cls: any) => {
+    setEditingClass(cls);
+    setSelectedClassStudents([]);
+    setClassRosterUnavailable(false);
+    setClassRosterLoading(true);
+    setShowClassModal(true);
+
+    // 현재 배정된 학생을 서버에서 불러와 체크 상태로 표시한다.
+    try {
+      const res = await api.get(`/classes/${cls.id}/students`);
+      const ids = (res.data?.data || []).map((x: any) => x.id);
+      setSelectedClassStudents(ids);
+    } catch (error: any) {
+      // 못 불러온 채로 저장하면 기존 배정이 전부 해제되므로, 사실대로 알리고
+      // 저장을 막는다(모달의 저장 버튼이 classRosterUnavailable 을 본다).
+      setClassRosterUnavailable(true);
+      toast.error(error.response?.data?.message || '배정 학생을 불러오지 못했습니다.');
+    } finally {
+      setClassRosterLoading(false);
+    }
+  };
+
+  const deleteClass = async (cls: any) => {
+    if (!confirm(`'${cls.name}' 반을 삭제하시겠습니까?`)) return;
+    try {
+      await api.delete(`/classes/${cls.id}`);
+      toast.success('반이 삭제되었습니다.');
+      refetchClasses();
+    } catch (error: any) {
+      if (error.response?.status === 409) {
+        const msg = error.response.data?.message || '배정된 학생이 있습니다.';
+        if (confirm(`${msg}\n\n그래도 삭제하시겠습니까? 배정이 함께 해제됩니다.`)) {
+          try {
+            await api.delete(`/classes/${cls.id}?force=true`);
+            toast.success('반이 삭제되었습니다.');
+            refetchClasses();
+          } catch (e: any) {
+            toast.error(e.response?.data?.message || '반 삭제에 실패했습니다.');
+          }
+        }
+        return;
+      }
+      toast.error(error.response?.data?.message || '반 삭제에 실패했습니다.');
+    }
+  };
+
+  const renderClasses = () => {
+    const q = classSearch.trim().toLowerCase();
+    const rows = (Array.isArray(classes) ? classes : []).filter(
+      (c: any) =>
+        !q ||
+        String(c.name || '').toLowerCase().includes(q) ||
+        String(c.grade || '').toLowerCase().includes(q)
+    );
+    return (
     <>
-      <Card className="border-0 shadow-xl bg-surface">
-        <CardHeader className="border-b border-line-subtle bg-surface-subtle">
-          <div className="flex justify-between items-center">
-            <CardTitle className="text-xl font-bold text-ink flex items-center gap-2">
-              <Home className="w-5 h-5 text-fn-success" />
-              반 관리
-            </CardTitle>
+      {/* 툴바 (DESIGN.md 11.2) */}
+      <div className="flex flex-col gap-3 border-b border-line pb-3 md:flex-row md:items-center md:gap-4">
+        <span className="text-sm text-ink-secondary">
+          <strong className="font-semibold text-ink tabular-nums">{rows.length}</strong>개 반
+        </span>
+        <div className="flex items-center gap-2 md:ml-auto">
+          <div className="relative flex-1 md:w-56 md:flex-none">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-tertiary" strokeWidth={1.5} />
+            <Input
+              value={classSearch}
+              onChange={(e) => setClassSearch(e.target.value)}
+              placeholder="반 이름 · 학년 검색"
+              aria-label="반 검색"
+              className="h-9 pl-9"
+            />
+          </div>
+          <Button
+            onClick={() => {
+              setEditingClass(null);
+              setSelectedClassStudents([]);
+              setGradeFilter('');
+              setShowClassModal(true);
+            }}
+            className="h-9 flex-shrink-0 bg-action hover:bg-action-hover"
+          >
+            <Plus className="mr-1.5 h-4 w-4" strokeWidth={1.5} />
+            반 만들기
+          </Button>
+        </div>
+      </div>
+
+      {rows.length > 0 ? (
+        <>
+          <table className="mt-3 hidden w-full text-sm md:table">
+            <thead>
+              <tr className="border-b border-line-strong">
+                <th className="px-3 py-2 text-left text-xs font-semibold text-ink-secondary">반 이름</th>
+                <th className="w-24 px-3 py-2 text-left text-xs font-semibold text-ink-secondary">학년</th>
+                <th className="px-3 py-2 text-left text-xs font-semibold text-ink-secondary">설명</th>
+                <th className="w-20 px-3 py-2 text-right text-xs font-semibold text-ink-secondary">학생</th>
+                <th className="w-24 px-3 py-2 text-left text-xs font-semibold text-ink-secondary">상태</th>
+                <th className="w-40 px-3 py-2 text-left text-xs font-semibold text-ink-secondary">작업</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((cls: any) => (
+                <tr key={cls.id} className="border-b border-line-subtle transition-colors duration-150 ease-out hover:bg-surface-subtle">
+                  <td className="px-3 py-1.5 font-semibold text-ink">{cls.name}</td>
+                  <td className="px-3 py-1.5 text-ink-secondary">{cls.grade || '-'}</td>
+                  <td className="max-w-0 truncate px-3 py-1.5 text-ink-secondary">{cls.description || '-'}</td>
+                  <td className="px-3 py-1.5 text-right tabular-nums text-ink">{cls.studentCount ?? 0}</td>
+                  <td className="px-3 py-1.5">
+                    {/* 운영 중은 정상 상태이므로 무채색 (DESIGN.md 2.4) */}
+                    <span className={`text-xs ${cls.isActive === false ? 'text-fn-warning' : 'text-ink-secondary'}`}>
+                      {cls.isActive === false ? '비활성' : '운영 중'}
+                    </span>
+                  </td>
+                  <td className="px-3 py-1.5">
+                    <div className="flex gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => openClassEditor(cls)}
+                        className="h-7 rounded-sm border border-line px-2.5 text-xs text-ink-secondary transition-colors duration-150 ease-out hover:bg-surface-subtle hover:text-ink"
+                      >
+                        상세
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => deleteClass(cls)}
+                        className="h-7 rounded-sm border border-fn-error-border px-2.5 text-xs text-fn-error transition-colors duration-150 ease-out hover:bg-fn-error-surface"
+                      >
+                        삭제
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          {/* 모바일: 카드 리스트 (11.3) */}
+          <div className="mt-3 flex flex-col gap-2 md:hidden">
+            {rows.map((cls: any) => (
+              <div key={cls.id} className="rounded-sm border border-line bg-surface p-3">
+                <div className="flex items-baseline gap-2">
+                  <p className="text-base font-semibold text-ink">{cls.name}</p>
+                  <span className="text-xs text-ink-tertiary">{cls.grade || '-'}</span>
+                </div>
+                <p className="mt-0.5 text-xs text-ink-secondary">{cls.description || '설명 없음'}</p>
+                <p className="mt-0.5 text-xs text-ink-tertiary">학생 {cls.studentCount ?? 0}명</p>
+                <div className="mt-2.5 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => openClassEditor(cls)}
+                    className="h-11 flex-1 rounded-sm border border-line text-sm text-ink-secondary transition-colors duration-150 ease-out hover:bg-surface-subtle"
+                  >
+                    상세
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => deleteClass(cls)}
+                    className="h-11 flex-1 rounded-sm border border-fn-error-border text-sm text-fn-error transition-colors duration-150 ease-out hover:bg-fn-error-surface"
+                  >
+                    삭제
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      ) : (
+        <div className="mt-3 border border-line bg-surface-subtle py-12 text-center">
+          <p className="text-sm text-ink-secondary">
+            {(classes || []).length === 0 ? '등록된 반이 없습니다.' : '조건에 맞는 반이 없습니다.'}
+          </p>
+          {(classes || []).length === 0 && (
             <Button
               onClick={() => {
                 setEditingClass(null);
@@ -1245,69 +2325,27 @@ export default function BranchDashboard({ user }: { user: User }) {
                 setGradeFilter('');
                 setShowClassModal(true);
               }}
-              className="bg-action hover:bg-action-hover"
+              className="mt-3 h-9 bg-action hover:bg-action-hover"
             >
-              <Plus className="w-4 h-4 mr-2" />
-              반 추가
+              <Plus className="mr-1.5 h-4 w-4" strokeWidth={1.5} />
+              첫 반 만들기
             </Button>
-          </div>
-        </CardHeader>
-        <CardContent className="p-6">
-          {classes && classes.length > 0 ? (
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {classes.map((cls: any) => (
-                <Card key={cls.id} className="transition-colors duration-150 ease-out hover:border-line-strong">
-                  <CardHeader className="border-b border-line bg-surface-subtle">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <CardTitle className="text-lg">{cls.name}</CardTitle>
-                        <p className="text-sm text-ink-secondary mt-1">{cls.grade || '-'}</p>
-                      </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={async () => {
-                          setEditingClass(cls);
-                          // Load students in this class
-                          try {
-                            const res = await api.get(`/classes/${cls.id}/students`);
-                            const classStudents = res.data.data || [];
-                            setSelectedClassStudents(classStudents.map((s: any) => s.id));
-                          } catch (error) {
-                            console.error('반 학생 조회 실패:', error);
-                            setSelectedClassStudents([]);
-                          }
-                          setShowClassModal(true);
-                        }}
-                        className="border-line-strong text-ink hover:bg-surface-subtle"
-                      >
-                        수정
-                      </Button>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="pt-4">
-                    <p className="text-sm text-ink-secondary">{cls.description || '설명 없음'}</p>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-12">
-              <Home className="w-16 h-16 mx-auto text-ink-tertiary mb-4" />
-              <p className="text-ink-secondary">등록된 반이 없습니다.</p>
-            </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      )}
 
       {/* 반 추가/수정 모달 */}
       {showClassModal && (
-        <div className="fixed inset-0 bg-[var(--overlay)] flex items-center justify-center z-50 p-4">
+        <div
+          ref={classModalRef}
+          role="dialog"
+          aria-modal="true"
+          aria-label={editingClass ? '반 수정' : '반 등록'}
+          className="fixed inset-0 bg-[var(--overlay)] flex items-center justify-center z-50 p-4"
+        >
           <Card className="w-full max-w-2xl mx-4 max-h-[90dvh] overflow-y-auto rounded-lg border-0 bg-surface-raised shadow-lg">
             <CardHeader className="border-b border-line bg-surface-subtle">
-              <CardTitle className="flex items-center gap-2">
-                <Home className="w-5 h-5 text-fn-success" />
-                {editingClass ? '반 수정' : '반 추가'}
+              <CardTitle>{editingClass ? '반 수정' : '반 추가'}
               </CardTitle>
             </CardHeader>
             <CardContent className="p-6">
@@ -1334,6 +2372,14 @@ export default function BranchDashboard({ user }: { user: User }) {
                 <div className="border-t pt-4">
                   <div className="flex justify-between items-center mb-3">
                     <label className="text-sm font-semibold text-ink">학생 선택</label>
+                  {editingClass && classRosterLoading && (
+                    <p className="mt-1 text-xs text-ink-secondary">배정 학생을 불러오는 중입니다.</p>
+                  )}
+                  {editingClass && classRosterUnavailable && (
+                    <p className="mt-1 text-xs text-fn-error">
+                      배정 학생을 불러오지 못했습니다. 이대로 저장하면 기존 배정이 해제되므로 저장할 수 없습니다. 모달을 닫고 다시 열어주세요.
+                    </p>
+                  )}
                     <select
                       value={gradeFilter}
                       onChange={(e) => setGradeFilter(e.target.value)}
@@ -1388,12 +2434,7 @@ export default function BranchDashboard({ user }: { user: User }) {
                   <Button
                     type="button"
                     variant="outline"
-                    onClick={() => {
-                      setShowClassModal(false);
-                      setEditingClass(null);
-                      setSelectedClassStudents([]);
-                      setGradeFilter('');
-                    }}
+                    onClick={closeClassModal}
                     className="flex-1"
                   >
                     취소
@@ -1405,91 +2446,114 @@ export default function BranchDashboard({ user }: { user: User }) {
         </div>
       )}
     </>
-  );
+    );
+  };
 
-  const renderExams = () => (
+  const renderExams = () => {
+    const rows = Array.isArray(distributions) ? distributions : [];
+    return (
     <>
-      <Card className="border-0 shadow-xl bg-surface">
-        <CardHeader className="border-b border-line-subtle bg-surface-subtle">
-          <CardTitle className="text-xl font-bold text-ink flex items-center gap-2">
-            <FileText className="w-5 h-5 text-fn-warning" />
-            배포된 시험
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-6">
-          {distributions && distributions.length > 0 ? (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[640px] text-sm [&_td]:whitespace-nowrap [&_thead_th:first-child]:sticky [&_thead_th:first-child]:left-0 [&_thead_th:first-child]:z-10 [&_tbody_td:first-child]:sticky [&_tbody_td:first-child]:left-0 [&_tbody_td:first-child]:bg-surface">
-                <thead>
-                  <tr className="border-b border-line-strong">
-                    <th className="text-left px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">시험명</th>
-                    <th className="text-left px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">시작일</th>
-                    <th className="text-left px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">종료일</th>
-                    <th className="text-left px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">총괄 배포일</th>
-                    <th className="text-left px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">지점 배포일</th>
-                    <th className="text-center px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">작업</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {distributions.map((dist: any) => (
-                    <tr key={dist.id} className="border-b border-line-subtle hover:bg-surface-subtle transition-colors duration-150 ease-out">
-                      <td className="px-4 py-3 font-medium text-ink">{dist.exam?.title || '-'}</td>
-                      <td className="px-4 py-3 text-ink">
-                        {new Date(dist.startDate).toLocaleDateString('ko-KR')}
-                      </td>
-                      <td className="px-4 py-3 text-ink">
-                        {new Date(dist.endDate).toLocaleDateString('ko-KR')}
-                      </td>
-                      <td className="px-4 py-3 text-ink">
-                        {dist.parentDistribution
-                          ? new Date(dist.parentDistribution.createdAt).toLocaleDateString('ko-KR')
-                          : new Date(dist.createdAt).toLocaleDateString('ko-KR')}
-                      </td>
-                      <td className="px-4 py-3 text-ink">
-                        {dist.parentDistribution
-                          ? new Date(dist.createdAt).toLocaleDateString('ko-KR')
-                          : '-'}
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex gap-2 justify-center">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                              setSelectedDistribution(dist);
-                              setShowRedistributeModal(true);
-                              setRedistributeType('class');
-                              setSelectedClassId('');
-                              setSelectedStudentIds([]);
-                            }}
-                            className="border-line-strong text-ink hover:bg-surface-subtle"
-                          >
-                            지점내 배포
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <div className="text-center py-12">
-              <FileText className="w-16 h-16 mx-auto text-ink-tertiary mb-4" />
-              <p className="text-ink-secondary">배포된 시험이 없습니다.</p>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      <div className="flex items-center gap-3 border-b border-line pb-3">
+        <span className="text-sm text-ink-secondary">
+          본사에서 내려온 배포 <strong className="font-semibold text-ink tabular-nums">{rows.length}</strong>건
+        </span>
+        <span className="ml-auto text-xs text-ink-tertiary">반이나 특정 학생에게 다시 배포할 수 있습니다.</span>
+      </div>
+
+      {rows.length > 0 ? (
+        <>
+          <table className="mt-3 hidden w-full text-sm md:table">
+            <thead>
+              <tr className="border-b border-line-strong">
+                <th className="px-3 py-2 text-left text-xs font-semibold text-ink-secondary">시험명</th>
+                <th className="w-28 px-3 py-2 text-left text-xs font-semibold text-ink-secondary">시작일</th>
+                <th className="w-28 px-3 py-2 text-left text-xs font-semibold text-ink-secondary">종료일</th>
+                <th className="w-28 px-3 py-2 text-left text-xs font-semibold text-ink-secondary">총괄 배포일</th>
+                <th className="w-28 px-3 py-2 text-left text-xs font-semibold text-ink-secondary">지점 배포일</th>
+                <th className="w-28 px-3 py-2 text-left text-xs font-semibold text-ink-secondary">작업</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((dist: any) => (
+                <tr key={dist.id} className="border-b border-line-subtle transition-colors duration-150 ease-out hover:bg-surface-subtle">
+                  <td className="px-3 py-1.5">
+                    <span className="block leading-tight font-medium text-ink">{dist.exam?.title || '-'}</span>
+                    <span className="block text-xs leading-tight text-ink-tertiary">
+                      {dist.exam?.subject || '과목 미지정'} · {dist.exam?.totalQuestions || 0}문항
+                    </span>
+                  </td>
+                  <td className="px-3 py-1.5 tabular-nums text-ink-secondary">{new Date(dist.startDate).toLocaleDateString('ko-KR')}</td>
+                  <td className="px-3 py-1.5 tabular-nums text-ink-secondary">{new Date(dist.endDate).toLocaleDateString('ko-KR')}</td>
+                  <td className="px-3 py-1.5 tabular-nums text-ink-secondary">
+                    {dist.parentDistribution
+                      ? new Date(dist.parentDistribution.createdAt).toLocaleDateString('ko-KR')
+                      : new Date(dist.createdAt).toLocaleDateString('ko-KR')}
+                  </td>
+                  <td className="px-3 py-1.5 tabular-nums text-ink-secondary">
+                    {dist.parentDistribution ? new Date(dist.createdAt).toLocaleDateString('ko-KR') : '-'}
+                  </td>
+                  <td className="px-3 py-1.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedDistribution(dist);
+                        setShowRedistributeModal(true);
+                        setRedistributeType('class');
+                        setSelectedClassId('');
+                        setSelectedStudentIds([]);
+                      }}
+                      className="h-7 rounded-sm border border-line px-2.5 text-xs text-ink-secondary transition-colors duration-150 ease-out hover:bg-surface-subtle hover:text-ink"
+                    >
+                      지점내 배포
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          <div className="mt-3 flex flex-col gap-2 md:hidden">
+            {rows.map((dist: any) => (
+              <div key={dist.id} className="rounded-sm border border-line bg-surface p-3">
+                <p className="text-base font-semibold text-ink">{dist.exam?.title || '-'}</p>
+                <p className="mt-0.5 text-xs text-ink-secondary">
+                  {new Date(dist.startDate).toLocaleDateString('ko-KR')} ~ {new Date(dist.endDate).toLocaleDateString('ko-KR')}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedDistribution(dist);
+                    setShowRedistributeModal(true);
+                    setRedistributeType('class');
+                    setSelectedClassId('');
+                    setSelectedStudentIds([]);
+                  }}
+                  className="mt-2.5 h-11 w-full rounded-sm border border-line text-sm text-ink-secondary transition-colors duration-150 ease-out hover:bg-surface-subtle"
+                >
+                  지점내 배포
+                </button>
+              </div>
+            ))}
+          </div>
+        </>
+      ) : (
+        <div className="mt-3 border border-line bg-surface-subtle py-12 text-center">
+          <p className="text-sm text-ink-secondary">본사에서 내려온 배포가 없습니다.</p>
+        </div>
+      )}
 
       {/* 지점내 배포 모달 */}
       {showRedistributeModal && selectedDistribution && (
-        <div className="fixed inset-0 bg-[var(--overlay)] flex items-center justify-center z-50">
+        <div
+          ref={redistributeModalRef}
+          role="dialog"
+          aria-modal="true"
+          aria-label="지점내 배포"
+          className="fixed inset-0 bg-[var(--overlay)] flex items-center justify-center z-50"
+        >
           <Card className="w-full max-w-2xl mx-4 max-h-[90dvh] overflow-y-auto rounded-lg border-0 bg-surface-raised shadow-lg">
             <CardHeader className="border-b border-line bg-surface-subtle">
-              <CardTitle className="flex items-center gap-2">
-                <FileText className="w-5 h-5 text-fn-warning" />
-                지점내 배포: {selectedDistribution.exam?.title}
+              <CardTitle>지점내 배포: {selectedDistribution.exam?.title}
               </CardTitle>
             </CardHeader>
             <CardContent className="p-6">
@@ -1608,12 +2672,7 @@ export default function BranchDashboard({ user }: { user: User }) {
                   <Button
                     type="button"
                     variant="outline"
-                    onClick={() => {
-                      setShowRedistributeModal(false);
-                      setSelectedDistribution(null);
-                      setSelectedClassId('');
-                      setSelectedStudentIds([]);
-                    }}
+                    onClick={closeRedistributeModal}
                     className="flex-1"
                   >
                     취소
@@ -1625,51 +2684,154 @@ export default function BranchDashboard({ user }: { user: User }) {
         </div>
       )}
     </>
-  );
+    );
+  };
 
-  const renderDistributions = () => (
-    <>
-      <Card className="border-0 shadow-xl bg-surface">
-        <CardHeader className="border-b border-line-subtle bg-surface-subtle">
-          <CardTitle className="text-xl font-bold text-ink flex items-center gap-2">
-            <FileText className="w-5 h-5 text-fn-warning" />
-            배포된 시험 목록
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-6">
-          {distributions && distributions.length > 0 ? (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[640px] text-sm [&_td]:whitespace-nowrap [&_thead_th:first-child]:sticky [&_thead_th:first-child]:left-0 [&_thead_th:first-child]:z-10 [&_tbody_td:first-child]:sticky [&_tbody_td:first-child]:left-0 [&_tbody_td:first-child]:bg-surface">
-                <thead>
-                  <tr className="border-b border-line-strong">
-                    <th className="text-left px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">시험명</th>
-                    <th className="text-left px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">과목</th>
-                    <th className="text-center px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">문항 수</th>
-                    <th className="text-center px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">총점</th>
-                    <th className="text-left px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">시작일</th>
-                    <th className="text-left px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">종료일</th>
-                    <th className="text-center px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">작업</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {distributions.map((dist: any) => (
-                    <tr key={dist.id} className="border-b border-line-subtle hover:bg-surface-subtle transition-colors duration-150 ease-out">
-                      <td className="px-4 py-3 font-medium text-ink cursor-pointer hover:text-fn-warning hover:underline"
-                        onClick={() => {
-                          setSelectedDistributionId(dist.id);
-                          setActiveSection('dashboard');
-                          setSelectedDashboardView('exam-attempts');
-                        }}
-                      >
-                        {dist.exam?.title || '-'}
+  /** 날짜로 배포 상태를 판정한다. 서버에 상태 필드가 없으므로 화면에서 계산한다. */
+  const distStatusOf = (dist: any): { key: 'upcoming' | 'ongoing' | 'ended'; label: string; cls: string } => {
+    const now = Date.now();
+    const s0 = new Date(dist.startDate).getTime();
+    const e0 = new Date(dist.endDate).getTime();
+    if (now < s0) return { key: 'upcoming', label: '예정', cls: 'text-ink-tertiary' };
+    if (now > e0) return { key: 'ended', label: '종료', cls: 'text-ink-secondary' };
+    return { key: 'ongoing', label: '진행 중', cls: 'text-fn-warning' };
+  };
+
+  /** 응시 현황. 이미 받아 둔 배포별 학생 목록에서 센다. */
+  const distProgressOf = (distributionId: string): { done: number; total: number } | null => {
+    const found = (Array.isArray(allDistributionStudents) ? allDistributionStudents : []).find(
+      (d: any) => d?.distribution?.id === distributionId
+    );
+    if (!found) return null;
+    const rows = found.students || [];
+    return { done: rows.filter((r: any) => r.isSubmitted).length, total: rows.length };
+  };
+
+  const classNameOf = (classId?: string | null) =>
+    classId ? (classes || []).find((c: any) => c.id === classId)?.name || '지정 반' : '지점 전체';
+
+  const renderDistributions = () => {
+    const q = distSearch.trim().toLowerCase();
+    const rows = (Array.isArray(distributions) ? distributions : []).filter((d: any) => {
+      if (distStatus !== 'all' && distStatusOf(d).key !== distStatus) return false;
+      if (!q) return true;
+      return [d.exam?.title, d.exam?.subject, classNameOf(d.classId)]
+        .some((v: any) => String(v || '').toLowerCase().includes(q));
+    });
+
+    const filters: { id: typeof distStatus; label: string }[] = [
+      { id: 'all', label: '전체' },
+      { id: 'ongoing', label: '진행 중' },
+      { id: 'upcoming', label: '예정' },
+      { id: 'ended', label: '종료' },
+    ];
+
+    return (
+      <>
+        <div className="flex flex-col gap-3 border-b border-line pb-3 md:flex-row md:items-center md:gap-4">
+          <div className="flex items-center gap-3 overflow-x-auto md:overflow-visible">
+            <div className="flex flex-shrink-0 rounded-sm border border-line">
+              {filters.map((f, i) => (
+                <button
+                  key={f.id}
+                  type="button"
+                  onClick={() => setDistStatus(f.id)}
+                  aria-pressed={distStatus === f.id}
+                  className={`h-8 whitespace-nowrap px-3 text-sm transition-colors duration-150 ease-out ${
+                    i > 0 ? 'border-l border-line' : ''
+                  } ${
+                    distStatus === f.id
+                      ? 'bg-surface-subtle font-semibold text-ink'
+                      : 'text-ink-secondary hover:bg-surface-subtle'
+                  }`}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+            <span className="flex-shrink-0 text-sm text-ink-secondary">
+              <strong className="font-semibold text-ink tabular-nums">{rows.length}</strong>건
+            </span>
+          </div>
+          <div className="relative md:ml-auto md:w-64">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-tertiary" strokeWidth={1.5} />
+            <Input
+              value={distSearch}
+              onChange={(e) => setDistSearch(e.target.value)}
+              placeholder="시험명 · 과목 · 대상 검색"
+              aria-label="배포 검색"
+              className="h-9 pl-9"
+            />
+          </div>
+        </div>
+
+        {rows.length > 0 ? (
+          <>
+            <table className="mt-3 hidden w-full text-sm md:table">
+              <thead>
+                <tr className="border-b border-line-strong">
+                  <th className="px-3 py-2 text-left text-xs font-semibold text-ink-secondary">시험명</th>
+                  <th className="w-28 px-3 py-2 text-left text-xs font-semibold text-ink-secondary">대상</th>
+                  <th className="w-28 px-3 py-2 text-left text-xs font-semibold text-ink-secondary">시작일</th>
+                  <th className="w-28 px-3 py-2 text-left text-xs font-semibold text-ink-secondary">종료일</th>
+                  <th className="w-40 px-3 py-2 text-left text-xs font-semibold text-ink-secondary">응시 현황</th>
+                  <th className="w-20 px-3 py-2 text-left text-xs font-semibold text-ink-secondary">상태</th>
+                  <th className="w-32 px-3 py-2 text-left text-xs font-semibold text-ink-secondary">작업</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((dist: any) => {
+                  const st = distStatusOf(dist);
+                  const pg = distProgressOf(dist.id);
+                  const pct = pg && pg.total > 0 ? Math.round((pg.done / pg.total) * 100) : 0;
+                  return (
+                    <tr key={dist.id} className="border-b border-line-subtle transition-colors duration-150 ease-out hover:bg-surface-subtle">
+                      <td className="px-3 py-1.5">
+                        <span className="block leading-tight font-medium text-ink">{dist.exam?.title || '-'}</span>
+                        <span className="block text-xs leading-tight text-ink-tertiary">
+                          {dist.exam?.subject || '과목 미지정'} · {dist.exam?.totalQuestions || 0}문항 · {dist.exam?.totalScore || 0}점
+                        </span>
                       </td>
-                      <td className="px-4 py-3 text-ink">{dist.exam?.subject || '-'}</td>
-                      <td className="px-4 py-3 text-center text-ink">{dist.exam?.totalQuestions || 0}</td>
-                      <td className="px-4 py-3 text-center text-ink">{dist.exam?.totalScore || 0}</td>
-                      <td className="px-4 py-3 text-ink">{new Date(dist.startDate).toLocaleDateString('ko-KR')}</td>
-                      <td className="px-4 py-3 text-ink">{new Date(dist.endDate).toLocaleDateString('ko-KR')}</td>
-                      <td className="px-4 py-3 text-center">
+                      <td className="px-3 py-1.5 text-ink-secondary">{classNameOf(dist.classId)}</td>
+                      <td className="px-3 py-1.5 tabular-nums text-ink-secondary">
+                        {new Date(dist.startDate).toLocaleDateString('ko-KR')}
+                      </td>
+                      <td className="px-3 py-1.5 tabular-nums text-ink-secondary">
+                        {new Date(dist.endDate).toLocaleDateString('ko-KR')}
+                      </td>
+                      {/* 진행률: 교사가 가장 먼저 보는 수치 (DESIGN.md 11.7) */}
+                      <td className="px-3 py-1.5">
+                        {pg ? (
+                          <div className="flex items-center gap-2">
+                            <span className="w-14 flex-shrink-0 text-sm font-semibold tabular-nums text-ink">
+                              {pg.done}<span className="text-xs font-normal text-ink-tertiary">/{pg.total}</span>
+                            </span>
+                            <span className="h-1.5 min-w-0 flex-1 bg-surface-subtle" aria-hidden="true">
+                              <span className="block h-full bg-action" style={{ width: `${pct}%` }} />
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-ink-tertiary">집계 중</span>
+                        )}
+                      </td>
+                      <td className={`px-3 py-1.5 text-xs ${st.cls}`}>{st.label}</td>
+                      <td className="px-3 py-1.5">
+                        <div className="flex gap-1.5">
                         <button
+                          type="button"
+                          onClick={() => {
+                            // 이 배포의 응시 현황으로 이동 (기존 시험명 클릭 동작을 액션으로 옮겼다)
+                            setSelectedDistributionId(dist.id);
+                            setTopTab('grades');
+                            setSelectedStudentId(null);
+                            setSelectedDashboardView('exam-attempts');
+                          }}
+                          className="h-7 rounded-sm border border-line px-2.5 text-xs text-ink-secondary transition-colors duration-150 ease-out hover:bg-surface-subtle hover:text-ink"
+                        >
+                          현황
+                        </button>
+                        <button
+                          type="button"
                           onClick={async () => {
                             if (confirm('이 배포를 삭제하시겠습니까?')) {
                               try {
@@ -1681,39 +2843,60 @@ export default function BranchDashboard({ user }: { user: User }) {
                               }
                             }
                           }}
-                          className="px-3 py-1.5 border border-fn-error-border bg-surface text-fn-error text-sm font-semibold rounded-sm transition-colors duration-150 ease-out hover:bg-fn-error-surface active:scale-[0.98]"
+                          className="h-7 rounded-sm border border-fn-error-border px-2.5 text-xs text-fn-error transition-colors duration-150 ease-out hover:bg-surface-subtle"
                         >
                           삭제
                         </button>
+                        </div>
                       </td>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  );
+                })}
+              </tbody>
+            </table>
+
+            <div className="mt-3 flex flex-col gap-2 md:hidden">
+              {rows.map((dist: any) => {
+                const st = distStatusOf(dist);
+                const pg = distProgressOf(dist.id);
+                return (
+                  <div key={dist.id} className="rounded-sm border border-line bg-surface p-3">
+                    <p className="text-base font-semibold text-ink">{dist.exam?.title || '-'}</p>
+                    <p className="mt-0.5 text-xs text-ink-secondary">
+                      {classNameOf(dist.classId)} · {new Date(dist.startDate).toLocaleDateString('ko-KR')} ~{' '}
+                      {new Date(dist.endDate).toLocaleDateString('ko-KR')}
+                    </p>
+                    <p className="mt-1 text-xs">
+                      <span className={st.cls}>{st.label}</span>
+                      {pg && (
+                        <span className="ml-2 tabular-nums text-ink-secondary">
+                          응시 {pg.done}/{pg.total}
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                );
+              })}
             </div>
-          ) : (
-            <div className="text-center py-12">
-              <FileText className="w-16 h-16 mx-auto text-ink-tertiary mb-4" />
-              <p className="text-ink-secondary">배포된 시험이 없습니다.</p>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-    </>
-  );
+          </>
+        ) : (
+          <div className="mt-3 border border-line bg-surface-subtle py-12 text-center">
+            <p className="text-sm text-ink-secondary">
+              {(distributions || []).length === 0 ? '배포된 시험이 없습니다.' : '조건에 맞는 배포가 없습니다.'}
+            </p>
+          </div>
+        )}
+      </>
+    );
+  };
 
   const renderReports = () => {
     if (!selectedReportDistribution) {
       // Show list of distributions
       return (
-        <Card className="border-0 shadow-xl bg-surface">
-          <CardHeader className="border-b border-line-subtle bg-surface-subtle">
-            <CardTitle className="text-xl font-bold text-ink flex items-center gap-2">
-              <BarChart3 className="w-5 h-5 text-ink-secondary" />
-              보고서 및 성적 관리
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-6">
+        <section className="mb-6">
+          <h2 className="mb-2 border-l-[3px] border-action pl-2 text-sm font-bold tracking-wide text-ink">보고서 및 성적 관리</h2>
+          <div>
             {distributions && distributions.length > 0 ? (
               <div className="grid gap-4">
                 {distributions.map((dist: any) => (
@@ -1745,7 +2928,7 @@ export default function BranchDashboard({ user }: { user: User }) {
                               deleteDistributionMutation.mutate(dist.id);
                             }
                           }}
-                          className="border-fn-error-border text-fn-error hover:bg-fn-error-surface"
+                          className="border-fn-error-border text-fn-error hover:bg-surface-subtle"
                         >
                           <Trash2 className="w-4 h-4" />
                         </Button>
@@ -1760,8 +2943,8 @@ export default function BranchDashboard({ user }: { user: User }) {
                 <p className="text-ink-secondary">배포된 시험이 없습니다.</p>
               </div>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </section>
       );
     }
 
@@ -1794,23 +2977,23 @@ export default function BranchDashboard({ user }: { user: User }) {
           <CardContent className="p-6">
             {distributionStudents && distributionStudents.students && distributionStudents.students.length > 0 ? (
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[640px] text-sm [&_td]:whitespace-nowrap [&_thead_th:first-child]:sticky [&_thead_th:first-child]:left-0 [&_thead_th:first-child]:z-10 [&_tbody_td:first-child]:sticky [&_tbody_td:first-child]:left-0 [&_tbody_td:first-child]:bg-surface">
+                <table className="w-full min-w-[640px] text-sm [&_td]:whitespace-nowrap">
                   <thead>
                     <tr className="border-b border-line-strong">
-                      <th className="text-left px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">학생</th>
-                      <th className="text-left px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">연락처</th>
-                      <th className="text-center px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">응시 상태</th>
-                      <th className="text-center px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">점수</th>
-                      <th className="text-center px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">등급</th>
-                      <th className="text-center px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">작업</th>
+                      <th className="text-left px-3 py-2 text-xs font-semibold text-ink-secondary whitespace-nowrap">학생</th>
+                      <th className="text-left px-3 py-2 text-xs font-semibold text-ink-secondary whitespace-nowrap">연락처</th>
+                      <th className="text-left px-3 py-2 text-xs font-semibold text-ink-secondary whitespace-nowrap">응시 상태</th>
+                      <th className="text-left px-3 py-2 text-xs font-semibold text-ink-secondary whitespace-nowrap">점수</th>
+                      <th className="text-left px-3 py-2 text-xs font-semibold text-ink-secondary whitespace-nowrap">등급</th>
+                      <th className="text-left px-3 py-2 text-xs font-semibold text-ink-secondary whitespace-nowrap">작업</th>
                     </tr>
                   </thead>
                   <tbody>
                     {distributionStudents.students.map((student: any) => (
                       <tr key={student.studentId} className="border-b border-line-subtle hover:bg-surface-subtle transition-colors duration-150 ease-out">
-                        <td className="px-4 py-3 font-medium text-ink">{student.studentName}</td>
-                        <td className="px-4 py-3 text-ink">{student.studentPhone || '-'}</td>
-                        <td className="px-4 py-3">
+                        <td className="px-3 py-1.5 font-medium text-ink">{student.studentName}</td>
+                        <td className="px-3 py-1.5 text-ink">{student.studentPhone || '-'}</td>
+                        <td className="px-3 py-1.5">
                           <div className="flex items-center justify-center gap-1">
                             {student.isSubmitted ? (
                               <>
@@ -1830,19 +3013,19 @@ export default function BranchDashboard({ user }: { user: User }) {
                             )}
                           </div>
                         </td>
-                        <td className="px-4 py-3 text-center text-ink">
+                        <td className="px-3 py-1.5 text-center text-ink">
                           {student.isSubmitted ? `${student.score || 0} / ${student.maxScore || 0}` : '-'}
                         </td>
-                        <td className="px-4 py-3 text-center">
+                        <td className="px-3 py-1.5 text-center">
                           {student.grade ? (
-                            <span className={`inline-block rounded-sm border px-2 py-0.5 text-xs font-semibold ${gradeBadgeClass(student.grade)}`}>
+                            <span className={`inline-block rounded-sm border px-2 py-0.5 text-xs font-semibold ${gradeBadgeOperate(student.grade)}`}>
                               {student.grade}등급
                             </span>
                           ) : (
                             '-'
                           )}
                         </td>
-                        <td className="px-4 py-3">
+                        <td className="px-3 py-1.5">
                           <div className="flex gap-2 justify-center">
                             {/* 답안 입력/수정 버튼 */}
                             <Button
@@ -1913,7 +3096,7 @@ export default function BranchDashboard({ user }: { user: User }) {
                                       });
                                   }
                                 }}
-                                className="border-fn-error-border text-fn-error hover:bg-fn-error-surface"
+                                className="border-fn-error-border text-fn-error hover:bg-surface-subtle"
                               >
                                 <Trash2 className="w-3 h-3 mr-1" />
                                 삭제
@@ -1967,128 +3150,140 @@ export default function BranchDashboard({ user }: { user: User }) {
     );
   };
 
-  return (
-    <div className="flex min-h-[100dvh] bg-surface-sunken">
-      {/*
-        DESIGN.md 7.2 사이드바
-          >= 768px : 문서 흐름 안 고정 기둥 (펼침 264px / 접힘 72px, 기존 동작 유지)
-          <  768px : 흐름에서 제거하고 오버레이 드로어. 본문은 항상 100% 폭.
-        기존 sidebarOpen 상태를 그대로 재사용한다.
-      */}
-      {sidebarOpen && (
-        <div
-          className="fixed inset-0 z-30 bg-[var(--overlay)] md:hidden"
-          onClick={() => setSidebarOpen(false)}
-          aria-hidden="true"
-        />
-      )}
-      <aside
-        className={`fixed inset-y-0 left-0 z-40 w-[264px] flex flex-col bg-surface-inverse border-r border-line-inverse transition-transform duration-200 ease-out ${
-          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-        } md:static md:z-auto md:translate-x-0 md:transition-[width] ${
-          sidebarOpen ? 'md:w-[264px]' : 'md:w-[72px]'
-        }`}
-      >
-        {/* Logo Section */}
-        <div className="p-4 border-b border-line-inverse">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 border border-line-inverse rounded-sm flex items-center justify-center flex-shrink-0">
-              <GraduationCap className="w-5 h-5 text-ink-inverse" strokeWidth={1.5} />
-            </div>
-            {sidebarOpen && (
-              <div className="overflow-hidden">
-                <h2 className="font-semibold tracking-[-0.01em] text-ink-inverse whitespace-nowrap">
-                  지점 관리
-                </h2>
-                <p className="text-xs text-ink-inverse-muted truncate">{user.name}</p>
-              </div>
-            )}
-          </div>
-        </div>
+  const subSections = TOP_TABS.find((t) => t.id === topTab)?.sections ?? [];
 
-        {/* Menu Items */}
-        <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-          {menuItems.map((item) => {
-            const Icon = item.icon;
-            const isActive = activeSection === item.id;
-            return (
+  const switchTopTab = (id: TopTab) => {
+    setTopTab(id);
+    const first = TOP_TABS.find((t) => t.id === id)?.sections[0];
+    if (first) setActiveSection(first);
+    setPanelOpen(false);
+  };
+
+  return (
+    <div className="flex min-h-[100dvh] flex-col bg-surface-sunken">
+      {/* ── 상단 GNB (DESIGN.md 11.6). 주요 메뉴가 여기 있고, 사이드바는 학생 패널이 된다 ── */}
+      <header className="sticky top-0 z-30 border-b border-line-inverse bg-surface-inverse">
+        <div className="flex items-center gap-2 px-3 md:px-6">
+          <div className="flex flex-shrink-0 items-center gap-2.5 py-2.5">
+            <div className="flex h-8 w-8 items-center justify-center rounded-sm border border-line-inverse">
+              <GraduationCap className="h-4 w-4 text-ink-inverse" strokeWidth={1.5} />
+            </div>
+            <div className="hidden min-w-0 lg:block">
+              <p className="truncate text-sm font-semibold text-ink-inverse">지점 관리</p>
+              <p className="truncate text-xs text-ink-inverse-muted">{user.name}</p>
+            </div>
+          </div>
+
+          <nav className="flex min-w-0 flex-1 items-stretch gap-1 overflow-x-auto" aria-label="주요 메뉴">
+            {TOP_TABS.map((t) => (
               <button
-                key={item.id}
-                onClick={() => setActiveSection(item.id)}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-md text-sm transition-colors duration-150 ease-out ${
-                  isActive
-                    ? 'bg-surface text-ink font-semibold'
+                key={t.id}
+                type="button"
+                onClick={() => switchTopTab(t.id)}
+                aria-current={topTab === t.id ? 'page' : undefined}
+                className={`h-11 whitespace-nowrap rounded-sm px-3 text-sm transition-colors duration-150 ease-out md:px-4 ${
+                  topTab === t.id
+                    ? 'bg-surface font-semibold text-ink'
                     : 'text-ink-inverse-muted hover:bg-line-inverse hover:text-ink-inverse'
                 }`}
               >
-                <Icon className="w-4 h-4 flex-shrink-0" strokeWidth={1.5} />
-                {sidebarOpen && (
-                  <span className="whitespace-nowrap">{item.label}</span>
-                )}
+                {t.label}
               </button>
-            );
-          })}
-        </nav>
+            ))}
+          </nav>
 
-        {/* Logout Button */}
-        <div className="p-4 border-t border-line-inverse">
-          <button
-            onClick={() => logoutMutation.mutate()}
-            className="w-full flex items-center gap-3 px-4 py-3 rounded-md text-sm text-ink-inverse-muted transition-colors duration-150 ease-out hover:bg-line-inverse hover:text-ink-inverse"
-          >
-            <LogOut className="w-4 h-4 flex-shrink-0" strokeWidth={1.5} />
-            {sidebarOpen && <span>로그아웃</span>}
-          </button>
-        </div>
-
-        {/* Toggle Button (데스크톱 전용. 모바일에서는 드로어가 화면 밖으로 나가므로 헤더 토글을 쓴다) */}
-        <button
-          onClick={() => setSidebarOpen(!sidebarOpen)}
-          aria-label={sidebarOpen ? '메뉴 접기' : '메뉴 펼치기'}
-          className="hidden md:flex absolute -right-3 top-20 w-6 h-6 bg-surface border border-line-strong rounded-full items-center justify-center text-ink-secondary transition-colors duration-150 ease-out hover:bg-surface-subtle hover:text-ink"
-        >
-          {sidebarOpen ? <X className="w-3 h-3" strokeWidth={1.5} /> : <Menu className="w-3 h-3" strokeWidth={1.5} />}
-        </button>
-      </aside>
-
-      {/* Main Content */}
-      <div className="flex-1 min-w-0 overflow-auto">
-        {/* Header */}
-        <header className="bg-surface border-b border-line sticky top-0 z-10">
-          <div className="flex items-center gap-3 px-4 py-3 md:px-8 md:py-5">
-            {/* 모바일 전용 드로어 토글. 기존 sidebarOpen 상태를 그대로 쓴다 */}
+          <div className="flex flex-shrink-0 items-center gap-1">
+            <ThemeToggle />
             <button
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-              aria-label="메뉴 열기"
-              className="md:hidden h-11 w-11 flex-shrink-0 flex items-center justify-center rounded-md text-ink-secondary transition-colors duration-150 ease-out hover:bg-surface-subtle hover:text-ink"
+              type="button"
+              onClick={() => logoutMutation.mutate()}
+              aria-label="로그아웃"
+              className="flex h-11 w-11 items-center justify-center rounded-sm text-ink-inverse-muted transition-colors duration-150 ease-out hover:bg-line-inverse hover:text-ink-inverse"
             >
-              <Menu className="w-5 h-5" strokeWidth={1.5} />
+              <LogOut className="h-4 w-4" strokeWidth={1.5} />
             </button>
-            <div className="min-w-0">
-              <h1 className="text-xl font-semibold tracking-[-0.015em] text-ink md:text-2xl">
-                {menuItems.find((item) => item.id === activeSection)?.label}
-              </h1>
-              <p className="text-xs text-ink-tertiary mt-1 md:text-sm">
-                {user.name}님 환영합니다
-              </p>
-            </div>
-
-            {/* 야간 모드 토글 (DESIGN.md 6장) */}
-            <div className="ml-auto flex flex-shrink-0 items-center gap-2">
-              <ThemeToggle />
-            </div>
           </div>
-        </header>
+        </div>
+      </header>
 
-        {/* Content */}
-        <main className="p-4 md:p-8">
-          {activeSection === 'dashboard' && renderDashboard()}
-          {activeSection === 'students' && renderStudents()}
-          {activeSection === 'classes' && renderClasses()}
-          {activeSection === 'exams' && renderExams()}
-          {activeSection === 'distributions' && renderDistributions()}
-          {activeSection === 'reports' && renderReports()}
-        </main>
+      <div className="flex min-h-0 flex-1">
+        {/* ── 좌측 학생 패널: 성적 관리 탭에서만. 흰 배경 + 네이비 GNB 조합 (11.6) ── */}
+        {topTab === 'grades' && (
+          <>
+            {panelOpen && (
+              <div
+                className="fixed inset-0 z-30 bg-[var(--overlay)] md:hidden"
+                onClick={() => setPanelOpen(false)}
+                aria-hidden="true"
+              />
+            )}
+            <aside
+              ref={drawerRef}
+              className={`fixed inset-y-0 left-0 z-40 w-[264px] border-r border-line bg-surface transition-transform duration-200 ease-out ${
+                panelOpen ? 'translate-x-0' : '-translate-x-full'
+              } md:sticky md:top-[57px] md:z-auto md:h-[calc(100dvh-57px)] md:translate-x-0 md:flex-shrink-0`}
+            >
+              {renderStudentPanel()}
+            </aside>
+          </>
+        )}
+
+        <div className="flex min-w-0 flex-1 flex-col">
+          {/* 하위 섹션 세그먼트 (관리 / 시험 배포 탭) */}
+          {subSections.length > 1 && (
+            <div className="sticky top-[57px] z-20 flex gap-1 overflow-x-auto border-b border-line bg-surface px-4 md:px-8">
+              {subSections.map((id) => {
+                const item = menuItems.find((m) => m.id === id);
+                if (!item) return null;
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => setActiveSection(id)}
+                    aria-current={activeSection === id ? 'page' : undefined}
+                    className={`-mb-px whitespace-nowrap border-b-2 px-3 py-2.5 text-sm transition-colors duration-150 ease-out ${
+                      activeSection === id
+                        ? 'border-action font-semibold text-ink'
+                        : 'border-transparent text-ink-secondary hover:text-ink'
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {/* 모바일: 학생 패널 열기 */}
+          {topTab === 'grades' && (
+            <div className="flex items-center gap-2 border-b border-line bg-surface px-4 py-2 md:hidden">
+              <button
+                type="button"
+                onClick={() => setPanelOpen(true)}
+                className="flex h-11 items-center gap-2 rounded-sm border border-line px-3 text-sm text-ink-secondary"
+              >
+                <Menu className="h-4 w-4" strokeWidth={1.5} />
+                학생 목록
+              </button>
+              <span className="min-w-0 truncate text-sm font-semibold text-ink">
+                {selectedStudent ? selectedStudent.user?.name : '지점 요약'}
+              </span>
+            </div>
+          )}
+
+          <main className="min-w-0 flex-1 p-4 md:p-8">
+            {topTab === 'grades' && renderStudentContext()}
+            {topTab !== 'grades' && (
+              <>
+                {activeSection === 'students' && renderStudents()}
+                {activeSection === 'classes' && renderClasses()}
+                {activeSection === 'exams' && renderExams()}
+                {activeSection === 'distributions' && renderDistributions()}
+                {activeSection === 'reports' && renderReports()}
+              </>
+            )}
+          </main>
+        </div>
       </div>
 
       {/* 답안 입력/수정 모달 - 전역으로 이동 */}
@@ -2100,7 +3295,13 @@ export default function BranchDashboard({ user }: { user: User }) {
         }
         console.log('모달 렌더링 중!');
         return (
-          <div className="fixed inset-0 bg-[var(--overlay)] flex items-center justify-center z-50 p-4">
+          <div
+            ref={answerModalRef}
+            role="dialog"
+            aria-modal="true"
+            aria-label="답안 채점"
+            className="fixed inset-0 bg-[var(--overlay)] flex items-center justify-center z-50 p-4"
+          >
             <div className="w-full max-w-2xl bg-surface-raised rounded-lg shadow-lg overflow-hidden max-h-[90dvh] flex flex-col">
               {/* 상단 헤더: 학생 정보 및 점수 */}
               <div className="p-6 border-b border-line flex justify-between items-center flex-shrink-0">
@@ -2302,10 +3503,7 @@ export default function BranchDashboard({ user }: { user: User }) {
                     <Button
                       type="button"
                       variant="outline"
-                      onClick={() => {
-                        setShowAnswerModal(false);
-                        setSelectedAttempt(null);
-                      }}
+                      onClick={closeAnswerModal}
                       className="flex-1"
                     >
                       취소

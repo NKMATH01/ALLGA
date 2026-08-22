@@ -7,6 +7,7 @@ import { ThemeToggle } from '../components/ui/theme-toggle';
 import { toast } from '../components/ui/toast';
 import { ensureReport, openFullReport, prefersSummaryView } from '../lib/reportClient';
 import { ReportSummaryModal } from '../components/ReportSummaryModal';
+import { useModalA11y, isMobileViewport } from '../lib/useModalA11y';
 import {
   LayoutDashboard,
   BarChart3,
@@ -65,6 +66,11 @@ export default function ParentDashboard({ user }: { user: User }) {
   const [selectedChildId, setSelectedChildId] = useState<string | null>(null);
   const [openingReportFor, setOpeningReportFor] = useState<string | null>(null);
   const [summaryReportId, setSummaryReportId] = useState<string | null>(null);
+
+  const drawerRef = useModalA11y<HTMLElement>({
+    active: sidebarOpen && isMobileViewport(),
+    onClose: () => setSidebarOpen(false),
+  });
 
   const logoutMutation = useMutation({
     mutationFn: async () => {
@@ -157,6 +163,7 @@ export default function ParentDashboard({ user }: { user: User }) {
       )}
 
       <aside
+        ref={drawerRef}
         className={`fixed inset-y-0 left-0 z-40 w-[264px] flex flex-col bg-surface-inverse text-ink-inverse transition-transform duration-200 ease-out ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         } md:static md:z-auto md:translate-x-0 md:overflow-hidden md:transition-[width] ${

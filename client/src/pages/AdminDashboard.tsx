@@ -4,6 +4,7 @@ import { api } from '../lib/api';
 import { toast } from '../components/ui/toast';
 import { ThemeToggle } from '../components/ui/theme-toggle';
 import { StatValue } from '../components/ui/stat-value';
+import { useModalA11y, isMobileViewport } from '../lib/useModalA11y';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
@@ -34,6 +35,30 @@ export default function AdminDashboard({ user }: { user: User }) {
   const [editingExam, setEditingExam] = useState(false);
   const [showDistributionModal, setShowDistributionModal] = useState(false);
   const [selectedBranches, setSelectedBranches] = useState<string[]>([]);
+
+  // 모달 닫기 핸들러. Esc(useModalA11y)와 취소 버튼이 같은 경로를 쓰도록 한 곳에 둔다.
+  const closeBranchModal = () => {
+    setShowBranchModal(false);
+    setEditingBranch(null);
+  };
+  const closeExamModal = () => setShowExamModal(false);
+  const closeViewExamModal = () => {
+    setViewingExam(null);
+    setEditingExam(false);
+  };
+  const closeDistributionModal = () => {
+    setShowDistributionModal(false);
+    setSelectedBranches([]);
+  };
+
+  const branchModalRef = useModalA11y<HTMLDivElement>({ active: showBranchModal, onClose: closeBranchModal });
+  const examModalRef = useModalA11y<HTMLDivElement>({ active: showExamModal, onClose: closeExamModal });
+  const viewExamModalRef = useModalA11y<HTMLDivElement>({ active: !!viewingExam, onClose: closeViewExamModal });
+  const distributionModalRef = useModalA11y<HTMLDivElement>({ active: showDistributionModal, onClose: closeDistributionModal });
+  const drawerRef = useModalA11y<HTMLElement>({
+    active: sidebarOpen && isMobileViewport(),
+    onClose: () => setSidebarOpen(false),
+  });
 
   const {
     data: stats,
@@ -619,7 +644,13 @@ export default function AdminDashboard({ user }: { user: User }) {
 
       {/* Branch Modal */}
       {showBranchModal && (
-        <div className="fixed inset-0 bg-[var(--overlay)] flex items-center justify-center z-50">
+        <div
+          ref={branchModalRef}
+          role="dialog"
+          aria-modal="true"
+          aria-label={editingBranch ? '지점 수정' : '지점 등록'}
+          className="fixed inset-0 bg-[var(--overlay)] flex items-center justify-center z-50"
+        >
           <Card className="w-full max-w-lg mx-4 rounded-lg border-0 bg-surface-raised shadow-lg">
             <CardHeader className="border-b border-line bg-surface-subtle">
               <CardTitle className="flex items-center gap-2">
@@ -694,10 +725,7 @@ export default function AdminDashboard({ user }: { user: User }) {
                   <Button
                     type="button"
                     variant="outline"
-                    onClick={() => {
-                      setShowBranchModal(false);
-                      setEditingBranch(null);
-                    }}
+                    onClick={closeBranchModal}
                     className="flex-1"
                   >
                     취소
@@ -815,7 +843,13 @@ export default function AdminDashboard({ user }: { user: User }) {
 
       {/* 시험 직접 생성 간단 모달 */}
       {showExamModal && (
-        <div className="fixed inset-0 bg-[var(--overlay)] flex items-center justify-center z-50 overflow-y-auto">
+        <div
+          ref={examModalRef}
+          role="dialog"
+          aria-modal="true"
+          aria-label="시험 직접 생성"
+          className="fixed inset-0 bg-[var(--overlay)] flex items-center justify-center z-50 overflow-y-auto"
+        >
           <Card className="w-full max-w-2xl mx-4 my-8 rounded-lg border-0 bg-surface-raised shadow-lg">
             <CardHeader className="border-b border-line bg-surface-subtle">
               <CardTitle className="flex items-center gap-2">
@@ -877,7 +911,7 @@ export default function AdminDashboard({ user }: { user: User }) {
                   <Button type="submit" className="flex-1 bg-action hover:bg-action-hover">
                     생성
                   </Button>
-                  <Button type="button" variant="outline" onClick={() => setShowExamModal(false)} className="flex-1">
+                  <Button type="button" variant="outline" onClick={closeExamModal} className="flex-1">
                     취소
                   </Button>
                 </div>
@@ -889,7 +923,13 @@ export default function AdminDashboard({ user }: { user: User }) {
 
       {/* 시험 상세보기/수정 모달 */}
       {viewingExam && (
-        <div className="fixed inset-0 bg-[var(--overlay)] flex items-center justify-center z-50 overflow-y-auto p-4">
+        <div
+          ref={viewExamModalRef}
+          role="dialog"
+          aria-modal="true"
+          aria-label="시험 상세"
+          className="fixed inset-0 bg-[var(--overlay)] flex items-center justify-center z-50 overflow-y-auto p-4"
+        >
           <Card className="w-full max-w-4xl mx-4 my-8 rounded-lg border-0 bg-surface-raised shadow-lg">
             <CardHeader className="border-b border-line bg-surface-subtle">
               <div className="flex justify-between items-start">
@@ -908,10 +948,7 @@ export default function AdminDashboard({ user }: { user: User }) {
                       수정
                     </Button>
                   )}
-                  <Button variant="outline" size="sm" onClick={() => {
-                    setViewingExam(null);
-                    setEditingExam(false);
-                  }}>
+                  <Button variant="outline" size="sm" onClick={closeViewExamModal}>
                     <X className="w-4 h-4" />
                   </Button>
                 </div>
@@ -1252,7 +1289,13 @@ export default function AdminDashboard({ user }: { user: User }) {
 
       {/* 배포 모달 */}
       {showDistributionModal && (
-        <div className="fixed inset-0 bg-[var(--overlay)] flex items-center justify-center z-50">
+        <div
+          ref={distributionModalRef}
+          role="dialog"
+          aria-modal="true"
+          aria-label="시험 배포"
+          className="fixed inset-0 bg-[var(--overlay)] flex items-center justify-center z-50"
+        >
           <Card className="w-full max-w-lg mx-4 rounded-lg border-0 bg-surface-raised shadow-lg">
             <CardHeader className="border-b border-line bg-surface-subtle">
               <CardTitle className="flex items-center gap-2">
@@ -1335,10 +1378,7 @@ export default function AdminDashboard({ user }: { user: User }) {
                   <Button
                     type="button"
                     variant="outline"
-                    onClick={() => {
-                      setShowDistributionModal(false);
-                      setSelectedBranches([]);
-                    }}
+                    onClick={closeDistributionModal}
                     className="flex-1"
                   >
                     취소
@@ -1368,6 +1408,7 @@ export default function AdminDashboard({ user }: { user: User }) {
         />
       )}
       <aside
+        ref={drawerRef}
         className={`fixed inset-y-0 left-0 z-40 w-[264px] flex flex-col bg-surface-inverse border-r border-line-inverse transition-transform duration-200 ease-out ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         } md:static md:z-auto md:translate-x-0 md:transition-[width] ${

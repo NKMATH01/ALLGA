@@ -167,6 +167,18 @@
     outline: 2px solid var(--focus-ring);
     outline-offset: 2px;
   }
+
+  /* DESIGN.md 5.1 모바일 터치 타깃.
+     Button/Input 컴포넌트는 자체 클래스로 44px 를 확보하지만, 페이지에서 직접 쓴
+     <button>(아이콘 버튼·표 행 액션)까지 덮으려면 전역 하한이 필요하다.
+     데스크톱은 기존 40/32/48 규격을 그대로 둔다. */
+  @media (max-width: 767px) {
+    button,
+    [role='button'],
+    select {
+      min-height: 44px;
+    }
+  }
 }
 
 /* DESIGN.md 8.3 감소 모션. 자동 애니메이션이 없으므로 hover 전이만 제거된다 */

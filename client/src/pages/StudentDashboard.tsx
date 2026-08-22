@@ -7,6 +7,7 @@ import { useTheme } from '../lib/useTheme';
 import { StatValue } from '../components/ui/stat-value';
 import { ensureReport, openFullReport, prefersSummaryView } from '../lib/reportClient';
 import { ReportSummaryModal } from '../components/ReportSummaryModal';
+import { useModalA11y, isMobileViewport } from '../lib/useModalA11y';
 import { Button } from '../components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog';
@@ -606,6 +607,14 @@ function ExamTakingModal({
     onClose();
   };
 
+  // Esc 는 저장 흐름을 그대로 타야 한다. onClose 를 직접 부르면 답안이 저장되지 않는다.
+  const examModalRef = useModalA11y<HTMLDivElement>({
+    active: true,
+    onClose: () => {
+      void handleCloseLater();
+    },
+  });
+
   const handleSubmit = async () => {
     if (answeredCount < totalQuestions) {
       if (!confirm(`아직 ${totalQuestions - answeredCount}개 문항이 미응답 상태입니다. 제출하시겠습니까?`)) {
@@ -637,7 +646,13 @@ function ExamTakingModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-[var(--overlay)] z-50 flex items-center justify-center p-4">
+    <div
+      ref={examModalRef}
+      role="dialog"
+      aria-modal="true"
+      aria-label="시험 응시"
+      className="fixed inset-0 bg-[var(--overlay)] z-50 flex items-center justify-center p-4"
+    >
       <div className="bg-surface-raised rounded-lg shadow-lg w-full max-w-4xl max-h-[90dvh] flex flex-col">
         {/* Header */}
         <div className="bg-surface-inverse text-ink-inverse p-6 rounded-t-lg">
@@ -798,6 +813,10 @@ export default function StudentDashboard({ user }: { user: User }) {
     () => typeof window === 'undefined' || window.matchMedia('(min-width: 768px)').matches
   );
   const [activeExamTab, setActiveExamTab] = useState<ExamTab>('available');
+  const drawerRef = useModalA11y<HTMLElement>({
+    active: sidebarOpen && isMobileViewport(),
+    onClose: () => setSidebarOpen(false),
+  });
   // 차트 색은 readToken() 으로 CSS 변수를 읽으므로, 테마가 바뀌면 다시 계산해야 한다.
   const { theme } = useTheme();
   const [examModal, setExamModal] = useState<{
@@ -1039,6 +1058,7 @@ export default function StudentDashboard({ user }: { user: User }) {
         />
       )}
       <aside
+        ref={drawerRef}
         className={`fixed inset-y-0 left-0 z-40 w-[264px] flex flex-col bg-surface-inverse text-ink-inverse transition-transform duration-200 ease-out ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         } md:static md:z-auto md:translate-x-0 md:overflow-hidden md:transition-[width] ${
