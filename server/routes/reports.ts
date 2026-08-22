@@ -6,6 +6,7 @@ import { and, eq } from 'drizzle-orm';
 import { requireAuth } from '../middleware/auth';
 import { OLGA_REPORT_META_PROMPT_V3 } from '../prompts/olga-report-meta-prompt-v3';
 import { generateReportHTML as generateNewReportHTML } from '../templates/newReportTemplate';
+import { log, errorFields } from '../utils/logger';
 
 const router = express.Router();
 
@@ -368,7 +369,7 @@ router.post('/generate/:attemptId', requireAuth, async (req, res) => {
       message: '보고서 생성을 시작했습니다.',
     });
   } catch (error) {
-    console.error('Generate report error:', error);
+    log.error('report.generate_report_failed', errorFields(error));
     res.status(500).json({ message: 'AI 보고서 생성 중 오류가 발생했습니다.' });
   }
 });
@@ -591,7 +592,7 @@ ${JSON.stringify(userData, null, 2)}`;
 
       console.log('✅ Google Gemini 전문 보고서 생성 완료');
     } catch (error: any) {
-      console.error('❌ Gemini API 오류:', error.message);
+      log.error('report.gemini_call_failed', { message: error?.message });
       // AI 분석 실패 시 기본 분석 데이터 생성
       responseText = JSON.stringify({
         olgaSummary: `AI 분석이 일시적으로 불가능합니다.\n\n성적: ${attempt.score}점/${attempt.maxScore}점 (${Math.round((attempt.score || 0) / (attempt.maxScore || 100) * 100)}%)\n등급: ${attempt.grade}등급\n순위: ${rank}/${completedAttempts.length}`,
@@ -632,8 +633,9 @@ ${JSON.stringify(userData, null, 2)}`;
         console.log('✅ 새로운 메타 프롬프트 v3 응답 확인');
       }
     } catch (e) {
-      console.error('JSON 파싱 오류:', e);
-      console.error('응답 내용:', responseText.substring(0, 500));
+      log.error('report.json_failed', errorFields(e));
+      // 응답 본문에는 학생명·성적이 들어갈 수 있어 길이만 남긴다(PII)
+      log.warn('report.ai_response_unparsable', { responseLength: responseText.length });
       aiAnalysis = {
         metaVersion: 'v3',
         olgaSummary: responseText,
@@ -1126,7 +1128,7 @@ router.get('/:reportId/summary', requireAuth, async (req, res) => {
       },
     });
   } catch (error) {
-    console.error('Get report summary error:', error);
+    log.error('report.get_report_summary_failed', errorFields(error));
     res.status(500).json({ message: '보고서 요약 조회 중 오류가 발생했습니다.' });
   }
 });
@@ -1152,7 +1154,7 @@ router.get('/:reportId', requireAuth, async (req, res) => {
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.send(report.htmlContent);
   } catch (error) {
-    console.error('Get report error:', error);
+    log.error('report.get_report_failed', errorFields(error));
     res.status(500).send('<h1>보고서 조회 중 오류가 발생했습니다.</h1>');
   }
 });
@@ -1180,7 +1182,7 @@ router.get('/attempt/:attemptId', requireAuth, async (req, res) => {
       data: report,
     });
   } catch (error) {
-    console.error('Get report by attempt error:', error);
+    log.error('report.get_report_by_attempt_failed', errorFields(error));
     res.status(500).json({ message: '보고서 조회 중 오류가 발생했습니다.' });
   }
 });

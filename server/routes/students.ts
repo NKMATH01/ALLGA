@@ -5,6 +5,7 @@ import { students, users, parents, studentParents, examAttempts, exams } from '.
 import { eq, and, desc, inArray, isNotNull } from 'drizzle-orm';
 import { requireBranchManager } from '../middleware/auth';
 import { hashPassword } from '../utils/helpers';
+import { log, errorFields } from '../utils/logger';
 
 // 안전한 랜덤 비밀번호 생성 (8자리: 영문+숫자)
 function generateSecurePassword(): string {
@@ -65,7 +66,7 @@ router.get('/me', async (req, res) => {
       },
     });
   } catch (error) {
-    console.error('Get student me error:', error);
+    log.error('student.get_student_me_failed', errorFields(error));
     res.status(500).json({ message: '학생 정보 조회 중 오류가 발생했습니다.' });
   }
 });
@@ -134,7 +135,7 @@ router.get('/', requireBranchManager, async (req, res) => {
       data: result,
     });
   } catch (error) {
-    console.error('Get students error:', error);
+    log.error('student.get_students_failed', errorFields(error));
     res.status(500).json({ message: '학생 목록 조회 중 오류가 발생했습니다.' });
   }
 });
@@ -206,7 +207,7 @@ router.post('/', requireBranchManager, async (req, res) => {
       message: `학생이 등록되었습니다. 초기 비밀번호: ${password} (반드시 학생에게 전달 후 변경 안내)`,
     });
   } catch (error) {
-    console.error('Create student error:', error);
+    log.error('student.create_student_failed', errorFields(error));
     res.status(500).json({ message: '학생 등록 중 오류가 발생했습니다.' });
   }
 });
@@ -286,7 +287,7 @@ router.put('/:id', requireBranchManager, async (req, res) => {
         : '학생 정보가 수정되었습니다.',
     });
   } catch (error) {
-    console.error('Update student error:', error);
+    log.error('student.update_student_failed', errorFields(error));
     res.status(500).json({ message: '학생 수정 중 오류가 발생했습니다.' });
   }
 });
@@ -366,7 +367,7 @@ router.get('/branch-students', requireBranchManager, async (req, res) => {
       data: result,
     });
   } catch (error) {
-    console.error('Get branch students error:', error);
+    log.error('student.get_branch_students_failed', errorFields(error));
     res.status(500).json({ message: '학생 목록 조회 중 오류가 발생했습니다.' });
   }
 });
@@ -407,7 +408,7 @@ router.get('/stats', requireBranchManager, async (req, res) => {
       },
     });
   } catch (error) {
-    console.error('Get branch stats error:', error);
+    log.error('student.get_branch_stats_failed', errorFields(error));
     res.status(500).json({ message: '통계 조회 중 오류가 발생했습니다.' });
   }
 });
@@ -455,7 +456,7 @@ router.post('/:id/login-as', requireBranchManager, async (req, res) => {
       message: `${user.name} 학생으로 로그인되었습니다.`,
     });
   } catch (error) {
-    console.error('Login as student error:', error);
+    log.error('student.login_as_student_failed', errorFields(error));
     res.status(500).json({ message: '학생 로그인 중 오류가 발생했습니다.' });
   }
 });

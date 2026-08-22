@@ -4,6 +4,7 @@ import { parents, users, studentParents, students, examAttempts, exams } from '.
 import { eq, and, inArray, isNotNull, desc, sql } from 'drizzle-orm';
 import { requireBranchManager, requireAuth } from '../middleware/auth';
 import { hashPassword } from '../utils/helpers';
+import { log, errorFields } from '../utils/logger';
 
 const router = express.Router();
 
@@ -66,7 +67,7 @@ router.get('/me/children', requireAuth, async (req, res) => {
       })),
     });
   } catch (error) {
-    console.error('Get my children error:', error);
+    log.error('parent.get_my_children_failed', errorFields(error));
     res.status(500).json({ message: '자녀 목록 조회 중 오류가 발생했습니다.' });
   }
 });
@@ -115,7 +116,7 @@ router.get('/me/children/:studentId/attempts', requireAuth, async (req, res) => 
       })),
     });
   } catch (error) {
-    console.error('Get child attempts error:', error);
+    log.error('parent.get_child_attempts_failed', errorFields(error));
     res.status(500).json({ message: '성적 조회 중 오류가 발생했습니다.' });
   }
 });
@@ -143,7 +144,7 @@ router.get('/', requireBranchManager, async (req, res) => {
       })),
     });
   } catch (error) {
-    console.error('Get parents error:', error);
+    log.error('parent.get_parents_failed', errorFields(error));
     res.status(500).json({ message: '학부모 목록 조회 중 오류가 발생했습니다.' });
   }
 });
@@ -207,7 +208,7 @@ router.post('/', requireBranchManager, async (req, res) => {
       message: '학부모가 등록되었습니다.',
     });
   } catch (error) {
-    console.error('Create parent error:', error);
+    log.error('parent.create_parent_failed', errorFields(error));
     res.status(500).json({ message: '학부모 등록 중 오류가 발생했습니다.' });
   }
 });

@@ -6,6 +6,7 @@ import { eq, and } from 'drizzle-orm';
 import { verifyPassword } from '../utils/helpers';
 import { requireAuth, requireAdmin, requireBranchManager } from '../middleware/auth';
 import type { SessionUser } from '../middleware/auth';
+import { log, errorFields } from '../utils/logger';
 
 const router = express.Router();
 
@@ -81,7 +82,7 @@ router.post('/login', loginLimiter, async (req, res) => {
       user: req.session.user,
     });
   } catch (error) {
-    console.error('Login error:', error);
+    log.error('auth.login_failed', errorFields(error));
     res.status(500).json({ message: '로그인 중 오류가 발생했습니다.' });
   }
 });
@@ -189,7 +190,7 @@ router.post('/impersonate/:branchId', requireAdmin, async (req, res) => {
       originalUser: req.session.originalUser,
     });
   } catch (error) {
-    console.error('Impersonate error:', error);
+    log.error('auth.impersonate_failed', errorFields(error));
     res.status(500).json({ message: '전환 중 오류가 발생했습니다.' });
   }
 });
@@ -243,7 +244,7 @@ router.post('/impersonate/student/:studentId', requireBranchManager, async (req,
       originalUser: req.session.originalUser,
     });
   } catch (error) {
-    console.error('Impersonate error:', error);
+    log.error('auth.impersonate_failed', errorFields(error));
     res.status(500).json({ message: '전환 중 오류가 발생했습니다.' });
   }
 });
@@ -297,7 +298,7 @@ router.post('/impersonate/parent/:parentId', requireBranchManager, async (req, r
       originalUser: req.session.originalUser,
     });
   } catch (error) {
-    console.error('Impersonate error:', error);
+    log.error('auth.impersonate_failed', errorFields(error));
     res.status(500).json({ message: '전환 중 오류가 발생했습니다.' });
   }
 });

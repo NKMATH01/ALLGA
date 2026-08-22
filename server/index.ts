@@ -5,6 +5,8 @@ import session from 'express-session';
 import connectPgSimple from 'connect-pg-simple';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { dbClient } from './db/index';
+import { log, errorFields } from './utils/logger';
 
 // Import routes (to be created)
 import authRoutes from './routes/auth';
@@ -71,6 +73,28 @@ app.use(
 );
 
 // API Routes
+/*
+ * GET /health - 모니터링용. 인증 없음.
+ * DB 가 죽어도 200 으로 응답하고 db:'down' 으로 알린다.
+ * 여기서 비-200 을 내면 모니터가 "앱이 죽었다"로 오인해, 실제로는 살아 있는
+ * 프로세스를 재시작시킬 수 있다. 앱 생존과 의존성 상태는 분리해서 알린다.
+ */
+app.get('/health', async (_req, res) => {
+  let db: 'up' | 'down' = 'down';
+  try {
+    await dbClient`SELECT 1`;
+    db = 'up';
+  } catch (error) {
+    log.error('health.db_check_failed', errorFields(error));
+  }
+
+  res.json({
+    ok: true,
+    db,
+    uptime: Math.round(process.uptime()),
+  });
+});
+
 app.use('/api/auth', authRoutes);
 app.use('/api/exams', examRoutes);
 app.use('/api/branches', branchRoutes);

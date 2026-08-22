@@ -5,6 +5,7 @@ import { db } from '../db/index';
 import { exams, examAttempts, examDistributions } from '../db/schema';
 import { eq } from 'drizzle-orm';
 import { requireAuth, requireAdmin } from '../middleware/auth';
+import { log, errorFields } from '../utils/logger';
 
 const router = express.Router();
 
@@ -62,7 +63,7 @@ router.get('/', requireAuth, async (_req, res) => {
       data: examList,
     });
   } catch (error) {
-    console.error('Get exams error:', error);
+    log.error('exam.get_exams_failed', errorFields(error));
     res.status(500).json({ message: '시험 목록 조회 중 오류가 발생했습니다.' });
   }
 });
@@ -86,7 +87,7 @@ router.get('/available', requireAuth, async (_req, res) => {
       data: examList,
     });
   } catch (error) {
-    console.error('Get available exams error:', error);
+    log.error('exam.get_available_exams_failed', errorFields(error));
     res.status(500).json({ message: '시험 목록 조회 중 오류가 발생했습니다.' });
   }
 });
@@ -107,7 +108,7 @@ router.get('/:id', requireAuth, async (req, res) => {
       data: exam,
     });
   } catch (error) {
-    console.error('Get exam error:', error);
+    log.error('exam.get_exam_failed', errorFields(error));
     res.status(500).json({ message: '시험 조회 중 오류가 발생했습니다.' });
   }
 });
@@ -158,7 +159,7 @@ router.post('/', requireAdmin, async (req, res) => {
       message: '시험이 생성되었습니다.',
     });
   } catch (error) {
-    console.error('Create exam error:', error);
+    log.error('exam.create_exam_failed', errorFields(error));
     res.status(500).json({ message: '시험 생성 중 오류가 발생했습니다.' });
   }
 });
@@ -227,7 +228,7 @@ router.patch('/:id', requireAdmin, async (req, res) => {
       message: '시험이 수정되었습니다.',
     });
   } catch (error) {
-    console.error('Update exam error:', error);
+    log.error('exam.update_exam_failed', errorFields(error));
     res.status(500).json({ message: '시험 수정 중 오류가 발생했습니다.' });
   }
 });
@@ -272,7 +273,7 @@ router.delete('/:id', requireAdmin, async (req, res) => {
       deletedAttempts: attempts.length,
     });
   } catch (error) {
-    console.error('Delete exam error:', error);
+    log.error('exam.delete_exam_failed', errorFields(error));
     res.status(500).json({ message: '시험 삭제 중 오류가 발생했습니다.' });
   }
 });
@@ -407,7 +408,7 @@ router.post('/upload', requireAdmin, upload.single('file'), async (req, res) => 
       },
     });
   } catch (error) {
-    console.error('Upload exam error:', error);
+    log.error('exam.upload_exam_failed', errorFields(error));
     res.status(500).json({ message: '시험 업로드 중 오류가 발생했습니다.' });
   }
 });

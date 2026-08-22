@@ -4,6 +4,7 @@ import { examDistributions, exams, distributionStudents, students, studentClasse
 import { eq, and, inArray } from 'drizzle-orm';
 import { requireAdminOrBranch, requireBranchManager } from '../middleware/auth';
 import { parseLocalDateStart, parseLocalDateEnd } from '../utils/helpers';
+import { log, errorFields } from '../utils/logger';
 
 /**
  * studentIds 가 전부 지정한 지점 소속인지 검증한다.
@@ -83,7 +84,7 @@ router.get('/', requireAdminOrBranch, async (req, res) => {
       data: result,
     });
   } catch (error) {
-    console.error('Get distributions error:', error);
+    log.error('distribution.get_distributions_failed', errorFields(error));
     res.status(500).json({ message: '배포 목록 조회 중 오류가 발생했습니다.' });
   }
 });
@@ -195,7 +196,7 @@ router.post('/', requireAdminOrBranch, async (req, res) => {
         : `${distributions.length}개 지점에 시험이 배포되었습니다.`,
     });
   } catch (error) {
-    console.error('Create distribution error:', error);
+    log.error('distribution.create_distribution_failed', errorFields(error));
     res.status(500).json({ message: '시험 배포 중 오류가 발생했습니다.' });
   }
 });
@@ -220,7 +221,7 @@ router.get('/:id', requireAdminOrBranch, async (req, res) => {
       data: distribution,
     });
   } catch (error) {
-    console.error('Get distribution error:', error);
+    log.error('distribution.get_distribution_failed', errorFields(error));
     res.status(500).json({ message: '배포 조회 중 오류가 발생했습니다.' });
   }
 });
@@ -300,7 +301,7 @@ router.put('/:id', requireAdminOrBranch, async (req, res) => {
         : '배포가 업데이트되었습니다.',
     });
   } catch (error) {
-    console.error('Update distribution error:', error);
+    log.error('distribution.update_distribution_failed', errorFields(error));
     res.status(500).json({ message: '배포 업데이트 중 오류가 발생했습니다.' });
   }
 });
@@ -334,7 +335,7 @@ router.delete('/:id', requireAdminOrBranch, async (req, res) => {
       message: '배포가 삭제되었습니다.',
     });
   } catch (error) {
-    console.error('Delete distribution error:', error);
+    log.error('distribution.delete_distribution_failed', errorFields(error));
     res.status(500).json({ message: '배포 삭제 중 오류가 발생했습니다.' });
   }
 });
@@ -468,7 +469,7 @@ router.get('/:id/students', requireBranchManager, async (req, res) => {
       },
     });
   } catch (error) {
-    console.error('Get distribution students error:', error);
+    log.error('distribution.get_distribution_students_failed', errorFields(error));
     res.status(500).json({ message: '학생 목록 조회 중 오류가 발생했습니다.' });
   }
 });

@@ -77,6 +77,43 @@ export function endOfLocalDay(value: Date | string): Date {
   return d;
 }
 
+/**
+ * 채점 코어. 두 경로(학생 온라인 제출 / 지점 수동 O·X 입력)가 같은 함수를 쓴다.
+ *
+ * 채점 방식은 answers 의 `_gradingMode` 메타키로 갈린다.
+ *   'ox'  : 값이 O=1 / X=0 (지점 수동 채점). 정답 번호와 비교하지 않는다.
+ *   그 외 : 값이 학생이 고른 번호. question.correctAnswer 와 비교한다.
+ *
+ * 라우트에서 분리한 이유는 DB 없이 조합을 검증하기 위해서다. 판정 규칙 자체는
+ * 분리 전과 동일하다.
+ */
+export interface GradeResult {
+  score: number;
+  correctCount: number;
+}
+
+export function gradeAnswers(questionsData: any[], answers: any): GradeResult {
+  const isOx = answers?._gradingMode === 'ox';
+  let score = 0;
+  let correctCount = 0;
+
+  for (const question of questionsData) {
+    const questionNum = question.number || question.questionNumber;
+    const studentAnswer = answers?.[questionNum];
+
+    const correct = isOx
+      ? Number(studentAnswer) === 1
+      : studentAnswer === (question.correctAnswer || question.answer);
+
+    if (correct) {
+      score += question.points || question.score || 0;
+      correctCount++;
+    }
+  }
+
+  return { score, correctCount };
+}
+
 // 등급 산출 로직 (백분율 기준)
 export function calculateGrade(percentage: number): number {
   if (percentage >= 96) return 1;

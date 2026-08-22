@@ -18,4 +18,7 @@ if (!process.env.DATABASE_URL) {
  * 한도를 넘기면 새 연결이 거부되어 제출 자체가 실패한다.
  */
 const client = postgres(process.env.DATABASE_URL, { max: 10 });
+
+/** /health 의 SELECT 1 용. 앱 쿼리는 db(drizzle) 를 쓴다. */
+export const dbClient = client;
 export const db = drizzle(client, { schema });

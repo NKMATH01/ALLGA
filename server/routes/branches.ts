@@ -4,6 +4,7 @@ import { branches, users, students, examAttempts } from '../db/schema';
 import { eq, asc, and, inArray } from 'drizzle-orm';
 import { requireAdmin } from '../middleware/auth';
 import { hashPassword } from '../utils/helpers';
+import { log, errorFields } from '../utils/logger';
 
 const router = express.Router();
 
@@ -39,7 +40,7 @@ router.get('/', requireAdmin, async (_req, res) => {
       data: Array.from(branchesMap.values()),
     });
   } catch (error) {
-    console.error('Get branches error:', error);
+    log.error('branch.get_branches_failed', errorFields(error));
     res.status(500).json({ message: '지점 목록 조회 중 오류가 발생했습니다.' });
   }
 });
@@ -100,7 +101,7 @@ router.post('/', requireAdmin, async (req, res) => {
       message: '지점이 등록되었습니다.',
     });
   } catch (error) {
-    console.error('Create branch error:', error);
+    log.error('branch.create_branch_failed', errorFields(error));
     res.status(500).json({ message: '지점 등록 중 오류가 발생했습니다.' });
   }
 });
@@ -127,7 +128,7 @@ router.put('/:id', requireAdmin, async (req, res) => {
       message: '지점이 수정되었습니다.',
     });
   } catch (error) {
-    console.error('Update branch error:', error);
+    log.error('branch.update_branch_failed', errorFields(error));
     res.status(500).json({ message: '지점 수정 중 오류가 발생했습니다.' });
   }
 });
@@ -186,7 +187,7 @@ router.delete('/:id', requireAdmin, async (req, res) => {
       deactivatedUsers: deactivated.length,
     });
   } catch (error) {
-    console.error('Delete branch error:', error);
+    log.error('branch.delete_branch_failed', errorFields(error));
     res.status(500).json({ message: '지점 삭제 중 오류가 발생했습니다.' });
   }
 });
@@ -215,7 +216,7 @@ router.post('/reorder', requireAdmin, async (req, res) => {
       message: '지점 순서가 변경되었습니다.',
     });
   } catch (error) {
-    console.error('Reorder branches error:', error);
+    log.error('branch.reorder_branches_failed', errorFields(error));
     res.status(500).json({ message: '지점 순서 변경 중 오류가 발생했습니다.' });
   }
 });

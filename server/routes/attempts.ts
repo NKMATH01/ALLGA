@@ -14,7 +14,8 @@ import {
 } from '../db/schema';
 import { eq, and, isNotNull, isNull, inArray } from 'drizzle-orm';
 import { requireStudent, requireBranchManager } from '../middleware/auth';
-import { calculateGrade, endOfLocalDay } from '../utils/helpers';
+import { calculateGrade, endOfLocalDay, gradeAnswers } from '../utils/helpers';
+import { log, errorFields } from '../utils/logger';
 
 const router = express.Router();
 
@@ -171,7 +172,7 @@ router.get('/my-exams', requireStudent, async (req, res) => {
       data: result,
     });
   } catch (error) {
-    console.error('Get my exams error:', error);
+    log.error('attempt.get_my_exams_failed', errorFields(error));
     res.status(500).json({ message: '시험 목록 조회 중 오류가 발생했습니다.' });
   }
 });
@@ -240,7 +241,7 @@ router.get('/my-exams/:distributionId', requireStudent, async (req, res) => {
       },
     });
   } catch (error) {
-    console.error('Get exam detail error:', error);
+    log.error('attempt.get_exam_detail_failed', errorFields(error));
     res.status(500).json({ message: '시험 조회 중 오류가 발생했습니다.' });
   }
 });
@@ -332,7 +333,7 @@ router.get('/exam-attempts/:id', async (req, res) => {
       data: attempt,
     });
   } catch (error) {
-    console.error('Get attempt error:', error);
+    log.error('attempt.get_attempt_failed', errorFields(error));
     res.status(500).json({ message: '시험 응시 조회 중 오류가 발생했습니다.' });
   }
 });
@@ -458,7 +459,7 @@ router.post('/exam-attempts', requireStudent, async (req, res) => {
       message: '이미 시작한 시험입니다.',
     });
   } catch (error) {
-    console.error('Create attempt error:', error);
+    log.error('attempt.create_attempt_failed', errorFields(error));
     res.status(500).json({ message: '시험 시작 중 오류가 발생했습니다.' });
   }
 });
@@ -509,7 +510,7 @@ router.put('/exam-attempts/:id', requireStudent, async (req, res) => {
       message: '답안이 저장되었습니다.',
     });
   } catch (error) {
-    console.error('Save answers error:', error);
+    log.error('attempt.save_answers_failed', errorFields(error));
     res.status(500).json({ message: '답안 저장 중 오류가 발생했습니다.' });
   }
 });
@@ -572,21 +573,9 @@ router.post('/exam-attempts/:id/submit', requireStudent, async (req, res) => {
       return res.status(404).json({ message: '시험을 찾을 수 없습니다.' });
     }
 
-    // Auto-grade
-    let score = 0;
-    let correctCount = 0;
+    // Auto-grade (채점 코어는 helpers.gradeAnswers 로 공용화)
     const questionsData = exam.questionsData as any[];
-
-    for (const question of questionsData) {
-      const questionNum = question.number || question.questionNumber;
-      const studentAnswer = answers[questionNum];
-      const correctAnswer = question.correctAnswer || question.answer;
-      // 학생 답안과 정답 비교
-      if (studentAnswer === correctAnswer) {
-        score += question.points || question.score || 0;
-        correctCount++;
-      }
-    }
+    const { score, correctCount } = gradeAnswers(questionsData, answers);
 
     const maxScore = exam.totalScore;
 
@@ -632,7 +621,7 @@ router.post('/exam-attempts/:id/submit', requireStudent, async (req, res) => {
       message: '시험이 제출되었습니다.',
     });
   } catch (error) {
-    console.error('Submit exam error:', error);
+    log.error('attempt.submit_exam_failed', errorFields(error));
     res.status(500).json({ message: '시험 제출 중 오류가 발생했습니다.' });
   }
 });
@@ -707,7 +696,7 @@ router.get('/branch/completed', async (req, res) => {
       data: result,
     });
   } catch (error) {
-    console.error('Get branch completed attempts error:', error);
+    log.error('attempt.get_branch_completed_attempts_failed', errorFields(error));
     res.status(500).json({ message: '시험 목록 조회 중 오류가 발생했습니다.' });
   }
 });
@@ -768,7 +757,7 @@ router.post('/exam-attempts/branch-create', requireBranchManager, async (req, re
       message: '답안이 생성되었습니다.',
     });
   } catch (error) {
-    console.error('Branch create attempt error:', error);
+    log.error('attempt.branch_create_attempt_failed', errorFields(error));
     res.status(500).json({ message: '답안 생성 중 오류가 발생했습니다.' });
   }
 });
@@ -807,24 +796,15 @@ router.put('/exam-attempts/:id/branch-grade', requireBranchManager, async (req, 
 
     // 지점 수동 채점은 O/X 방식: 클라이언트가 문항별로 O=1 / X=0 을 보낸다.
     // (정답 번호가 아니므로 correctAnswer 와 비교하지 않는다)
-    let score = 0;
-    let correctCount = 0;
-    const questionsData = exam.questionsData as any[];
+    // O/X 방식으로 채점되었음을 기록 (학생 온라인 제출에는 이 키가 없다)
+    const gradedAnswers = { ...answers, _gradingMode: 'ox' };
 
-    for (const question of questionsData) {
-      const questionNum = question.number || question.questionNumber;
-      if (Number(answers[questionNum]) === 1) {
-        score += question.points || question.score || 0;
-        correctCount++;
-      }
-    }
+    const questionsData = exam.questionsData as any[];
+    const { score, correctCount } = gradeAnswers(questionsData, gradedAnswers);
 
     const maxScore = exam.totalScore;
     const percentage = (score / maxScore) * 100;
     const grade = calculateGrade(percentage);
-
-    // O/X 방식으로 채점되었음을 기록 (학생 온라인 제출에는 이 키가 없다)
-    const gradedAnswers = { ...answers, _gradingMode: 'ox' };
 
     // Update attempt
     const now = new Date();
@@ -851,7 +831,7 @@ router.put('/exam-attempts/:id/branch-grade', requireBranchManager, async (req, 
       message: '답안이 입력되고 채점되었습니다.',
     });
   } catch (error) {
-    console.error('Branch grade attempt error:', error);
+    log.error('attempt.branch_grade_attempt_failed', errorFields(error));
     res.status(500).json({ message: '답안 채점 중 오류가 발생했습니다.' });
   }
 });
@@ -899,7 +879,7 @@ router.delete('/exam-attempts/:id', requireBranchManager, async (req, res) => {
       message: '답안이 삭제되었습니다.',
     });
   } catch (error) {
-    console.error('Delete attempt error:', error);
+    log.error('attempt.delete_attempt_failed', errorFields(error));
     res.status(500).json({ message: '답안 삭제 중 오류가 발생했습니다.' });
   }
 });

@@ -3,6 +3,7 @@ import { db } from '../db/index';
 import { students, branches, exams, examAttempts } from '../db/schema';
 import { eq, sql } from 'drizzle-orm';
 import { requireAdmin } from '../middleware/auth';
+import { log, errorFields } from '../utils/logger';
 
 const router = express.Router();
 
@@ -107,7 +108,7 @@ router.get('/stats', requireAdmin, async (req, res) => {
       },
     });
   } catch (error) {
-    console.error('Get admin stats error:', error);
+    log.error('admin.get_admin_stats_failed', errorFields(error));
     res.status(500).json({ message: '통계 조회 중 오류가 발생했습니다.' });
   }
 });
@@ -134,7 +135,7 @@ router.get('/recent-activity', requireAdmin, async (_req, res) => {
       },
     });
   } catch (error) {
-    console.error('Get recent activity error:', error);
+    log.error('admin.get_recent_activity_failed', errorFields(error));
     res.status(500).json({ message: '최근 활동 조회 중 오류가 발생했습니다.' });
   }
 });
