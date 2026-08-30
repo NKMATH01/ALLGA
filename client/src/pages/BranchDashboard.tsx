@@ -1527,6 +1527,51 @@ export default function BranchDashboard({ user }: { user: User }) {
     const boardDist =
       boardDistributions.find((d: any) => d.distribution.id === boardDistributionId) || boardDistributions[0] || null;
 
+    /*
+      배포 선택 라벨. 제목이 완전히 같은 배포가 실제로 있어서 제목만으로는
+      드롭다운의 두 항목이 구분되지 않는다. startDate 까지 같은 경우가 있어
+      구분에 쓸 수 없으므로 배포 생성 시각(createdAt)을 병기한다.
+      시각 표기는 새 유틸을 만들지 않고 이 파일이 이미 쓰는
+      toLocaleString('ko-KR') 을 그대로 쓴다.
+    */
+    const boardLabelEntries = boardDistributions.map((d: any) => {
+      const title = d.exam?.title || '제목 없는 시험';
+      const created = d.distribution.createdAt;
+      const stamp = created
+        ? new Date(created).toLocaleString('ko-KR', {
+            month: 'numeric',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false,
+          })
+        : '';
+      return {
+        id: d.distribution.id as string,
+        createdAt: created ? new Date(created).getTime() : 0,
+        base: stamp ? `${title} · 배포 ${stamp}` : title,
+      };
+    });
+
+    // 겹치는 라벨에만 순번을 붙인다. 멀쩡한 이름에 번호를 달면 지면만 시끄러워진다.
+    const boardLabelCounts = new Map<string, number>();
+    boardLabelEntries.forEach((e) => boardLabelCounts.set(e.base, (boardLabelCounts.get(e.base) || 0) + 1));
+
+    const boardLabelSeq = new Map<string, number>();
+    const boardLabels = new Map<string, string>();
+    boardLabelEntries
+      .slice()
+      .sort((a, b) => a.createdAt - b.createdAt)
+      .forEach((e) => {
+        if ((boardLabelCounts.get(e.base) || 0) > 1) {
+          const n = (boardLabelSeq.get(e.base) || 0) + 1;
+          boardLabelSeq.set(e.base, n);
+          boardLabels.set(e.id, `${e.base} (${n})`);
+        } else {
+          boardLabels.set(e.id, e.base);
+        }
+      });
+
     if (!boardDist) {
       return (
         <section className="mb-6">
@@ -1615,7 +1660,7 @@ export default function BranchDashboard({ user }: { user: User }) {
               <SelectContent>
                 {boardDistributions.map((d: any) => (
                   <SelectItem key={d.distribution.id} value={d.distribution.id}>
-                    {d.exam?.title || '제목 없는 시험'}
+                    {boardLabels.get(d.distribution.id) || d.exam?.title || '제목 없는 시험'}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -1623,7 +1668,8 @@ export default function BranchDashboard({ user }: { user: User }) {
           )}
         </div>
         <p className="mb-3 text-xs text-ink-secondary">
-          {boardDist.exam?.title || '제목 없는 시험'} · 대상 {rows.length}명
+          {boardLabels.get(boardDist.distribution.id) || boardDist.exam?.title || '제목 없는 시험'} · 대상{' '}
+          {rows.length}명
         </p>
         <StatusBoard columns={columns} />
       </section>
