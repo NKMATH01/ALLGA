@@ -4,11 +4,16 @@ import { api } from '../lib/api';
 import { toast } from '../components/ui/toast';
 import { ThemeToggle } from '../components/ui/theme-toggle';
 import { StatValue } from '../components/ui/stat-value';
+import { StatStrip, StatStripItem } from '../components/ui/stat-strip';
+import { PageHeader } from '../components/ui/page-header';
+import { SegmentedControl } from '../components/ui/segmented-control';
+import { StatusBoard, StatusBoardCard, type StatusTone } from '../components/ui/status-board';
 import { ensureReport, openFullReport } from '../lib/reportClient';
 import { useModalA11y, isMobileViewport } from '../lib/useModalA11y';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Users, GraduationCap, FileText, BarChart3, LogOut, LayoutDashboard, Menu, Home, Plus, Trash2, CheckCircle, XCircle, Edit, Sparkles, ArrowLeft, Search } from 'lucide-react';
 
 interface User {
@@ -67,6 +72,8 @@ export default function BranchDashboard({ user }: { user: User }) {
   const [selectedAttempt, setSelectedAttempt] = useState<any>(null);
   const [selectedDashboardView, setSelectedDashboardView] = useState<'students' | 'classes' | 'distributions' | 'exam-attempts' | null>(null);
   const [selectedDistributionId, setSelectedDistributionId] = useState<string | null>(null);
+  // 응시 현황 보드가 보고 있는 배포. null 이면 가장 최근 배포를 쓴다.
+  const [boardDistributionId, setBoardDistributionId] = useState<string | null>(null);
   const [selectedClassStudents, setSelectedClassStudents] = useState<string[]>([]);
   const [classRosterLoading, setClassRosterLoading] = useState(false);
   const [gradeFilter, setGradeFilter] = useState<string>('');
@@ -557,105 +564,124 @@ export default function BranchDashboard({ user }: { user: User }) {
     { id: 'reports' as MenuSection, label: '보고서', icon: BarChart3 },
   ];
 
+  /*
+    보기 전환은 세그먼트 토글과 KPI 첫 칸 두 곳에서 걸린다. 두 입력이 각자
+    상태를 들면 서로 어긋나므로, 원래부터 있던 selectedDashboardView 하나만
+    쓰고 토글은 그것을 다른 모양으로 보여 줄 뿐이다. null(= 전체)을 세그먼트
+    값으로 다룰 수 없어 'all' 이라는 이름만 씌운다.
+  */
+  type DashboardViewKey = 'all' | 'students' | 'classes' | 'exam-attempts';
+  const dashboardViewKey: DashboardViewKey =
+    selectedDashboardView === 'students' ||
+    selectedDashboardView === 'classes' ||
+    selectedDashboardView === 'exam-attempts'
+      ? selectedDashboardView
+      : 'all';
+  const setDashboardViewKey = (key: DashboardViewKey) =>
+    setSelectedDashboardView(key === 'all' ? null : key);
+
   const renderDashboard = () => (
     <>
       {/*
-        통계 카드: DESIGN.md 5.2. 아이콘 타일과 장식 원을 제거하고 라벨 / 수치 / 각주 3단으로.
-        선택 상태는 확대(scale)가 아니라 테두리와 면으로 표시한다 (8.2 자동 애니메이션 금지).
-        카드가 4개이므로 그리드도 4열로 맞춘다 (기존 5열은 빈 칸이 남았다).
+        요약 화면이므로 제목 블록을 둔다 (DESIGN.md 11.9). 관리 목록과 달리
+        한 화면에 성격이 다른 덩어리가 섞여 있어 좌측 내비만으로는 무엇을
+        보고 있는지가 설명되지 않는다. 우측 토글은 본문 보기를 실제로 바꾼다.
+      */}
+      <PageHeader
+        overline="지점 관리"
+        title="한눈에 보기"
+        description="지점의 학생·반·응시 현황을 한 화면에서 확인합니다."
+        actions={
+          <SegmentedControl
+            ariaLabel="본문 보기 선택"
+            value={dashboardViewKey}
+            onChange={setDashboardViewKey}
+            options={[
+              { value: 'all', label: '전체' },
+              { value: 'students', label: '학생' },
+              { value: 'classes', label: '반' },
+              { value: 'exam-attempts', label: '응시' },
+            ]}
+          />
+        }
+      />
+
+      {/*
+        KPI 스트립: DESIGN.md 5.2 / 11.9. 카드 4장으로 흩지 않고 한 컨테이너
+        안에서 구분선으로 가른다. 네 숫자는 지점의 한 상태를 함께 말하는
+        한 벌이므로 각각 독립된 카드로 세울 이유가 없다.
+        선택 상태는 확대(scale)가 아니라 면으로 표시한다 (8.2 자동 애니메이션 금지).
         브라스 0곳: 관리 화면에는 강조할 성취 요소가 없다 (DESIGN.md 1.2).
       */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-8">
-        <Card
-          className={`cursor-pointer transition-colors duration-150 ease-out hover:border-line-strong ${
-            selectedDashboardView === 'students' ? 'border-line-strong bg-surface-subtle' : ''
-          }`}
-          onClick={() => setSelectedDashboardView(selectedDashboardView === 'students' ? null : 'students')}
-        >
-          <CardContent className="p-5 pt-5">
-            <p className="text-xs font-semibold tracking-[0.08em] text-ink-tertiary">총 학생 수</p>
-            <div className="mt-3">
-              <StatValue
-                value={students?.length}
-                isLoading={studentsLoading}
-                isError={studentsError}
-                onRetry={() => refetchStudents()}
-                valueClassName="text-4xl font-bold leading-none tracking-[-0.03em] text-ink"
-              />
-            </div>
-            <p className="text-xs text-ink-secondary mt-3">등록된 학생. 눌러서 목록 보기</p>
-          </CardContent>
-        </Card>
+      <div className="mb-8">
+        <StatStrip>
+          <StatStripItem
+            label="총 학생 수"
+            footnote="등록된 학생. 눌러서 목록 보기"
+            isActive={selectedDashboardView === 'students'}
+            onClick={() => setSelectedDashboardView(selectedDashboardView === 'students' ? null : 'students')}
+          >
+            <StatValue
+              value={students?.length}
+              isLoading={studentsLoading}
+              isError={studentsError}
+              onRetry={() => refetchStudents()}
+              valueClassName="text-4xl font-bold leading-none tracking-[-0.03em] text-ink"
+            />
+          </StatStripItem>
 
-        <Card>
-          <CardContent className="p-5 pt-5">
-            <p className="text-xs font-semibold tracking-[0.08em] text-ink-tertiary">보고서 완료</p>
-            <div className="mt-3">
-              <StatValue
-                value={allDistributionStudents?.reduce((total: number, distData: any) => {
-                  const studentsWithReports = distData.students?.filter((s: any) => s.hasReport) || [];
-                  return total + studentsWithReports.length;
-                }, 0)}
-                isLoading={distributionsLoading || allDistLoading}
-                isError={distributionsError || allDistError}
-                onRetry={() => {
-                  refetchDistributions();
-                  refetchAllDistributionStudents();
-                }}
-                valueClassName="text-4xl font-bold leading-none tracking-[-0.03em] text-ink"
-              />
-            </div>
-            <p className="text-xs text-ink-secondary mt-3">AI 분석 완료 학생</p>
-          </CardContent>
-        </Card>
+          <StatStripItem label="보고서 완료" footnote="AI 분석 완료 학생">
+            <StatValue
+              value={allDistributionStudents?.reduce((total: number, distData: any) => {
+                const studentsWithReports = distData.students?.filter((s: any) => s.hasReport) || [];
+                return total + studentsWithReports.length;
+              }, 0)}
+              isLoading={distributionsLoading || allDistLoading}
+              isError={distributionsError || allDistError}
+              onRetry={() => {
+                refetchDistributions();
+                refetchAllDistributionStudents();
+              }}
+              valueClassName="text-4xl font-bold leading-none tracking-[-0.03em] text-ink"
+            />
+          </StatStripItem>
 
-        <Card
-          className={`cursor-pointer transition-colors duration-150 ease-out hover:border-line-strong ${
-            selectedDashboardView === 'classes' ? 'border-line-strong bg-surface-subtle' : ''
-          }`}
-          onClick={() => setSelectedDashboardView(selectedDashboardView === 'classes' ? null : 'classes')}
-        >
-          <CardContent className="p-5 pt-5">
-            <p className="text-xs font-semibold tracking-[0.08em] text-ink-tertiary">총 반 수</p>
-            <div className="mt-3">
-              <StatValue
-                value={classes?.length}
-                isLoading={classesLoading}
-                isError={classesError}
-                onRetry={() => refetchClasses()}
-                valueClassName="text-4xl font-bold leading-none tracking-[-0.03em] text-ink"
-              />
-            </div>
-            <p className="text-xs text-ink-secondary mt-3">운영 중인 반. 눌러서 목록 보기</p>
-          </CardContent>
-        </Card>
+          <StatStripItem
+            label="총 반 수"
+            footnote="운영 중인 반. 눌러서 목록 보기"
+            isActive={selectedDashboardView === 'classes'}
+            onClick={() => setSelectedDashboardView(selectedDashboardView === 'classes' ? null : 'classes')}
+          >
+            <StatValue
+              value={classes?.length}
+              isLoading={classesLoading}
+              isError={classesError}
+              onRetry={() => refetchClasses()}
+              valueClassName="text-4xl font-bold leading-none tracking-[-0.03em] text-ink"
+            />
+          </StatStripItem>
 
-        <Card
-          className={`cursor-pointer transition-colors duration-150 ease-out hover:border-line-strong ${
-            selectedDashboardView === 'exam-attempts' ? 'border-line-strong bg-surface-subtle' : ''
-          }`}
-          onClick={() => setSelectedDashboardView(selectedDashboardView === 'exam-attempts' ? null : 'exam-attempts')}
-        >
-          <CardContent className="p-5 pt-5">
-            <p className="text-xs font-semibold tracking-[0.08em] text-ink-tertiary">시험</p>
-            <div className="mt-3">
-              <StatValue
-                value={allDistributionStudents?.reduce((total: number, distData: any) => {
-                  const studentsWithAttempts = distData.students?.filter((s: any) => s.hasAttempt) || [];
-                  return total + studentsWithAttempts.length;
-                }, 0)}
-                isLoading={distributionsLoading || allDistLoading}
-                isError={distributionsError || allDistError}
-                onRetry={() => {
-                  refetchDistributions();
-                  refetchAllDistributionStudents();
-                }}
-                valueClassName="text-4xl font-bold leading-none tracking-[-0.03em] text-ink"
-              />
-            </div>
-            <p className="text-xs text-ink-secondary mt-3">응시와 채점 학생. 눌러서 목록 보기</p>
-          </CardContent>
-        </Card>
+          <StatStripItem
+            label="시험"
+            footnote="응시와 채점 학생. 눌러서 목록 보기"
+            isActive={selectedDashboardView === 'exam-attempts'}
+            onClick={() => setSelectedDashboardView(selectedDashboardView === 'exam-attempts' ? null : 'exam-attempts')}
+          >
+            <StatValue
+              value={allDistributionStudents?.reduce((total: number, distData: any) => {
+                const studentsWithAttempts = distData.students?.filter((s: any) => s.hasAttempt) || [];
+                return total + studentsWithAttempts.length;
+              }, 0)}
+              isLoading={distributionsLoading || allDistLoading}
+              isError={distributionsError || allDistError}
+              onRetry={() => {
+                refetchDistributions();
+                refetchAllDistributionStudents();
+              }}
+              valueClassName="text-4xl font-bold leading-none tracking-[-0.03em] text-ink"
+            />
+          </StatStripItem>
+        </StatStrip>
       </div>
 
       {/* 상세 정보 표 */}
@@ -950,8 +976,14 @@ export default function BranchDashboard({ user }: { user: User }) {
         </section>
       )}
 
-      {/* 최근 활동 - 시험 응시 학생 */}
+      {/*
+        응시 현황 보드 + 최근 활동. 두 덩어리 모두 "전체" 보기에서만 나온다.
+        학생/반/응시 목록으로 파고든 상태에서 요약을 다시 겹쳐 놓으면
+        무엇을 보고 있는지가 흐려진다.
+      */}
       {!selectedDashboardView && (
+        <>
+          {renderAttemptBoard()}
         <section className="mb-6">
           <h2 className="mb-2 border-l-[3px] border-action pl-2 text-sm font-bold tracking-wide text-ink">시험 응시 학생</h2>
           <div>
@@ -1120,6 +1152,7 @@ export default function BranchDashboard({ user }: { user: User }) {
             )}
           </div>
         </section>
+        </>
       )}
     </>
   );
@@ -1420,6 +1453,181 @@ export default function BranchDashboard({ user }: { user: User }) {
     } catch (error: any) {
       toast.error(error.response?.data?.message || error.message || '보고서를 열 수 없습니다.');
     }
+  };
+
+  /*
+    응시 현황 보드 (DESIGN.md 11.9).
+
+    이미 받아 둔 allDistributionStudents 만 뒤집어 쓰고 새 API 를 부르지 않는다 (11.6.5).
+    칸을 가르는 것은 사람이 아니라 데이터다. 그래서 카드를 끌어 옮기지 않는다.
+
+      미응시      !hasAttempt                neutral
+      작성 중     hasAttempt && !isSubmitted warning   <- 손이 가야 하는 유일한 칸
+      채점 완료   isSubmitted && !hasReport  neutral
+      보고서 완료 hasReport                  neutral
+
+    카드 클릭은 새 핸들러를 만들지 않고 기존 openStudentReport 로 보낸다.
+    보고서가 있으면 그것을 열고, 없으면 ensureReport 가 생성한 뒤 연다
+    (= 기존 목록의 [보고서 / AI 분석] 버튼과 같은 경로). 응시 기록이 없거나
+    아직 제출되지 않은 카드는 누를 곳이 없다 - 답안 입력은 배포를 고른
+    상태에서만 성립하는 인라인 동작이라 재사용할 명명된 핸들러가 없다.
+  */
+  const renderAttemptBoard = () => {
+    const boardTitle = (
+      <h2 className="mb-2 border-l-[3px] border-action pl-2 text-sm font-bold tracking-wide text-ink">
+        응시 현황
+      </h2>
+    );
+
+    // 못 받아온 것과 0명은 다르다. 거짓 0 을 그리지 않는다 (11.7).
+    if (distributionsLoading || allDistLoading) {
+      return (
+        <section className="mb-6">
+          {boardTitle}
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4" role="status" aria-label="불러오는 중">
+            {[0, 1, 2, 3].map((i) => (
+              <div key={i} className="h-44 animate-pulse rounded-lg border border-line bg-surface-subtle" />
+            ))}
+          </div>
+        </section>
+      );
+    }
+
+    if (distributionsError || allDistError) {
+      return (
+        <section className="mb-6">
+          {boardTitle}
+          <div className="rounded-lg border border-line bg-surface p-8 text-center">
+            <p className="text-sm font-semibold text-fn-error">응시 현황을 불러오지 못했습니다</p>
+            <p className="mt-1 text-xs text-ink-secondary">배포 목록 또는 배포별 학생 조회가 실패했습니다.</p>
+            <button
+              type="button"
+              onClick={() => {
+                refetchDistributions();
+                refetchAllDistributionStudents();
+              }}
+              className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-ink-secondary underline underline-offset-2 transition-colors duration-150 ease-out hover:text-ink"
+            >
+              재시도
+            </button>
+          </div>
+        </section>
+      );
+    }
+
+    // 기본값은 가장 최근 배포(생성일 기준)다.
+    const boardDistributions = (Array.isArray(allDistributionStudents) ? allDistributionStudents : [])
+      .filter((d: any) => d?.distribution?.id)
+      .slice()
+      .sort(
+        (a: any, b: any) =>
+          new Date(b.distribution.createdAt || 0).getTime() - new Date(a.distribution.createdAt || 0).getTime()
+      );
+
+    const boardDist =
+      boardDistributions.find((d: any) => d.distribution.id === boardDistributionId) || boardDistributions[0] || null;
+
+    if (!boardDist) {
+      return (
+        <section className="mb-6">
+          {boardTitle}
+          <div className="rounded-lg border border-line bg-surface p-8 text-center">
+            <p className="text-sm text-ink-secondary">배포된 시험이 없습니다.</p>
+          </div>
+        </section>
+      );
+    }
+
+    // 학년은 배포별 학생 응답에 없다. 이미 받아 둔 학생 목록에서만 붙이고,
+    // 없으면 칩을 만들지 않는다 (11.8 데이터가 없는 열은 만들지 않습니다).
+    const gradeByStudentId = new Map<string, string>();
+    studentList.forEach((s: any) => {
+      const g = String(s?.grade || '').trim();
+      if (s?.id && g) gradeByStudentId.set(s.id, g);
+    });
+
+    const rows: any[] = Array.isArray(boardDist.students) ? boardDist.students : [];
+
+    const toCard = (row: any, tone: StatusTone) => {
+      const meta = row.isSubmitted
+        ? `${row.score ?? 0} / ${row.maxScore ?? 0}${row.grade ? ` · ${row.grade}등급` : ''}`
+        : '-';
+      return (
+        <StatusBoardCard
+          key={row.studentId}
+          chip={gradeByStudentId.get(row.studentId)}
+          tone={tone}
+          title={row.studentName || '이름 없음'}
+          meta={meta}
+          footnote={row.submittedAt ? new Date(row.submittedAt).toLocaleString('ko-KR') : undefined}
+          onClick={
+            row.isSubmitted && row.attemptId ? () => openStudentReport(row.attemptId) : undefined
+          }
+        />
+      );
+    };
+
+    const columns = [
+      {
+        key: 'not-attempted',
+        label: '미응시',
+        tone: 'neutral' as StatusTone,
+        cards: rows.filter((r) => !r.hasAttempt).map((r) => toCard(r, 'neutral')),
+        emptyText: '전원 응시했습니다',
+      },
+      {
+        key: 'writing',
+        label: '작성 중',
+        tone: 'warning' as StatusTone,
+        cards: rows.filter((r) => r.hasAttempt && !r.isSubmitted).map((r) => toCard(r, 'warning')),
+        emptyText: '작성 중인 학생이 없습니다',
+      },
+      {
+        key: 'scored',
+        label: '채점 완료',
+        tone: 'neutral' as StatusTone,
+        cards: rows.filter((r) => r.isSubmitted && !r.hasReport).map((r) => toCard(r, 'neutral')),
+        emptyText: '채점만 끝난 학생이 없습니다',
+      },
+      {
+        key: 'reported',
+        label: '보고서 완료',
+        tone: 'neutral' as StatusTone,
+        cards: rows.filter((r) => r.hasReport).map((r) => toCard(r, 'neutral')),
+        emptyText: '생성된 보고서가 없습니다',
+      },
+    ];
+
+    return (
+      <section className="mb-6">
+        <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <h2 className="border-l-[3px] border-action pl-2 text-sm font-bold tracking-wide text-ink">
+            응시 현황
+          </h2>
+          {boardDistributions.length > 1 && (
+            <Select
+              value={boardDist.distribution.id}
+              onValueChange={(value) => setBoardDistributionId(value)}
+            >
+              <SelectTrigger className="h-9 w-full sm:w-72" aria-label="배포 선택">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {boardDistributions.map((d: any) => (
+                  <SelectItem key={d.distribution.id} value={d.distribution.id}>
+                    {d.exam?.title || '제목 없는 시험'}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        </div>
+        <p className="mb-3 text-xs text-ink-secondary">
+          {boardDist.exam?.title || '제목 없는 시험'} · 대상 {rows.length}명
+        </p>
+        <StatusBoard columns={columns} />
+      </section>
+    );
   };
 
   /** 배포 id 로 시험 원본(questionsData 포함)을 찾는다. 이미 받아 둔 응답에서만 꺼낸다. */

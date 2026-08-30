@@ -4,6 +4,8 @@ import { api } from '../lib/api';
 import { toast } from '../components/ui/toast';
 import { ThemeToggle } from '../components/ui/theme-toggle';
 import { StatValue } from '../components/ui/stat-value';
+import { StatStrip, StatStripItem } from '../components/ui/stat-strip';
+import { PageHeader } from '../components/ui/page-header';
 import { useModalA11y, isMobileViewport } from '../lib/useModalA11y';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -408,73 +410,65 @@ export default function AdminDashboard({ user }: { user: User }) {
   const renderDashboard = () => (
     <>
       {/*
-        통계 카드: DESIGN.md 5.2. 아이콘 타일과 장식 원을 제거하고 라벨 / 수치 / 각주 3단으로.
-        브라스 1곳 / 최대 2: 전사 평균 점수. 이 화면에서 유일한 성취 지표다 (DESIGN.md 1.2).
+        요약 화면이므로 제목 블록을 둔다 (DESIGN.md 11.9).
+        보기 전환 토글은 두지 않는다 - 이 화면의 본문은 지점별 통계 표 하나뿐이라
+        전환할 대상이 없고, 죽은 장식 컨트롤은 만들지 않는다.
       */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-8">
-        <Card>
-          <CardContent className="p-5 pt-5">
-            <p className="text-xs font-semibold tracking-[0.08em] text-ink-tertiary">총 학생 수</p>
-            <div className="mt-3">
-              <StatValue
-                value={stats?.totalStudents}
-                isLoading={statsLoading}
-                isError={statsError}
-                onRetry={() => refetchStats()}
-                valueClassName="text-4xl font-bold leading-none tracking-[-0.03em] text-ink"
-              />
-            </div>
-            <p className="text-xs text-ink-secondary mt-3">전체 등록 학생</p>
-          </CardContent>
-        </Card>
+      <PageHeader
+        overline="전체 관리"
+        title="한눈에 보기"
+        description="전 지점의 학생·시험·평균을 한 화면에서 확인합니다."
+      />
 
-        <Card>
-          <CardContent className="p-5 pt-5">
-            <p className="text-xs font-semibold tracking-[0.08em] text-ink-tertiary">총 지점 수</p>
-            <div className="mt-3">
-              <StatValue
-                value={stats?.totalBranches}
-                isLoading={statsLoading}
-                isError={statsError}
-                onRetry={() => refetchStats()}
-                valueClassName="text-4xl font-bold leading-none tracking-[-0.03em] text-ink"
-              />
-            </div>
-            <p className="text-xs text-ink-secondary mt-3">운영 중인 지점</p>
-          </CardContent>
-        </Card>
+      {/*
+        KPI 스트립: DESIGN.md 5.2 / 11.9. 카드 4장으로 흩지 않고 한 컨테이너
+        안에서 구분선으로 가른다.
+        브라스 0곳: 관리 화면에는 브라스를 쓰지 않는다 (DESIGN.md 1.2).
+        평균 점수는 전사 집계 수치이지 누군가의 성취가 아니므로, 이전의
+        accent 강조(카드 상단 바 + 숫자 색)를 걷어내고 무채색으로 통일한다.
+      */}
+      <div className="mb-8">
+        <StatStrip>
+          <StatStripItem label="총 학생 수" footnote="전체 등록 학생">
+            <StatValue
+              value={stats?.totalStudents}
+              isLoading={statsLoading}
+              isError={statsError}
+              onRetry={() => refetchStats()}
+              valueClassName="text-4xl font-bold leading-none tracking-[-0.03em] text-ink"
+            />
+          </StatStripItem>
 
-        <Card>
-          <CardContent className="p-5 pt-5">
-            <p className="text-xs font-semibold tracking-[0.08em] text-ink-tertiary">총 시험 수</p>
-            <div className="mt-3">
-              <StatValue
-                value={stats?.totalExams}
-                isLoading={statsLoading}
-                isError={statsError}
-                onRetry={() => refetchStats()}
-                valueClassName="text-4xl font-bold leading-none tracking-[-0.03em] text-ink"
-              />
-            </div>
-            <p className="text-xs text-ink-secondary mt-3">생성된 시험</p>
-          </CardContent>
-        </Card>
+          <StatStripItem label="총 지점 수" footnote="운영 중인 지점">
+            <StatValue
+              value={stats?.totalBranches}
+              isLoading={statsLoading}
+              isError={statsError}
+              onRetry={() => refetchStats()}
+              valueClassName="text-4xl font-bold leading-none tracking-[-0.03em] text-ink"
+            />
+          </StatStripItem>
 
-        <Card className="border-t-[3px] border-t-accent">
-          <CardContent className="p-5 pt-5">
-            <p className="text-xs font-semibold tracking-[0.08em] text-ink-tertiary">평균 점수</p>
-            <div className="mt-3">
-              <StatValue
-                value={stats?.averageScore}
-                isLoading={statsLoading}
-                isError={statsError}
-                onRetry={() => refetchStats()}
-                valueClassName="text-4xl font-bold leading-none tracking-[-0.03em] text-accent-strong"
-              />
-            </div>
-            <p className="text-xs text-ink-secondary mt-3">전체 평균</p>
-          </CardContent>
-        </Card>
+          <StatStripItem label="총 시험 수" footnote="생성된 시험">
+            <StatValue
+              value={stats?.totalExams}
+              isLoading={statsLoading}
+              isError={statsError}
+              onRetry={() => refetchStats()}
+              valueClassName="text-4xl font-bold leading-none tracking-[-0.03em] text-ink"
+            />
+          </StatStripItem>
+
+          <StatStripItem label="평균 점수" footnote="전체 평균">
+            <StatValue
+              value={stats?.averageScore}
+              isLoading={statsLoading}
+              isError={statsError}
+              onRetry={() => refetchStats()}
+              valueClassName="text-4xl font-bold leading-none tracking-[-0.03em] text-ink"
+            />
+          </StatStripItem>
+        </StatStrip>
       </div>
 
       {/* Branch Statistics Table */}
