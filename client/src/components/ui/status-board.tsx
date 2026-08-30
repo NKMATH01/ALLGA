@@ -10,7 +10,8 @@
     정상 귀결에는 색을 쓰지 않는다. 네 칸을 전부 물들이면 색이 상태를 알리는
     신호가 아니라 배경 장식이 된다. 손이 가야 하는 칸 하나만 warning 이고
     나머지는 무채색이다. 특히 미응시/미제출에 빨강을 쓰지 않는다 - 아직 안 친
-    시험은 실패가 아니다.
+    시험은 실패가 아니다. 또한 warning 칸이라도 카드가 0장이면 무채색으로
+    그린다 - 비어 있다는 것은 벗어난 상태가 아니라 손 갈 일이 없다는 뜻이다.
 */
 export type StatusTone = 'neutral' | 'warning';
 
@@ -30,12 +31,21 @@ const CARD_TONE: Record<StatusTone, string> = {
   warning: 'border-l-fn-warning hover:border-l-fn-warning',
 };
 
+/*
+  한 칸에 그리는 카드 수의 상한. 요약 화면의 블록 하나가 나머지를 밀어내면
+  요약이 아니다 (11.1 밀도). 6장까지가 보드 아래 본문(시험 응시 학생 표)이
+  첫 화면에 남아 있는 선이다. 넘치는 만큼은 칸 안에 스크롤을 만들지 않고
+  "+ N명 더" 한 줄로 말한다 - 숨은 스크롤 영역은 있는 줄 모르고 지나친다.
+*/
+const MAX_VISIBLE_CARDS = 6;
+
 export function StatusBoard({
   columns,
 }: {
   columns: {
     key: string;
     label: string;
+    /** "손이 가야 하는 칸"이라는 의미만 넘긴다. 실제로 칠할지는 보드가 정한다 */
     tone: StatusTone;
     /** 이미 만들어진 카드 노드. 보드는 배치만 맡고 내용은 호출부가 정한다 */
     cards: React.ReactNode[];
@@ -45,19 +55,32 @@ export function StatusBoard({
 }) {
   return (
     <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-      {columns.map((column) => (
-        <div key={column.key} className={`rounded-lg border p-3 ${COLUMN_TONE[column.tone]}`}>
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-sm font-semibold text-ink">{column.label}</span>
-            <span className="text-sm font-semibold text-ink-secondary">{column.cards.length}</span>
+      {columns.map((column) => {
+        // 빈 칸은 벗어난 상태가 아니므로 warning 이어도 무채색으로 그린다.
+        const tone: StatusTone = column.cards.length > 0 ? column.tone : 'neutral';
+        const visibleCards = column.cards.slice(0, MAX_VISIBLE_CARDS);
+        // 칸 머리의 건수는 자르기 전 전체 수를 그대로 보여준다.
+        const hiddenCount = column.cards.length - visibleCards.length;
+
+        return (
+          <div key={column.key} className={`rounded-lg border p-3 ${COLUMN_TONE[tone]}`}>
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-sm font-semibold text-ink">{column.label}</span>
+              <span className="text-sm font-semibold text-ink-secondary">{column.cards.length}</span>
+            </div>
+            {column.cards.length === 0 ? (
+              <p className="py-6 text-center text-xs text-ink-tertiary">{column.emptyText}</p>
+            ) : (
+              <>
+                <div className="mt-3 space-y-2">{visibleCards}</div>
+                {hiddenCount > 0 && (
+                  <p className="pt-2 text-center text-xs text-ink-secondary">+ {hiddenCount}명 더</p>
+                )}
+              </>
+            )}
           </div>
-          {column.cards.length === 0 ? (
-            <p className="py-6 text-center text-xs text-ink-tertiary">{column.emptyText}</p>
-          ) : (
-            <div className="mt-3 space-y-2">{column.cards}</div>
-          )}
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
