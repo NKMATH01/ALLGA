@@ -22,6 +22,36 @@ async function validateStudentsInBranch(studentIds: string[], branchId: string):
   return null;
 }
 
+/**
+ * 배포 1건에 속한 학생 1명의 응답 행을 만든다.
+ * `/students`(배치)와 `/:id/students`(단건)가 같은 모양을 내야 하므로 한 곳에 모아둔다.
+ * 두 곳이 각자 조립하면 필드가 조용히 갈라진다.
+ */
+function buildDistributionStudentRow(
+  row: { student: typeof students.$inferSelect; user: typeof users.$inferSelect },
+  attempt: typeof examAttempts.$inferSelect | undefined,
+  reportByAttemptId: Map<string, { id: string }>
+) {
+  // 보고서는 제출된 응시에 대해서만 조회했었다. 그 조건을 그대로 유지한다.
+  const report = attempt && attempt.submittedAt ? reportByAttemptId.get(attempt.id) : undefined;
+
+  return {
+    studentId: row.student.id,
+    studentName: row.user.name,
+    studentPhone: row.user.phone,
+    attemptId: attempt?.id || null,
+    answers: attempt?.answers || null,
+    score: attempt?.score || null,
+    maxScore: attempt?.maxScore || null,
+    grade: attempt?.grade || null,
+    submittedAt: attempt?.submittedAt || null,
+    hasAttempt: !!attempt,
+    isSubmitted: !!(attempt && attempt.submittedAt),
+    hasReport: !!report,
+    reportId: report?.id || null,
+  };
+}
+
 const router = express.Router();
 
 // GET /api/distributions - 시험 배포 목록 조회
@@ -205,6 +235,176 @@ router.post('/', requireAdminOrBranch, async (req, res) => {
   } catch (error) {
     log.error('distribution.create_distribution_failed', errorFields(error));
     res.status(500).json({ message: '시험 배포 중 오류가 발생했습니다.' });
+  }
+});
+
+// GET /api/distributions/students - 지점의 모든 배포에 대한 학생 목록·응시 상태를 한 번에 조회
+//
+// ⚠ 등록 순서 주의: 이 라우트는 반드시 아래 router.get('/:id', ...) 보다 위에 있어야 한다.
+//    아래로 옮기면 '/students' 요청이 :id === 'students' 로 잡혀 404 로 조용히 깨진다.
+//    (정렬·리팩터링 중에 순서를 바꾸지 말 것)
+//
+// 대시보드가 배포마다 /:id/students 를 부르면 배포 수만큼 요청이 나간다. 요청을 1건으로 줄인다.
+router.get('/students', requireBranchManager, async (req, res) => {
+  try {
+    const branchId = req.session.user!.branchId!;
+
+    // ① 지점의 배포 전체 + 시험 (1회). 정렬은 GET / 과 같게 createdAt 오름차순.
+    //    exams 참조가 끊긴 배포를 감지해 로그로 남겨야 하므로 leftJoin 으로 읽고 조립 단계에서 거른다.
+    const distributionRows = await db
+      .select({
+        distribution: examDistributions,
+        exam: exams,
+      })
+      .from(examDistributions)
+      .leftJoin(exams, eq(examDistributions.examId, exams.id))
+      .where(eq(examDistributions.branchId, branchId))
+      .orderBy(examDistributions.createdAt);
+
+    type DistributionWithExam = {
+      distribution: typeof examDistributions.$inferSelect;
+      exam: typeof exams.$inferSelect;
+    };
+
+    const validRows: DistributionWithExam[] = [];
+    for (const row of distributionRows) {
+      if (!row.exam) {
+        // 참조가 끊긴 배포 1건 때문에 지점 전체 조회를 500 으로 실패시키지 않는다.
+        log.error('distribution.batch_students_exam_missing', {
+          distributionId: row.distribution.id,
+          examId: row.distribution.examId,
+        });
+        continue;
+      }
+      validRows.push({ distribution: row.distribution, exam: row.exam });
+    }
+
+    const distributionIds = validRows.map((row) => row.distribution.id);
+
+    // ② 반 배포들의 반 구성원 (1회)
+    const classIds = Array.from(
+      new Set(
+        validRows
+          .map((row) => row.distribution.classId)
+          .filter((classId): classId is string => !!classId)
+      )
+    );
+    const classMemberRows = classIds.length
+      ? await db
+          .select({ classId: studentClasses.classId, studentId: studentClasses.studentId })
+          .from(studentClasses)
+          .where(inArray(studentClasses.classId, classIds))
+      : [];
+    const studentIdsByClassId = new Map<string, string[]>();
+    for (const row of classMemberRows) {
+      const list = studentIdsByClassId.get(row.classId);
+      if (list) list.push(row.studentId);
+      else studentIdsByClassId.set(row.classId, [row.studentId]);
+    }
+
+    // ③ 학생 지정 배포들의 지정 대상 (1회)
+    const assignedRows = distributionIds.length
+      ? await db
+          .select({
+            distributionId: distributionStudents.distributionId,
+            studentId: distributionStudents.studentId,
+          })
+          .from(distributionStudents)
+          .where(inArray(distributionStudents.distributionId, distributionIds))
+      : [];
+    const studentIdsByDistributionId = new Map<string, string[]>();
+    for (const row of assignedRows) {
+      const list = studentIdsByDistributionId.get(row.distributionId);
+      if (list) list.push(row.studentId);
+      else studentIdsByDistributionId.set(row.distributionId, [row.studentId]);
+    }
+
+    // ④ 지점 학생 전체 (1회). 다른 지점 학생은 여기서부터 들어오지 않는다.
+    const branchStudents = await db
+      .select({
+        student: students,
+        user: users,
+      })
+      .from(students)
+      .innerJoin(users, eq(students.userId, users.id))
+      .where(eq(students.branchId, branchId));
+    const branchStudentById = new Map(branchStudents.map((row) => [row.student.id, row]));
+
+    // ⑤ 응시 (1회).
+    //    키는 반드시 (distributionId, studentId) 복합이다. studentId 만으로 잡으면
+    //    제목·기간이 같은 다른 배포의 응시가 섞여 들어온다.
+    const attemptKey = (distributionId: string, studentId: string) => `${distributionId}:${studentId}`;
+    const attemptRows = distributionIds.length
+      ? await db
+          .select()
+          .from(examAttempts)
+          .where(inArray(examAttempts.distributionId, distributionIds))
+      : [];
+    const attemptByKey = new Map<string, (typeof attemptRows)[number]>();
+    for (const attempt of attemptRows) {
+      const key = attemptKey(attempt.distributionId, attempt.studentId);
+      // 단건 조회의 .limit(1) 과 같게 먼저 들어온 것을 유지한다.
+      if (!attemptByKey.has(key)) attemptByKey.set(key, attempt);
+    }
+
+    // ⑥ 보고서 (1회). 존재 여부와 id 만 필요하다(htmlContent 는 수십~수백 KB).
+    const submittedAttemptIds = Array.from(attemptByKey.values())
+      .filter((attempt) => attempt.submittedAt)
+      .map((attempt) => attempt.id);
+    const reportRows = submittedAttemptIds.length
+      ? await db
+          .select({ id: aiReports.id, attemptId: aiReports.attemptId })
+          .from(aiReports)
+          .where(inArray(aiReports.attemptId, submittedAttemptIds))
+      : [];
+    const reportByAttemptId = new Map<string, { id: string }>();
+    for (const report of reportRows) {
+      if (!reportByAttemptId.has(report.attemptId)) reportByAttemptId.set(report.attemptId, report);
+    }
+
+    // 조립. 배포별 대상 학생 결정 규칙은 /:id/students 와 동일하다.
+    const data = validRows.map(({ distribution, exam }) => {
+      let studentsList: (typeof branchStudents)[number][];
+
+      if (distribution.classId) {
+        // 반 배포 → 그 반에 속한 지점 학생
+        studentsList = (studentIdsByClassId.get(distribution.classId) ?? [])
+          .map((studentId) => branchStudentById.get(studentId))
+          .filter((row): row is (typeof branchStudents)[number] => !!row);
+      } else {
+        const assigned = studentIdsByDistributionId.get(distribution.id) ?? [];
+        if (assigned.length > 0) {
+          // 학생 지정 배포 → 지정된 학생 중 지점 소속인 것만
+          // (단건 조회의 inArray 는 중복 id 를 한 행으로 접으므로 여기서도 중복을 제거한다)
+          studentsList = Array.from(new Set(assigned))
+            .map((studentId) => branchStudentById.get(studentId))
+            .filter((row): row is (typeof branchStudents)[number] => !!row);
+        } else {
+          // 그 외 → 지점 학생 전체
+          studentsList = branchStudents;
+        }
+      }
+
+      return {
+        distribution,
+        exam,
+        students: studentsList.map((row) =>
+          buildDistributionStudentRow(
+            row,
+            attemptByKey.get(attemptKey(distribution.id, row.student.id)),
+            reportByAttemptId
+          )
+        ),
+      };
+    });
+
+    res.json({
+      success: true,
+      data,
+    });
+  } catch (error) {
+    log.error('distribution.get_branch_distribution_students_failed', errorFields(error));
+    res.status(500).json({ message: '학생 목록 조회 중 오류가 발생했습니다.' });
   }
 });
 
@@ -420,52 +620,49 @@ router.get('/:id/students', requireBranchManager, async (req, res) => {
       }
     }
 
-    // TODO(N+1): 학생마다 examAttempts·aiReports 를 개별 조회한다.
-    // studentIds 로 한 번에 받아 매핑해야 한다. (iteration 3 범위 외)
-    // Get attempts for each student
-    const result = [];
-    for (const row of studentsList) {
-      const [attempt] = await db
-        .select()
-        .from(examAttempts)
-        .where(
-          and(
-            eq(examAttempts.studentId, row.student.id),
-            eq(examAttempts.distributionId, id)
+    // 학생마다 examAttempts·aiReports 를 개별 조회하면 학생 N명에 최대 2N 회 왕복이 생긴다.
+    // studentId 목록으로 두 테이블을 한 번씩만 읽고 메모리에서 매핑한다.
+    const studentIds = studentsList.map((row) => row.student.id);
+    const attemptRows = studentIds.length
+      ? await db
+          .select()
+          .from(examAttempts)
+          .where(
+            and(
+              inArray(examAttempts.studentId, studentIds),
+              eq(examAttempts.distributionId, id)
+            )
           )
-        )
-        .limit(1);
+      : [];
 
-      // Check if AI report exists
-      let hasReport = false;
-      let reportId = null;
-      if (attempt && attempt.submittedAt) {
-        // 존재 여부와 id 만 필요하다. 전체 행을 select 하면 htmlContent 가 함께 실려 온다.
-        const [report] = await db
-          .select({ id: aiReports.id })
-          .from(aiReports)
-          .where(eq(aiReports.attemptId, attempt.id))
-          .limit(1);
-        hasReport = !!report;
-        reportId = report?.id || null;
+    // 기존 .limit(1) 은 "여러 건이면 아무거나 하나" 였으므로 먼저 들어온 것을 유지한다.
+    const attemptByStudentId = new Map<string, (typeof attemptRows)[number]>();
+    for (const attempt of attemptRows) {
+      if (!attemptByStudentId.has(attempt.studentId)) {
+        attemptByStudentId.set(attempt.studentId, attempt);
       }
-
-      result.push({
-        studentId: row.student.id,
-        studentName: row.user.name,
-        studentPhone: row.user.phone,
-        attemptId: attempt?.id || null,
-        answers: attempt?.answers || null,
-        score: attempt?.score || null,
-        maxScore: attempt?.maxScore || null,
-        grade: attempt?.grade || null,
-        submittedAt: attempt?.submittedAt || null,
-        hasAttempt: !!attempt,
-        isSubmitted: !!(attempt && attempt.submittedAt),
-        hasReport,
-        reportId,
-      });
     }
+
+    // 존재 여부와 id 만 필요하다. 전체 행을 select 하면 htmlContent 가 함께 실려 온다.
+    const submittedAttemptIds = Array.from(attemptByStudentId.values())
+      .filter((attempt) => attempt.submittedAt)
+      .map((attempt) => attempt.id);
+    const reportRows = submittedAttemptIds.length
+      ? await db
+          .select({ id: aiReports.id, attemptId: aiReports.attemptId })
+          .from(aiReports)
+          .where(inArray(aiReports.attemptId, submittedAttemptIds))
+      : [];
+    const reportByAttemptId = new Map<string, { id: string }>();
+    for (const report of reportRows) {
+      if (!reportByAttemptId.has(report.attemptId)) {
+        reportByAttemptId.set(report.attemptId, report);
+      }
+    }
+
+    const result = studentsList.map((row) =>
+      buildDistributionStudentRow(row, attemptByStudentId.get(row.student.id), reportByAttemptId)
+    );
 
     res.json({
       success: true,

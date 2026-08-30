@@ -212,22 +212,11 @@ export default function BranchDashboard({ user }: { user: User }) {
     queryFn: async () => {
       if (!distributions || distributions.length === 0) return [];
 
-      // 모든 배포에 대해 학생 정보 가져오기
-      const allStudents = await Promise.all(
-        distributions.map(async (dist: any) => {
-          try {
-            const res = await api.get(`/distributions/${dist.id}/students`);
-            return {
-              distribution: dist,
-              ...res.data.data,
-            };
-          } catch (error) {
-            return null;
-          }
-        })
-      );
-
-      return allStudents.filter(Boolean);
+      // 배포마다 요청하면 배포 수만큼 왕복이 생긴다. 배치 엔드포인트로 1회에 받는다.
+      // 항목 모양은 기존과 같은 { distribution, exam, students } 이다.
+      // 실패 시 배포별로 조용히 누락되지 않고 쿼리 전체가 에러가 된다(allDistError 경로).
+      const res = await api.get('/distributions/students');
+      return res.data.data;
     },
     enabled: !!distributions && distributions.length > 0,
   });
