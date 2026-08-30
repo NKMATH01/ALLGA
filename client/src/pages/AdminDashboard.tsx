@@ -5,7 +5,6 @@ import { toast } from '../components/ui/toast';
 import { ThemeToggle } from '../components/ui/theme-toggle';
 import { StatValue } from '../components/ui/stat-value';
 import { StatStrip, StatStripItem } from '../components/ui/stat-strip';
-import { PageHeader } from '../components/ui/page-header';
 import { useModalA11y, isMobileViewport } from '../lib/useModalA11y';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -410,15 +409,12 @@ export default function AdminDashboard({ user }: { user: User }) {
   const renderDashboard = () => (
     <>
       {/*
-        요약 화면이므로 제목 블록을 둔다 (DESIGN.md 11.9).
-        보기 전환 토글은 두지 않는다 - 이 화면의 본문은 지점별 통계 표 하나뿐이라
-        전환할 대상이 없고, 죽은 장식 컨트롤은 만들지 않는다.
+        제목 블록을 두지 않는다. 이 화면의 레이아웃 헤더가 이미 활성 메뉴 라벨을
+        <h1>로 그리고 있고(아래 상단 바), 사이드바 활성 표시까지 합치면 같은 자리를
+        세 번 말하게 된다 (DESIGN.md 11.2 - 지면 낭비). 11.9의 "요약 화면에는
+        제목 블록" 요건은 그 레이아웃 헤더로 이미 충족된다. 한 페이지에 <h1>이
+        둘이면 접근성상으로도 문제다. 그래서 KPI 스트립으로 바로 시작한다.
       */}
-      <PageHeader
-        overline="전체 관리"
-        title="한눈에 보기"
-        description="전 지점의 학생·시험·평균을 한 화면에서 확인합니다."
-      />
 
       {/*
         KPI 스트립: DESIGN.md 5.2 / 11.9. 카드 4장으로 흩지 않고 한 컨테이너
