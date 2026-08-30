@@ -14,6 +14,7 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
+import { Pagination, paginate } from '../components/ui/pagination';
 import { Users, GraduationCap, FileText, BarChart3, LogOut, LayoutDashboard, Menu, Home, Plus, Trash2, CheckCircle, XCircle, Edit, Sparkles, ArrowLeft, Search } from 'lucide-react';
 
 interface User {
@@ -92,7 +93,6 @@ export default function BranchDashboard({ user }: { user: User }) {
     dir: 'asc',
   });
   const [studentPage, setStudentPage] = useState(1);
-  const STUDENTS_PER_PAGE = 20;
 
   // ---- 학생 중심 네비게이션 (DESIGN.md 11.6) ----
   // 상단 GNB 3탭 + 좌측 학생 패널 + 학생 컨텍스트 탭.
@@ -110,6 +110,17 @@ export default function BranchDashboard({ user }: { user: User }) {
   const [classRosterUnavailable, setClassRosterUnavailable] = useState(false);
   const [distSearch, setDistSearch] = useState('');
   const [distStatus, setDistStatus] = useState<'all' | 'upcoming' | 'ongoing' | 'ended'>('all');
+
+  /*
+    목록별 쪽 번호 (DESIGN.md 11.2). 목록마다 따로 들고 있어야 한 목록의 쪽
+    이동이 다른 목록을 끌고 가지 않는다. 렌더 헬퍼는 조건부로 호출되므로
+    훅은 여기 컴포넌트 최상단에만 둔다.
+  */
+  const [classPage, setClassPage] = useState(1);
+  const [examPage, setExamPage] = useState(1);
+  const [distPage, setDistPage] = useState(1);
+  const [viewStudentPage, setViewStudentPage] = useState(1);
+  const [viewClassPage, setViewClassPage] = useState(1);
 
   // 응시 행을 펼쳐 보는 문항별 답안 패널 (DESIGN.md 11.6.5).
   // 서버는 그대로 두고 기존 GET /api/exam-attempts/:id 만 쓴다.
@@ -575,6 +586,14 @@ export default function BranchDashboard({ user }: { user: User }) {
   const setDashboardViewKey = (key: DashboardViewKey) =>
     setSelectedDashboardView(key === 'all' ? null : key);
 
+  /*
+    대시보드 드릴다운 표도 지점 규모에 비례해 늘어나므로 자른다 (DESIGN.md 11.2).
+    renderDashboard 가 식(expression) 본문이라 자르기는 여기서 미리 해 둔다.
+    이 두 표에는 필터가 없어 1쪽 복귀를 걸 자리도 없다.
+  */
+  const viewStudents = paginate(Array.isArray(students) ? students : [], viewStudentPage);
+  const viewClasses = paginate(Array.isArray(classes) ? classes : [], viewClassPage);
+
   const renderDashboard = () => (
     <>
       {/*
@@ -697,7 +716,7 @@ export default function BranchDashboard({ user }: { user: User }) {
                     </tr>
                   </thead>
                   <tbody>
-                    {students.map((student: any) => (
+                    {viewStudents.pageItems.map((student: any) => (
                       <tr key={student.id} className="border-b border-line-subtle hover:bg-surface-subtle transition-colors duration-150 ease-out">
                         <td className="px-3 py-1.5 font-medium text-ink">{student.user?.name}</td>
                         <td className="px-3 py-1.5 text-ink">{student.grade || '-'}</td>
@@ -715,6 +734,15 @@ export default function BranchDashboard({ user }: { user: User }) {
                 <p className="text-ink-secondary">등록된 학생이 없습니다.</p>
               </div>
             )}
+            {/*
+              페이저 (11.2). 가로 스크롤 상자 밖이자 빈 상태 분기 밖에 둔다.
+              목록이 비면 totalItems 가 0이라 페이저 스스로 아무것도 그리지 않는다.
+            */}
+            <Pagination
+              page={viewStudents.page}
+              totalItems={students?.length || 0}
+              onPageChange={setViewStudentPage}
+            />
           </div>
         </section>
       )}
@@ -735,7 +763,7 @@ export default function BranchDashboard({ user }: { user: User }) {
                     </tr>
                   </thead>
                   <tbody>
-                    {classes.map((cls: any) => (
+                    {viewClasses.pageItems.map((cls: any) => (
                       <tr key={cls.id} className="border-b border-line-subtle hover:bg-surface-subtle transition-colors duration-150 ease-out">
                         <td className="px-3 py-1.5 font-medium text-ink">{cls.name}</td>
                         <td className="px-3 py-1.5 text-ink">{cls.grade || '-'}</td>
@@ -752,6 +780,12 @@ export default function BranchDashboard({ user }: { user: User }) {
                 <p className="text-ink-secondary">등록된 반이 없습니다.</p>
               </div>
             )}
+            {/* 페이저 (11.2). 가로 스크롤 상자 밖이자 빈 상태 분기 밖 */}
+            <Pagination
+              page={viewClasses.page}
+              totalItems={classes?.length || 0}
+              onPageChange={setViewClassPage}
+            />
           </div>
         </section>
       )}
@@ -1176,21 +1210,19 @@ export default function BranchDashboard({ user }: { user: User }) {
     return String(a.user?.name || '').localeCompare(String(b.user?.name || ''), 'ko') * dir;
   });
 
-  const studentPageCount = Math.max(1, Math.ceil(sortedStudents.length / STUDENTS_PER_PAGE));
-  const currentStudentPage = Math.min(studentPage, studentPageCount);
-  const pagedStudents = sortedStudents.slice(
-    (currentStudentPage - 1) * STUDENTS_PER_PAGE,
-    currentStudentPage * STUDENTS_PER_PAGE
-  );
+  // 정렬·필터를 전부 적용한 뒤에 자른다. 잘라낸 뒤 정렬하면 지금 쪽 안에서만 순서가 맞는다.
+  const { page: currentStudentPage, pageItems: pagedStudents } = paginate(sortedStudents, studentPage);
 
-  /** 필터가 바뀌면 1쪽으로 돌린다 (DESIGN.md 11.2) */
+  /** 필터·검색·정렬이 바뀌면 1쪽으로 돌린다 (DESIGN.md 11.2) */
   const resetStudentPage = () => setStudentPage(1);
 
-  const toggleStudentSort = (key: 'name' | 'grade') =>
+  const toggleStudentSort = (key: 'name' | 'grade') => {
+    resetStudentPage();
     setStudentSort((prev) => ({
       key,
       dir: prev.key === key && prev.dir === 'asc' ? 'desc' : 'asc',
     }));
+  };
 
   const sortMark = (key: 'name' | 'grade') =>
     studentSort.key !== key ? '' : studentSort.dir === 'asc' ? ' ▲' : ' ▼';
@@ -2272,25 +2304,11 @@ export default function BranchDashboard({ user }: { user: User }) {
           </div>
 
           {/* 페이저 (11.2) */}
-          {studentPageCount > 1 && (
-            <nav className="mt-4 flex items-center justify-center gap-1" aria-label="학생 목록 페이지">
-              {Array.from({ length: studentPageCount }, (_, i) => i + 1).map((p) => (
-                <button
-                  key={p}
-                  type="button"
-                  onClick={() => setStudentPage(p)}
-                  aria-current={p === currentStudentPage ? 'page' : undefined}
-                  className={`h-8 min-w-8 rounded-sm px-2 text-sm tabular-nums transition-colors duration-150 ease-out ${
-                    p === currentStudentPage
-                      ? 'bg-surface-inverse font-semibold text-ink-inverse'
-                      : 'border border-line text-ink-secondary hover:bg-surface-subtle'
-                  }`}
-                >
-                  {p}
-                </button>
-              ))}
-            </nav>
-          )}
+          <Pagination
+            page={currentStudentPage}
+            totalItems={sortedStudents.length}
+            onPageChange={setStudentPage}
+          />
         </>
       ) : (
         <div className="mt-3 border border-line bg-surface-subtle py-12 text-center">
@@ -2453,6 +2471,8 @@ export default function BranchDashboard({ user }: { user: User }) {
         String(c.name || '').toLowerCase().includes(q) ||
         String(c.grade || '').toLowerCase().includes(q)
     );
+    // 검색을 전체에 건 뒤에 자른다 (11.2)
+    const { page: curPage, pageItems: pageRows } = paginate(rows, classPage);
     return (
     <>
       {/* 툴바 (DESIGN.md 11.2) */}
@@ -2465,7 +2485,10 @@ export default function BranchDashboard({ user }: { user: User }) {
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-tertiary" strokeWidth={1.5} />
             <Input
               value={classSearch}
-              onChange={(e) => setClassSearch(e.target.value)}
+              onChange={(e) => {
+                setClassSearch(e.target.value);
+                setClassPage(1);
+              }}
               placeholder="반 이름 · 학년 검색"
               aria-label="반 검색"
               className="h-9 pl-9"
@@ -2500,7 +2523,7 @@ export default function BranchDashboard({ user }: { user: User }) {
               </tr>
             </thead>
             <tbody>
-              {rows.map((cls: any) => (
+              {pageRows.map((cls: any) => (
                 <tr key={cls.id} className="border-b border-line-subtle transition-colors duration-150 ease-out hover:bg-surface-subtle">
                   <td className="px-3 py-1.5 font-semibold text-ink">{cls.name}</td>
                   <td className="px-3 py-1.5 text-ink-secondary">{cls.grade || '-'}</td>
@@ -2537,7 +2560,7 @@ export default function BranchDashboard({ user }: { user: User }) {
 
           {/* 모바일: 카드 리스트 (11.3) */}
           <div className="mt-3 flex flex-col gap-2 md:hidden">
-            {rows.map((cls: any) => (
+            {pageRows.map((cls: any) => (
               <div key={cls.id} className="rounded-sm border border-line bg-surface p-3">
                 <div className="flex items-baseline gap-2">
                   <p className="text-base font-semibold text-ink">{cls.name}</p>
@@ -2564,6 +2587,9 @@ export default function BranchDashboard({ user }: { user: User }) {
               </div>
             ))}
           </div>
+
+          {/* 페이저 (11.2) */}
+          <Pagination page={curPage} totalItems={rows.length} onPageChange={setClassPage} />
         </>
       ) : (
         <div className="mt-3 border border-line bg-surface-subtle py-12 text-center">
@@ -2704,6 +2730,7 @@ export default function BranchDashboard({ user }: { user: User }) {
 
   const renderExams = () => {
     const rows = Array.isArray(distributions) ? distributions : [];
+    const { page: curPage, pageItems: pageRows } = paginate(rows, examPage);
     return (
     <>
       <div className="flex items-center gap-3 border-b border-line pb-3">
@@ -2727,7 +2754,7 @@ export default function BranchDashboard({ user }: { user: User }) {
               </tr>
             </thead>
             <tbody>
-              {rows.map((dist: any) => (
+              {pageRows.map((dist: any) => (
                 <tr key={dist.id} className="border-b border-line-subtle transition-colors duration-150 ease-out hover:bg-surface-subtle">
                   <td className="px-3 py-1.5">
                     <span className="block leading-tight font-medium text-ink">{dist.exam?.title || '-'}</span>
@@ -2766,7 +2793,7 @@ export default function BranchDashboard({ user }: { user: User }) {
           </table>
 
           <div className="mt-3 flex flex-col gap-2 md:hidden">
-            {rows.map((dist: any) => (
+            {pageRows.map((dist: any) => (
               <div key={dist.id} className="rounded-sm border border-line bg-surface p-3">
                 <p className="text-base font-semibold text-ink">{dist.exam?.title || '-'}</p>
                 <p className="mt-0.5 text-xs text-ink-secondary">
@@ -2788,6 +2815,9 @@ export default function BranchDashboard({ user }: { user: User }) {
               </div>
             ))}
           </div>
+
+          {/* 페이저 (11.2) */}
+          <Pagination page={curPage} totalItems={rows.length} onPageChange={setExamPage} />
         </>
       ) : (
         <div className="mt-3 border border-line bg-surface-subtle py-12 text-center">
@@ -2972,6 +3002,9 @@ export default function BranchDashboard({ user }: { user: User }) {
         .some((v: any) => String(v || '').toLowerCase().includes(q));
     });
 
+    // 상태 필터와 검색을 전체에 건 뒤에 자른다 (11.2)
+    const { page: curPage, pageItems: pageRows } = paginate(rows, distPage);
+
     const filters: { id: typeof distStatus; label: string }[] = [
       { id: 'all', label: '전체' },
       { id: 'ongoing', label: '진행 중' },
@@ -2988,7 +3021,10 @@ export default function BranchDashboard({ user }: { user: User }) {
                 <button
                   key={f.id}
                   type="button"
-                  onClick={() => setDistStatus(f.id)}
+                  onClick={() => {
+                    setDistStatus(f.id);
+                    setDistPage(1);
+                  }}
                   aria-pressed={distStatus === f.id}
                   className={`h-8 whitespace-nowrap px-3 text-sm transition-colors duration-150 ease-out ${
                     i > 0 ? 'border-l border-line' : ''
@@ -3010,7 +3046,10 @@ export default function BranchDashboard({ user }: { user: User }) {
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-tertiary" strokeWidth={1.5} />
             <Input
               value={distSearch}
-              onChange={(e) => setDistSearch(e.target.value)}
+              onChange={(e) => {
+                setDistSearch(e.target.value);
+                setDistPage(1);
+              }}
               placeholder="시험명 · 과목 · 대상 검색"
               aria-label="배포 검색"
               className="h-9 pl-9"
@@ -3033,7 +3072,7 @@ export default function BranchDashboard({ user }: { user: User }) {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((dist: any) => {
+                {pageRows.map((dist: any) => {
                   const st = distStatusOf(dist);
                   const pg = distProgressOf(dist.id);
                   const pct = pg && pg.total > 0 ? Math.round((pg.done / pg.total) * 100) : 0;
@@ -3109,7 +3148,7 @@ export default function BranchDashboard({ user }: { user: User }) {
             </table>
 
             <div className="mt-3 flex flex-col gap-2 md:hidden">
-              {rows.map((dist: any) => {
+              {pageRows.map((dist: any) => {
                 const st = distStatusOf(dist);
                 const pg = distProgressOf(dist.id);
                 return (
@@ -3131,6 +3170,9 @@ export default function BranchDashboard({ user }: { user: User }) {
                 );
               })}
             </div>
+
+            {/* 페이저 (11.2) */}
+            <Pagination page={curPage} totalItems={rows.length} onPageChange={setDistPage} />
           </>
         ) : (
           <div className="mt-3 border border-line bg-surface-subtle py-12 text-center">

@@ -9,6 +9,7 @@ import { useModalA11y, isMobileViewport } from '../lib/useModalA11y';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
+import { Pagination, paginate } from '../components/ui/pagination';
 import { Users, Building2, FileText, TrendingUp, LogOut, GraduationCap, Plus, Send, LayoutDashboard, Menu, X, ArrowUp, ArrowDown } from 'lucide-react';
 
 interface User {
@@ -36,6 +37,15 @@ export default function AdminDashboard({ user }: { user: User }) {
   const [editingExam, setEditingExam] = useState(false);
   const [showDistributionModal, setShowDistributionModal] = useState(false);
   const [selectedBranches, setSelectedBranches] = useState<string[]>([]);
+
+  /*
+    목록별 쪽 번호 (DESIGN.md 11.2). 목록마다 따로 들고 있어야 한 목록의 쪽
+    이동이 다른 목록을 끌고 가지 않는다. 이 화면의 목록에는 필터나 검색이
+    없으므로 1쪽으로 되돌릴 계기도 없다.
+  */
+  const [branchStatPage, setBranchStatPage] = useState(1);
+  const [examPage, setExamPage] = useState(1);
+  const [distPage, setDistPage] = useState(1);
 
   // 모달 닫기 핸들러. Esc(useModalA11y)와 취소 버튼이 같은 경로를 쓰도록 한 곳에 둔다.
   const closeBranchModal = () => {
@@ -406,6 +416,14 @@ export default function AdminDashboard({ user }: { user: User }) {
     { id: 'distributions' as MenuSection, label: '시험 배포', icon: Send },
   ];
 
+  /*
+    지점·시험·배포는 셋 다 데이터가 쌓이는 만큼 늘어나는 목록이라 20행씩 자른다
+    (DESIGN.md 11.2). 렌더 헬퍼가 식(expression) 본문이라 자르기는 여기서 미리 해 둔다.
+  */
+  const pagedBranchStats = paginate<any>(stats?.branchStats || [], branchStatPage);
+  const pagedExams = paginate<any>(Array.isArray(exams) ? exams : [], examPage);
+  const pagedDistributions = paginate<any>(Array.isArray(distributions) ? distributions : [], distPage);
+
   const renderDashboard = () => (
     <>
       {/*
@@ -487,7 +505,7 @@ export default function AdminDashboard({ user }: { user: User }) {
                 </tr>
               </thead>
               <tbody>
-                {stats?.branchStats?.map((branch: any) => (
+                {pagedBranchStats.pageItems.map((branch: any) => (
                   <tr
                     key={branch.branchName}
                     className="border-b border-line-subtle hover:bg-surface-subtle transition-colors duration-150 ease-out"
@@ -517,6 +535,12 @@ export default function AdminDashboard({ user }: { user: User }) {
               </tbody>
             </table>
           </div>
+          {/* 페이저 (11.2). 가로 스크롤 상자 밖에 둬야 표를 옆으로 밀어도 따라가지 않는다 */}
+          <Pagination
+            page={pagedBranchStats.page}
+            totalItems={stats?.branchStats?.length || 0}
+            onPageChange={setBranchStatPage}
+          />
         </CardContent>
       </Card>
     </>
@@ -783,7 +807,7 @@ export default function AdminDashboard({ user }: { user: User }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {exams.map((exam: any) => (
+                  {pagedExams.pageItems.map((exam: any) => (
                     <tr key={exam.id} className="border-b border-line-subtle hover:bg-surface-subtle transition-colors duration-150 ease-out">
                       <td className="px-4 py-3 font-medium text-ink">{exam.title}</td>
                       <td className="px-4 py-3 text-ink">{exam.subject || '-'}</td>
@@ -828,6 +852,15 @@ export default function AdminDashboard({ user }: { user: User }) {
               <p className="text-sm text-ink-tertiary">Excel 파일을 업로드하거나 직접 생성하세요.</p>
             </div>
           )}
+          {/*
+            페이저 (11.2). 가로 스크롤 상자 밖이자 빈 상태 분기 밖에 둔다.
+            목록이 비면 totalItems 가 0이라 페이저 스스로 아무것도 그리지 않는다.
+          */}
+          <Pagination
+            page={pagedExams.page}
+            totalItems={exams?.length || 0}
+            onPageChange={setExamPage}
+          />
         </CardContent>
       </Card>
 
@@ -1233,7 +1266,7 @@ export default function AdminDashboard({ user }: { user: User }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {distributions.map((dist: any) => (
+                  {pagedDistributions.pageItems.map((dist: any) => (
                     <tr key={dist.id} className="border-b border-line-subtle hover:bg-surface-subtle transition-colors duration-150 ease-out">
                       <td className="px-4 py-3 font-medium text-ink">{dist.exam?.title || '-'}</td>
                       <td className="px-4 py-3 text-ink">{dist.branchId}</td>
@@ -1274,6 +1307,12 @@ export default function AdminDashboard({ user }: { user: User }) {
               <p className="text-sm text-ink-tertiary">시험을 지점에 배포하세요.</p>
             </div>
           )}
+          {/* 페이저 (11.2). 가로 스크롤 상자 밖이자 빈 상태 분기 밖 */}
+          <Pagination
+            page={pagedDistributions.page}
+            totalItems={distributions?.length || 0}
+            onPageChange={setDistPage}
+          />
         </CardContent>
       </Card>
 
