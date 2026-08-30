@@ -40,11 +40,17 @@ const TOP_TABS: { id: TopTab; label: string; sections: MenuSection[] }[] = [
  * 교사 관리 화면 전용 등급 스케일 (DESIGN.md 2.4 예외).
  * 학생·학부모 화면과 AI 보고서 지면은 gradeBadgeClass 를 그대로 쓴다.
  * 교사는 명단을 훑으며 성적 차이를 즉시 읽어야 하므로 등급대별 대비를 준다.
+ *
+ * 1~2등급 칩의 글자는 text-ink-inverse 가 아니라 text-action-text 다. 헤더 로고 칩과
+ * 같은 이유다 - --fn-success 는 라이트에서 어두운 초록, 다크에서 밝은 초록으로 명도
+ * 방향이 뒤집히는데 ink-inverse 는 두 모드 모두 흰색 계열이라 다크에서 2.20:1 로
+ * 무너진다. action-text 는 라이트 흰색 / 다크 slate-900 으로 함께 뒤집혀
+ * 5.33:1 / 7.76:1 을 유지한다. 새 토큰이 아니라 기존 토큰 선택이다.
  */
 const gradeBadgeOperate = (grade?: number | string | null): string => {
   const g = Number(grade);
   if (!g || Number.isNaN(g)) return 'border-line bg-surface-subtle text-ink-secondary';
-  if (g <= 2) return 'border-fn-success bg-fn-success text-ink-inverse';
+  if (g <= 2) return 'border-fn-success bg-fn-success text-action-text';
   if (g <= 4) return 'border-fn-success-border bg-fn-success-surface text-fn-success';
   if (g <= 6) return 'border-fn-warning-border bg-fn-warning-surface text-fn-warning';
   return 'border-line-strong bg-surface-subtle text-ink-secondary';
