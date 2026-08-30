@@ -86,8 +86,10 @@ npx vitest run                             → 2 files / 37 tests passed
 
 | 항목 | 현재 상태 |
 |---|---|
-| `attempts.ts` `/branch/completed` 보고서 존재확인 | **잔여, 우선순위 1.** 응시 건마다 `aiReports` 를 **직렬로** 개별 조회한다(`await` 가 for 루프 안에 있어 병렬도 아니다). 코드에 `TODO(N+1)` 주석이 남아 있다. `server/routes/attempts.ts:665` |
-| `distributions.ts` 목록 상위배포 조회 | **잔여, 우선순위 2.** 행마다 `parentDistribution` 을 개별 조회한다(`Promise.all` 로 병렬일 뿐 쿼리 수는 행 수만큼). `server/routes/distributions.ts:56` |
+| `attempts.ts` `/branch/completed` 보고서 존재확인 | **해소.** 응시 건마다 직렬로 돌던 `aiReports` 조회를 `attemptId` `inArray` 단일 조회로 묶고 `{id, attemptId}` 만 projection 했다(`htmlContent` 가 행마다 실려오던 것도 함께 제거). `server/routes/attempts.ts:664` |
+| `distributions.ts` 목록 상위배포 조회 | **해소.** 행마다 돌던 `parentDistribution` 조회를 id 중복 제거 후 `inArray` 단일 조회 + Map 매핑으로 바꿨다. 참조가 끊긴 경우의 `null` 처리는 그대로다. `server/routes/distributions.ts:56` |
+| `distributions.ts` `/:id/students` 응시·보고서 조회 | **해소.** 학생마다 `examAttempts` 를 조회하고 제출 건은 다시 `aiReports` 를 조회해 학생 N명에 최대 2N 회 왕복이 났다. `studentId` `inArray` 로 응시 1회 + 제출 attempt id `inArray` 로 보고서 1회, 총 2회로 고정했다. 행 조립은 `buildDistributionStudentRow` 로 빼 배치 엔드포인트와 공유한다. `server/routes/distributions.ts:472` |
+| `BranchDashboard` 전 배포 학생 조회 요청 N건 | **해소.** 대시보드가 배포마다 `/distributions/:id/students` 를 불러 배포 D개에 요청 D건이 나갔다. `GET /api/distributions/students` 배치 엔드포인트를 신설(라우트는 `/:id` 보다 **위**에 등록해야 한다)해 요청을 1건으로 줄였다. 항목 모양은 `{distribution, exam, students}` 로 동일해 호출부 12곳은 그대로다. 대신 배포 1건 실패를 `catch → null` 로 삼키던 동작이 사라져 이제는 쿼리 전체가 `allDistError` 경로로 간다(일부가 조용히 "학생 없음"으로 보이는 것보다 낫다). `client/src/pages/BranchDashboard.tsx:205` |
 | `/my-exams` 루프 | **해소 확인.** `attempts.ts:63, 101` 의 루프는 쿼리를 돌지 않는 메모리 연산이다. 대상·반·응시·보고서를 각각 `inArray` 로 한 번씩 조회한 뒤 Map/Set 으로 조립한다 (Wave 1–2) |
 | 목록 페이지네이션 | **미착수, 결정 필요.** `/branch/completed` 는 지점의 제출 건을 **전량** 반환한다(limit 없음). 페이징은 응답 계약이 바뀌어 화면도 함께 고쳐야 하므로 별도 판단이 필요하다. `reports.ts` 에는 목록 엔드포인트 자체가 없다(단건·요약·생성만) |
 | 세션 스토어 부하 | **해소.** `connect-pg-simple` DB 스토어 사용, 커넥션 예산 명시 완료 |
