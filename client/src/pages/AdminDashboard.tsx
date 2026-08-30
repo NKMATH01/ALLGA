@@ -1399,24 +1399,28 @@ export default function AdminDashboard({ user }: { user: User }) {
       )}
       <aside
         ref={drawerRef}
-        className={`fixed inset-y-0 left-0 z-40 w-[264px] flex flex-col bg-surface-inverse border-r border-line-inverse transition-transform duration-200 ease-out ${
+        className={`fixed inset-y-0 left-0 z-40 w-[264px] flex flex-col bg-surface border-r border-line transition-transform duration-200 ease-out ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         } md:static md:z-auto md:translate-x-0 md:transition-[width] ${
           sidebarOpen ? 'md:w-[264px]' : 'md:w-[72px]'
         }`}
       >
-        {/* Logo Section */}
-        <div className="p-4 border-b border-line-inverse">
+        {/*
+          Logo Section.
+          그린 1곳: 로고 칩. 아이콘 색은 --accent 와 함께 뒤집히는 action-text 를 쓴다
+          (라이트 흰 글자 3.30:1 / 다크 slate-900 10.3:1). BranchDashboard 헤더와 같은 이유.
+        */}
+        <div className="p-4 border-b border-line">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 border border-line-inverse rounded-sm flex items-center justify-center flex-shrink-0">
-              <GraduationCap className="w-5 h-5 text-ink-inverse" strokeWidth={1.5} />
+            <div className="w-10 h-10 bg-accent rounded-md flex items-center justify-center flex-shrink-0">
+              <GraduationCap className="w-5 h-5 text-action-text" strokeWidth={1.5} />
             </div>
             {sidebarOpen && (
               <div className="overflow-hidden">
-                <h2 className="font-semibold tracking-[-0.01em] text-ink-inverse whitespace-nowrap">
+                <h2 className="font-semibold tracking-[-0.01em] text-ink whitespace-nowrap">
                   ALLGA 시스템
                 </h2>
-                <p className="text-xs text-ink-inverse-muted truncate">{user.name}</p>
+                <p className="text-xs text-ink-secondary truncate">{user.name}</p>
               </div>
             )}
           </div>
@@ -1431,10 +1435,16 @@ export default function AdminDashboard({ user }: { user: User }) {
               <button
                 key={item.id}
                 onClick={() => setActiveSection(item.id)}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-md text-sm transition-colors duration-150 ease-out ${
+                /*
+                  그린 2곳째: 활성 메뉴의 좌측 강조 바. 세로 내비이므로 하단 밑줄이
+                  아니라 좌측 바가 같은 역할을 한다 (border-b-2 -> border-l-2).
+                  색 단독 표기가 아니다 - 굵기와 면이 함께 바뀐다 (12.2).
+                  비활성도 같은 두께의 투명 바를 깔아 전환 시 글자가 밀리지 않게 한다.
+                */
+                className={`w-full flex items-center gap-3 border-l-2 px-4 py-3 rounded-md text-sm transition-colors duration-150 ease-out ${
                   isActive
-                    ? 'bg-surface text-ink font-semibold'
-                    : 'text-ink-inverse-muted hover:bg-line-inverse hover:text-ink-inverse'
+                    ? 'border-accent bg-action-subtle text-ink font-semibold'
+                    : 'border-transparent text-ink-secondary hover:bg-surface-subtle hover:text-ink'
                 }`}
               >
                 <Icon className="w-4 h-4 flex-shrink-0" strokeWidth={1.5} />
@@ -1447,10 +1457,10 @@ export default function AdminDashboard({ user }: { user: User }) {
         </nav>
 
         {/* Logout Button */}
-        <div className="p-4 border-t border-line-inverse">
+        <div className="p-4 border-t border-line">
           <button
             onClick={() => logoutMutation.mutate()}
-            className="w-full flex items-center gap-3 px-4 py-3 rounded-md text-sm text-ink-inverse-muted transition-colors duration-150 ease-out hover:bg-line-inverse hover:text-ink-inverse"
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-md text-sm text-ink-secondary transition-colors duration-150 ease-out hover:bg-surface-subtle hover:text-ink"
           >
             <LogOut className="w-4 h-4 flex-shrink-0" strokeWidth={1.5} />
             {sidebarOpen && <span>로그아웃</span>}

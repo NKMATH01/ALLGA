@@ -164,19 +164,23 @@ export default function ParentDashboard({ user }: { user: User }) {
 
       <aside
         ref={drawerRef}
-        className={`fixed inset-y-0 left-0 z-40 w-[264px] flex flex-col bg-surface-inverse text-ink-inverse transition-transform duration-200 ease-out ${
+        className={`fixed inset-y-0 left-0 z-40 w-[264px] flex flex-col border-r border-line bg-surface text-ink transition-transform duration-200 ease-out ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         } md:static md:z-auto md:translate-x-0 md:overflow-hidden md:transition-[width] ${
           sidebarOpen ? 'md:w-[264px]' : 'md:w-0'
         }`}
       >
+        {/*
+          로고 칩. 이 화면의 그린 1곳째. 아이콘 색은 --accent 와 함께 뒤집히는
+          action-text 를 쓴다 (라이트 흰 글자 3.30:1 / 다크 slate-900 10.3:1).
+        */}
         <div className="flex items-center gap-3 px-5 py-5">
-          <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-md border border-line-inverse">
-            <GraduationCap className="h-5 w-5" strokeWidth={1.5} />
+          <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-md bg-accent">
+            <GraduationCap className="h-5 w-5 text-action-text" strokeWidth={1.5} />
           </div>
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold">학부모</p>
-            <p className="truncate text-xs text-ink-inverse-muted">{user.name}</p>
+            <p className="truncate text-xs text-ink-secondary">{user.name}</p>
           </div>
         </div>
 
@@ -192,10 +196,14 @@ export default function ParentDashboard({ user }: { user: User }) {
                   if (window.innerWidth < 768) setSidebarOpen(false);
                 }}
                 aria-current={active ? 'page' : undefined}
-                className={`flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors duration-150 ease-out ${
+                /*
+                  그린 2곳째: 활성 메뉴의 좌측 강조 바 (세로 내비에서 밑줄의 대응물).
+                  색 단독 표기가 아니다 - 굵기와 면이 함께 바뀌고 aria-current 가 남는다 (12.2).
+                */
+                className={`flex w-full items-center gap-3 border-l-2 rounded-md px-3 py-2.5 text-sm transition-colors duration-150 ease-out ${
                   active
-                    ? 'bg-line-inverse text-ink-inverse'
-                    : 'text-ink-inverse-muted hover:bg-line-inverse hover:text-ink-inverse'
+                    ? 'border-accent bg-action-subtle font-semibold text-ink'
+                    : 'border-transparent font-medium text-ink-secondary hover:bg-surface-subtle hover:text-ink'
                 }`}
               >
                 <Icon className="h-4 w-4 flex-shrink-0" strokeWidth={1.5} />
@@ -205,10 +213,10 @@ export default function ParentDashboard({ user }: { user: User }) {
           })}
         </nav>
 
-        <div className="border-t border-line-inverse p-3">
+        <div className="border-t border-line p-3">
           <button
             onClick={() => logoutMutation.mutate()}
-            className="flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium text-ink-inverse-muted transition-colors duration-150 ease-out hover:bg-line-inverse hover:text-ink-inverse"
+            className="flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium text-ink-secondary transition-colors duration-150 ease-out hover:bg-surface-subtle hover:text-ink"
           >
             <LogOut className="h-4 w-4 flex-shrink-0" strokeWidth={1.5} />
             <span>로그아웃</span>

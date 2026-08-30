@@ -1450,10 +1450,14 @@ export default function BranchDashboard({ user }: { user: User }) {
     이미 받아 둔 allDistributionStudents 만 뒤집어 쓰고 새 API 를 부르지 않는다 (11.6.5).
     칸을 가르는 것은 사람이 아니라 데이터다. 그래서 카드를 끌어 옮기지 않는다.
 
-      미응시      !hasAttempt                neutral
-      작성 중     hasAttempt && !isSubmitted warning   <- 손이 가야 하는 유일한 칸
+      미응시      !hasAttempt                danger    <- 독촉이 필요한 칸 (2.4 개정)
+      작성 중     hasAttempt && !isSubmitted warning   <- 손이 가는 중인 칸
       채점 완료   isSubmitted && !hasReport  neutral
       보고서 완료 hasReport                  neutral
+
+    미응시가 danger 인 것은 2026-08-22 사용자 결정이다. 되돌릴 때 고칠 곳은
+    토큰이 아니라 아래 columns 의 tone 값과 DESIGN.md 2.4 다.
+    빈 칸은 어느 톤이든 무채색으로 떨어지므로 "전원 응시" 는 빨갛지 않다.
 
     카드 클릭은 새 핸들러를 만들지 않고 기존 openStudentReport 로 보낸다.
     보고서가 있으면 그것을 열고, 없으면 ensureReport 가 생성한 뒤 연다
@@ -1605,8 +1609,8 @@ export default function BranchDashboard({ user }: { user: User }) {
       {
         key: 'not-attempted',
         label: '미응시',
-        tone: 'neutral' as StatusTone,
-        cards: rows.filter((r) => !r.hasAttempt).map((r) => toCard(r, 'neutral')),
+        tone: 'danger' as StatusTone,
+        cards: rows.filter((r) => !r.hasAttempt).map((r) => toCard(r, 'danger')),
         emptyText: '전원 응시했습니다',
       },
       {
@@ -3404,19 +3408,36 @@ export default function BranchDashboard({ user }: { user: User }) {
 
   return (
     <div className="flex min-h-[100dvh] flex-col bg-surface-sunken">
-      {/* ── 상단 GNB (DESIGN.md 11.6). 주요 메뉴가 여기 있고, 사이드바는 학생 패널이 된다 ── */}
-      <header className="sticky top-0 z-30 border-b border-line-inverse bg-surface-inverse">
+      {/*
+        ── 상단 GNB (DESIGN.md 11.6). 주요 메뉴가 여기 있고, 사이드바는 학생 패널이 된다 ──
+
+        크롬은 밝은 면(bg-surface) + 아래 경계선이다. 짙은 면을 쓰면 그린이 얹힐
+        자리가 없어져 브랜드가 화면에서 사라진다 (1.3). 이 화면의 그린은 정확히
+        두 곳 - 로고 칩과 활성 탭 밑줄. 그 밖에는 무채색이다.
+
+        로고 칩 아이콘에 text-ink-inverse 가 아니라 text-action-text 를 쓰는 이유:
+        --accent 는 라이트에서 green-600(어두움), 다크에서 green-400(밝음)으로
+        방향이 뒤집힌다. ink-inverse 는 두 모드 모두 흰색 계열이라 다크에서
+        1.74:1 로 무너진다. action-text 는 라이트 #FFF / 다크 slate-900 으로 함께
+        뒤집혀 3.30:1 / 10.3:1 을 유지한다. 새 토큰이 아니라 기존 토큰 선택이다.
+      */}
+      <header className="sticky top-0 z-30 border-b border-line bg-surface">
         <div className="flex items-center gap-2 px-3 md:px-6">
           <div className="flex flex-shrink-0 items-center gap-2.5 py-2.5">
-            <div className="flex h-8 w-8 items-center justify-center rounded-sm border border-line-inverse">
-              <GraduationCap className="h-4 w-4 text-ink-inverse" strokeWidth={1.5} />
+            <div className="flex h-8 w-8 items-center justify-center rounded-md bg-accent">
+              <GraduationCap className="h-4 w-4 text-action-text" strokeWidth={1.5} />
             </div>
             <div className="hidden min-w-0 lg:block">
-              <p className="truncate text-sm font-semibold text-ink-inverse">지점 관리</p>
-              <p className="truncate text-xs text-ink-inverse-muted">{user.name}</p>
+              <p className="truncate text-sm font-semibold text-ink">지점 관리</p>
+              <p className="truncate text-xs text-ink-secondary">{user.name}</p>
             </div>
           </div>
 
+          {/*
+            활성 탭은 색과 밑줄만으로 알리지 않는다 (12.2). 굵기(font-semibold)가
+            흑백에서도 남고, aria-current="page" 가 스크린리더에 남는다.
+            비활성도 같은 두께의 투명 밑줄을 깔아 활성 전환 시 글자가 밀리지 않게 한다.
+          */}
           <nav className="flex min-w-0 flex-1 items-stretch gap-1 overflow-x-auto" aria-label="주요 메뉴">
             {TOP_TABS.map((t) => (
               <button
@@ -3424,10 +3445,10 @@ export default function BranchDashboard({ user }: { user: User }) {
                 type="button"
                 onClick={() => switchTopTab(t.id)}
                 aria-current={topTab === t.id ? 'page' : undefined}
-                className={`h-11 whitespace-nowrap rounded-sm px-3 text-sm transition-colors duration-150 ease-out md:px-4 ${
+                className={`h-11 whitespace-nowrap border-b-2 px-3 text-sm transition-colors duration-150 ease-out md:px-4 ${
                   topTab === t.id
-                    ? 'bg-surface font-semibold text-ink'
-                    : 'text-ink-inverse-muted hover:bg-line-inverse hover:text-ink-inverse'
+                    ? 'border-accent font-semibold text-ink'
+                    : 'border-transparent text-ink-secondary hover:text-ink'
                 }`}
               >
                 {t.label}
@@ -3441,7 +3462,7 @@ export default function BranchDashboard({ user }: { user: User }) {
               type="button"
               onClick={() => logoutMutation.mutate()}
               aria-label="로그아웃"
-              className="flex h-11 w-11 items-center justify-center rounded-sm text-ink-inverse-muted transition-colors duration-150 ease-out hover:bg-line-inverse hover:text-ink-inverse"
+              className="flex h-11 w-11 items-center justify-center rounded-sm text-ink-secondary transition-colors duration-150 ease-out hover:bg-surface-subtle hover:text-ink"
             >
               <LogOut className="h-4 w-4" strokeWidth={1.5} />
             </button>

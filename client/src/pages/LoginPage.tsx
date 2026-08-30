@@ -35,7 +35,10 @@ export default function LoginPage() {
   /*
    * DESIGN.md 9.2 매핑 적용 (오렌지레드 -> 네이비 체계)
    *   배경 그라디언트와 pulse 글로우 원은 제거 (1.4 그라디언트 금지, 8.2 자동 애니메이션 금지)
-   *   로고 타일과 주 버튼은 --surface-inverse / --action 네이비로 통합
+   *   주 버튼은 --action 슬레이트. 로고 칩만 --accent 그린이다 (색 전환 2단계).
+   *     이 화면의 그린은 로고 칩 1곳뿐이다 (1.3 화면당 최대 2곳).
+   *     아이콘 색은 --accent 와 함께 뒤집히는 action-text 를 쓴다
+   *     (라이트 흰 글자 3.30:1 / 다크 slate-900 10.3:1).
    *   브라스 사용 0곳. 로그인 화면에는 강조할 성취가 없으므로 브라스를 쓰지 않는다 (1.2)
    */
   return (
@@ -47,8 +50,8 @@ export default function LoginPage() {
       <Card className="w-full max-w-md shadow-lg">
         <CardHeader className="space-y-4 pb-8">
           <div className="flex justify-center">
-            <div className="flex h-16 w-16 items-center justify-center rounded-md bg-surface-inverse">
-              <GraduationCap className="h-9 w-9 text-ink-inverse" strokeWidth={1.5} />
+            <div className="flex h-16 w-16 items-center justify-center rounded-md bg-accent">
+              <GraduationCap className="h-9 w-9 text-action-text" strokeWidth={1.5} />
             </div>
           </div>
           <CardTitle className="text-center">

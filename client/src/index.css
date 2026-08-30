@@ -9,66 +9,78 @@
    hex 리터럴은 이 파일의 :root / [data-theme="dark"] 블록에만 존재한다.
    ============================================================================ */
 :root {
-  /* --- ① 브랜드: 네이비(구조와 권위) --- */
-  --navy-50:  #F4F6FA;
-  --navy-100: #E6EBF4;
-  --navy-200: #C9D4E7;
-  --navy-300: #A3B4D3;
-  --navy-400: #7189B5;
-  --navy-500: #4C6595;
-  --navy-600: #354C78;
-  --navy-700: #27395C;
-  --navy-800: #1B2942;
-  --navy-900: #131E31;
-  --navy-950: #0C1421;
+  /* --- ① 브랜드: 뉴트럴 슬레이트(구조와 권위) --- */
+  --slate-50:  #F8FAFC;
+  --slate-100: #F1F5F9;
+  --slate-200: #E2E8F0;
+  --slate-300: #CBD5E1;
+  --slate-400: #94A3B8;
+  --slate-500: #64748B;
+  --slate-600: #475569;
+  --slate-700: #334155;
+  --slate-800: #1E293B;
+  --slate-900: #0F172A;
+  --slate-950: #020617;
 
-  /* --- ① 브랜드: 브라스(성취와 강조). 화면당 최대 2곳 --- */
-  --brass-300: #E3C88E;
-  --brass-400: #D4B26A;
-  --brass-500: #C09A4E;
-  --brass-600: #A07F3B;
-  --brass-700: #7D622C;
+  /* --- ① 브랜드: 그린(성취와 강조). 화면당 최대 2곳 --- */
+  /* 밝은 단계(300~500)는 면·그래픽 전용이다. 흰 배경에서 500 은 2.28:1,
+     600 은 3.30:1 이라 글자로 쓸 수 없다. 글자와 "흰 글자를 얹는 그린 면"은
+     700(흰 배경 5.02:1) 이상만 쓴다. */
+  --green-50:  #F0FDF4;
+  --green-100: #DCFCE7;
+  --green-200: #BBF7D0;
+  --green-300: #86EFAC;
+  --green-400: #4ADE80;
+  --green-500: #22C55E;
+  --green-600: #16A34A;
+  --green-700: #15803D;
+  --green-800: #166534;
+  --green-900: #14532D;
 
   /* --- ② 시맨틱: 면 --- */
   --surface:          #FFFFFF;
-  --surface-sunken:   var(--navy-50);
+  --surface-sunken:   var(--slate-50);
   --surface-raised:   #FFFFFF;
-  --surface-inverse:  var(--navy-800);
-  --surface-subtle:   var(--navy-100);
+  --surface-inverse:  var(--slate-800);
+  --surface-subtle:   var(--slate-100);
 
   /* --- ② 시맨틱: 글자 --- */
-  --text-primary:     var(--navy-900);
-  --text-secondary:   var(--navy-600);
-  --text-tertiary:    var(--navy-400);
+  /* tertiary 는 slate-400(2.56:1)이 3:1 미달이라 500(4.76:1)으로 한 단계 내렸다 */
+  --text-primary:     var(--slate-900);
+  --text-secondary:   var(--slate-600);
+  --text-tertiary:    var(--slate-500);
   --text-on-inverse:  #FFFFFF;
-  --text-on-inverse-muted: var(--navy-200);
-  --text-accent:      var(--brass-700);
+  --text-on-inverse-muted: var(--slate-200);
+  --text-accent:      var(--green-700);
 
   /* --- ② 시맨틱: 선 --- */
-  --border:           var(--navy-200);
-  --border-strong:    var(--navy-300);
-  --border-subtle:    var(--navy-100);
-  --border-inverse:   var(--navy-700);
+  --border:           var(--slate-200);
+  --border-strong:    var(--slate-300);
+  --border-subtle:    var(--slate-100);
+  --border-inverse:   var(--slate-700);
 
   /* --- ② 시맨틱: 액션 --- */
-  --action:           var(--navy-800);
-  --action-hover:     var(--navy-700);
-  --action-active:    var(--navy-900);
+  --action:           var(--slate-800);
+  --action-hover:     var(--slate-700);
+  --action-active:    var(--slate-900);
   --action-text:      #FFFFFF;
-  --action-subtle:    var(--navy-100);
-  --action-subtle-hover: var(--navy-200);
-  --focus-ring:       var(--navy-500);
+  --action-subtle:    var(--slate-100);
+  --action-subtle-hover: var(--slate-200);
+  --focus-ring:       var(--slate-500);
 
-  /* --- ② 시맨틱: 강조(브라스) --- */
-  --accent:           var(--brass-500);
-  --accent-strong:    var(--brass-700);
-  --accent-surface:   #FBF6EA;
+  /* --- ② 시맨틱: 강조(그린) --- */
+  /* accent 는 그래픽(막대·상단 바)과 "어두운 글자를 받는 면"용이다.
+     흰 면 위 3.30:1, 그 면 위 slate-900 글자 5.42:1. 흰 글자는 얹을 수 없다.
+     밝은 면 위의 그린 글자는 accent-strong(green-700, 5.02:1)만 쓴다. */
+  --accent:           var(--green-600);
+  --accent-strong:    var(--green-700);
+  --accent-surface:   var(--green-50);
 
-  /* --- ② 시맨틱: 그림자와 가림막(네이비 틴트, 순검정 금지) --- */
-  --shadow-sm: 0 1px 2px rgba(19, 30, 49, 0.06);
-  --shadow-md: 0 2px 8px rgba(19, 30, 49, 0.08);
-  --shadow-lg: 0 8px 24px rgba(19, 30, 49, 0.12);
-  --overlay:   rgba(19, 30, 49, 0.48);
+  /* --- ② 시맨틱: 그림자와 가림막(슬레이트 틴트, 순검정 금지) --- */
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
+  --shadow-md: 0 2px 8px rgba(15, 23, 42, 0.08);
+  --shadow-lg: 0 8px 24px rgba(15, 23, 42, 0.12);
+  --overlay:   rgba(15, 23, 42, 0.48);
 
   /* --- ③ 기능색: 브랜드와 독립. 등급/상태 표시 전용 --- */
   --fn-success:         #1D7A4C;
@@ -95,35 +107,38 @@
 [data-theme='dark'],
 .dark {
   /* 표면 사다리: 캔버스가 가장 어둡고 위로 올라올수록 밝아진다 */
-  --surface:          var(--navy-800);
-  --surface-sunken:   var(--navy-950);
-  --surface-raised:   var(--navy-700);
-  --surface-inverse:  var(--navy-900);
-  --surface-subtle:   var(--navy-700);
+  --surface:          var(--slate-800);
+  --surface-sunken:   var(--slate-950);
+  --surface-raised:   var(--slate-700);
+  --surface-inverse:  var(--slate-900);
+  --surface-subtle:   var(--slate-700);
 
-  --text-primary:     #EEF2F8;
-  --text-secondary:   var(--navy-200);
-  --text-tertiary:    var(--navy-300);
-  --text-on-inverse:  #EEF2F8;
-  --text-on-inverse-muted: var(--navy-300);
-  --text-accent:      var(--brass-400);
+  --text-primary:     var(--slate-50);
+  --text-secondary:   var(--slate-200);
+  --text-tertiary:    var(--slate-300);
+  --text-on-inverse:  var(--slate-50);
+  --text-on-inverse-muted: var(--slate-300);
+  /* 어두운 면 위에서는 그린도 방향이 뒤집힌다. 라이트의 700 은 slate-800 위에서
+     2.92:1 로 무너지므로 400(8.40:1) 이상 밝은 단계만 글자로 쓴다 */
+  --text-accent:      var(--green-400);
 
-  --border:           var(--navy-600);
-  --border-strong:    var(--navy-500);
-  --border-subtle:    var(--navy-700);
-  --border-inverse:   var(--navy-700);
+  --border:           var(--slate-600);
+  --border-strong:    var(--slate-500);
+  --border-subtle:    var(--slate-700);
+  --border-inverse:   var(--slate-700);
 
-  --action:           var(--navy-100);
+  --action:           var(--slate-100);
   --action-hover:     #FFFFFF;
-  --action-active:    var(--navy-200);
-  --action-text:      var(--navy-900);
-  --action-subtle:    var(--navy-700);
-  --action-subtle-hover: var(--navy-600);
-  --focus-ring:       var(--navy-300);
+  --action-active:    var(--slate-200);
+  --action-text:      var(--slate-900);
+  --action-subtle:    var(--slate-700);
+  --action-subtle-hover: var(--slate-600);
+  --focus-ring:       var(--slate-300);
 
-  --accent:           var(--brass-400);
-  --accent-strong:    var(--brass-300);
-  --accent-surface:   #2A2314;
+  --accent:           var(--green-400);
+  --accent-strong:    var(--green-300);
+  /* green-900 을 더 눌러 만든 어두운 그린 면. green-300 이 11.00:1 로 얹힌다 */
+  --accent-surface:   #0C2A17;
 
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.5);

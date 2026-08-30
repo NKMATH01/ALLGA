@@ -1059,44 +1059,47 @@ export default function StudentDashboard({ user }: { user: User }) {
       )}
       <aside
         ref={drawerRef}
-        className={`fixed inset-y-0 left-0 z-40 w-[264px] flex flex-col bg-surface-inverse text-ink-inverse transition-transform duration-200 ease-out ${
+        className={`fixed inset-y-0 left-0 z-40 w-[264px] flex flex-col border-r border-line bg-surface text-ink transition-transform duration-200 ease-out ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         } md:static md:z-auto md:translate-x-0 md:overflow-hidden md:transition-[width] ${
           sidebarOpen ? 'md:w-[264px]' : 'md:w-0'
         }`}
       >
         <div className="p-6 flex-1 overflow-y-auto">
-          {/* Logo */}
+          {/*
+            Logo. 이 화면의 그린 1곳째. 아이콘 색은 --accent 와 함께 뒤집히는
+            action-text 를 쓴다 (라이트 흰 글자 3.30:1 / 다크 slate-900 10.3:1).
+          */}
           <div className="flex items-center gap-3 mb-8">
-            <div className="w-10 h-10 border border-line-inverse rounded-sm flex items-center justify-center flex-shrink-0">
-              <GraduationCap className="w-5 h-5" strokeWidth={1.5} />
+            <div className="w-10 h-10 bg-accent rounded-md flex items-center justify-center flex-shrink-0">
+              <GraduationCap className="w-5 h-5 text-action-text" strokeWidth={1.5} />
             </div>
             <div>
               <h1 className="text-base font-semibold tracking-[-0.01em]">ALLGA</h1>
-              <p className="text-xs text-ink-inverse-muted">학습 관리 시스템</p>
+              <p className="text-xs text-ink-secondary">학습 관리 시스템</p>
             </div>
           </div>
 
           {/* User Card */}
-          <div className="mb-8 p-4 rounded-md border border-line-inverse">
+          <div className="mb-8 p-4 rounded-md border border-line">
             <div className="flex items-center gap-3">
-              <div className="w-11 h-11 border border-line-inverse rounded-full flex items-center justify-center flex-shrink-0">
+              <div className="w-11 h-11 border border-line rounded-full flex items-center justify-center flex-shrink-0">
                 <User className="w-5 h-5" strokeWidth={1.5} />
               </div>
               <div className="flex-1 min-w-0">
                 <p className="font-semibold truncate">{user.name}</p>
-                <p className="text-sm text-ink-inverse-muted truncate">
+                <p className="text-sm text-ink-secondary truncate">
                   {studentData?.branch?.name || '학생'}
                 </p>
               </div>
             </div>
             {studentData && (
-              <div className="mt-3 pt-3 border-t border-line-inverse grid grid-cols-2 gap-2 text-xs">
-                <div className="flex items-center gap-1.5 text-ink-inverse-muted">
+              <div className="mt-3 pt-3 border-t border-line grid grid-cols-2 gap-2 text-xs">
+                <div className="flex items-center gap-1.5 text-ink-secondary">
                   <School className="w-3.5 h-3.5" strokeWidth={1.5} />
                   <span className="truncate">{studentData.school || '-'}</span>
                 </div>
-                <div className="flex items-center gap-1.5 text-ink-inverse-muted">
+                <div className="flex items-center gap-1.5 text-ink-secondary">
                   <GraduationCap className="w-3.5 h-3.5" strokeWidth={1.5} />
                   <span>{studentData.grade || '-'}</span>
                 </div>
@@ -1112,10 +1115,14 @@ export default function StudentDashboard({ user }: { user: User }) {
                 <button
                   key={item.id}
                   onClick={() => setActiveSection(item.id)}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-md text-sm transition-colors duration-150 ease-out ${
+                  /*
+                    그린 2곳째: 활성 메뉴의 좌측 강조 바 (세로 내비에서 밑줄의 대응물).
+                    색 단독이 아니다 - 굵기·면·우측 ChevronRight 가 함께 바뀐다 (12.2).
+                  */
+                  className={`w-full flex items-center gap-3 border-l-2 px-4 py-3 rounded-md text-sm transition-colors duration-150 ease-out ${
                     activeSection === item.id
-                      ? 'bg-surface text-ink font-semibold'
-                      : 'text-ink-inverse-muted hover:bg-line-inverse hover:text-ink-inverse'
+                      ? 'border-accent bg-action-subtle text-ink font-semibold'
+                      : 'border-transparent text-ink-secondary hover:bg-surface-subtle hover:text-ink'
                   }`}
                 >
                   <Icon className="w-4 h-4 flex-shrink-0" strokeWidth={1.5} />
@@ -1130,18 +1137,18 @@ export default function StudentDashboard({ user }: { user: User }) {
 
           {/* Quick Stats */}
           {completedExams.length > 0 && (
-            <div className="mt-8 p-4 rounded-md border border-line-inverse">
-              <h3 className="text-xs font-semibold tracking-[0.08em] text-ink-inverse-muted mb-3">
+            <div className="mt-8 p-4 rounded-md border border-line">
+              <h3 className="text-xs font-semibold tracking-[0.08em] text-ink-secondary mb-3">
                 나의 성적 요약
               </h3>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <p className="text-2xl font-bold leading-none">{averageScore}</p>
-                  <p className="text-xs text-ink-inverse-muted mt-1.5">평균 점수</p>
+                  <p className="text-xs text-ink-secondary mt-1.5">평균 점수</p>
                 </div>
                 <div>
                   <p className="text-2xl font-bold leading-none">{completedExams.length}</p>
-                  <p className="text-xs text-ink-inverse-muted mt-1.5">응시 횟수</p>
+                  <p className="text-xs text-ink-secondary mt-1.5">응시 횟수</p>
                 </div>
               </div>
             </div>
@@ -1149,11 +1156,11 @@ export default function StudentDashboard({ user }: { user: User }) {
         </div>
 
         {/* Logout Button */}
-        <div className="p-6 border-t border-line-inverse">
+        <div className="p-6 border-t border-line">
           <Button
             onClick={() => logoutMutation.mutate()}
             variant="ghost"
-            className="w-full justify-start text-ink-inverse-muted hover:bg-line-inverse hover:text-ink-inverse"
+            className="w-full justify-start text-ink-secondary hover:bg-surface-subtle hover:text-ink"
           >
             <LogOut className="w-4 h-4 mr-3" strokeWidth={1.5} />
             로그아웃

@@ -6,8 +6,13 @@
  * 이름 규칙
  *   surface-* / ink-* / line-* / action-* : 시맨틱 계층 (컴포넌트가 쓰는 것)
  *   fn-*                                  : 기능 계층 (등급/상태 전용, 브랜드 독립)
- *   navy-* / brass-*                      : 브랜드 원색. 시맨틱으로 표현되지 않는 경우에만
+ *   slate-* / green-*                     : 브랜드 원색. 시맨틱으로 표현되지 않는 경우에만
  *   background/foreground/primary/...     : 기존 shadcn 이름 별칭. 신규 토큰으로 재배선
+ *
+ * ⚠ slate 와 green 은 Tailwind 기본 팔레트에도 있는 이름이다. theme.extend.colors 에
+ *   같은 키를 두면 기본 팔레트를 덮어쓴다. 의도한 동작이다 — 이 프로젝트의 색은 전부
+ *   토큰에서 나와야 하므로, bg-green-500 같은 클래스가 Tailwind 기본 hex 로 새는 길을
+ *   막는 편이 낫다. 전환 시점에 기본 slate / green 유틸리티 사용처는 0건이었다.
  */
 export default {
   darkMode: ['class', '[data-theme="dark"]'],
@@ -60,7 +65,7 @@ export default {
           subtle: 'var(--action-subtle)',
           'subtle-hover': 'var(--action-subtle-hover)',
         },
-        /* 브라스. 화면당 최대 2곳 (DESIGN.md 1.3) */
+        /* 그린. 화면당 최대 2곳 (DESIGN.md 1.3) */
         accent: {
           DEFAULT: 'var(--accent)',
           strong: 'var(--accent-strong)',
@@ -83,26 +88,31 @@ export default {
           'info-border': 'var(--fn-info-border)',
         },
 
-        /* --- 브랜드 원색 스케일 --- */
-        navy: {
-          50: 'var(--navy-50)',
-          100: 'var(--navy-100)',
-          200: 'var(--navy-200)',
-          300: 'var(--navy-300)',
-          400: 'var(--navy-400)',
-          500: 'var(--navy-500)',
-          600: 'var(--navy-600)',
-          700: 'var(--navy-700)',
-          800: 'var(--navy-800)',
-          900: 'var(--navy-900)',
-          950: 'var(--navy-950)',
+        /* --- 브랜드 원색 스케일 (Tailwind 기본 slate/green 을 덮어쓴다) --- */
+        slate: {
+          50: 'var(--slate-50)',
+          100: 'var(--slate-100)',
+          200: 'var(--slate-200)',
+          300: 'var(--slate-300)',
+          400: 'var(--slate-400)',
+          500: 'var(--slate-500)',
+          600: 'var(--slate-600)',
+          700: 'var(--slate-700)',
+          800: 'var(--slate-800)',
+          900: 'var(--slate-900)',
+          950: 'var(--slate-950)',
         },
-        brass: {
-          300: 'var(--brass-300)',
-          400: 'var(--brass-400)',
-          500: 'var(--brass-500)',
-          600: 'var(--brass-600)',
-          700: 'var(--brass-700)',
+        green: {
+          50: 'var(--green-50)',
+          100: 'var(--green-100)',
+          200: 'var(--green-200)',
+          300: 'var(--green-300)',
+          400: 'var(--green-400)',
+          500: 'var(--green-500)',
+          600: 'var(--green-600)',
+          700: 'var(--green-700)',
+          800: 'var(--green-800)',
+          900: 'var(--green-900)',
         },
 
         /* --- 기존 shadcn 이름 별칭 (신규 토큰으로 재배선) --- */
@@ -147,7 +157,7 @@ export default {
         '3xl': 'var(--radius-lg)',
       },
       boxShadow: {
-        /* DESIGN.md 4.4 / 9.1: 그림자는 3단계, 네이비 틴트. shadow-xl, shadow-2xl 클램프 */
+        /* DESIGN.md 4.4 / 9.1: 그림자는 3단계, 슬레이트 틴트. shadow-xl, shadow-2xl 클램프 */
         sm: 'var(--shadow-sm)',
         DEFAULT: 'var(--shadow-sm)',
         md: 'var(--shadow-md)',

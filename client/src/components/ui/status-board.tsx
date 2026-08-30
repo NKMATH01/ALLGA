@@ -8,16 +8,19 @@
 
   색 규칙 (2.4):
     정상 귀결에는 색을 쓰지 않는다. 네 칸을 전부 물들이면 색이 상태를 알리는
-    신호가 아니라 배경 장식이 된다. 손이 가야 하는 칸 하나만 warning 이고
-    나머지는 무채색이다. 특히 미응시/미제출에 빨강을 쓰지 않는다 - 아직 안 친
-    시험은 실패가 아니다. 또한 warning 칸이라도 카드가 0장이면 무채색으로
-    그린다 - 비어 있다는 것은 벗어난 상태가 아니라 손 갈 일이 없다는 뜻이다.
+    신호가 아니라 배경 장식이 된다. 손이 가야 하는 칸만 색을 갖고 나머지는
+    무채색이다. 색은 두 단계다 - 손이 가는 중이면 warning, 아직 시작조차
+    되지 않아 독촉이 필요하면 danger(미응시/미제출). danger 는 2026-08-22
+    사용자 결정으로 열렸다(2.4 개정 참조). 어느 톤이든 카드가 0장이면
+    무채색으로 그린다 - 비어 있다는 것은 벗어난 상태가 아니라 손 갈 일이
+    없다는 뜻이다. 빈 칸을 빨갛게 칠하면 "전원 응시" 가 경고로 읽힌다.
 */
-export type StatusTone = 'neutral' | 'warning';
+export type StatusTone = 'neutral' | 'warning' | 'danger';
 
 const COLUMN_TONE: Record<StatusTone, string> = {
   neutral: 'border-line bg-surface-subtle',
   warning: 'border-fn-warning-border bg-fn-warning-surface',
+  danger: 'border-fn-error-border bg-fn-error-surface',
 };
 
 /*
@@ -29,6 +32,7 @@ const COLUMN_TONE: Record<StatusTone, string> = {
 const CARD_TONE: Record<StatusTone, string> = {
   neutral: 'border-l-line-strong hover:border-l-line-strong',
   warning: 'border-l-fn-warning hover:border-l-fn-warning',
+  danger: 'border-l-fn-error hover:border-l-fn-error',
 };
 
 /*
@@ -56,7 +60,7 @@ export function StatusBoard({
   return (
     <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
       {columns.map((column) => {
-        // 빈 칸은 벗어난 상태가 아니므로 warning 이어도 무채색으로 그린다.
+        // 빈 칸은 벗어난 상태가 아니므로 warning/danger 여도 무채색으로 그린다.
         const tone: StatusTone = column.cards.length > 0 ? column.tone : 'neutral';
         const visibleCards = column.cards.slice(0, MAX_VISIBLE_CARDS);
         // 칸 머리의 건수는 자르기 전 전체 수를 그대로 보여준다.
