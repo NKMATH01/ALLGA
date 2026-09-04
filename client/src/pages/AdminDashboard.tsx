@@ -983,15 +983,41 @@ export default function AdminDashboard({ user }: { user: User }) {
                   e.preventDefault();
                   const formData = new FormData(e.currentTarget);
 
+                  // 입력이 렌더되는 필드만 덮어쓰고, category 처럼 입력이 없는 필드는 원본 값을 보존한다.
+                  const text = (name: string, fallback: unknown) => {
+                    const value = formData.get(name);
+                    return typeof value === 'string' ? value : fallback;
+                  };
+
                   // 문제 데이터 파싱
-                  const questionsData = viewingExam.questionsData.map((q: any, idx: number) => ({
-                    questionNumber: q.questionNumber,
-                    difficulty: formData.get(`difficulty_${idx}`) as string,
-                    category: formData.get(`category_${idx}`) as string,
-                    subcategory: formData.get(`subcategory_${idx}`) as string || '',
-                    correctAnswer: parseInt(formData.get(`correctAnswer_${idx}`) as string),
-                    points: parseInt(formData.get(`points_${idx}`) as string),
-                  }));
+                  const questionsData: any[] = [];
+                  for (let idx = 0; idx < viewingExam.questionsData.length; idx++) {
+                    const q = viewingExam.questionsData[idx];
+                    const label = q.number ?? q.questionNumber ?? idx + 1;
+
+                    const correctAnswer = parseInt(formData.get(`correctAnswer_${idx}`) as string, 10);
+                    if (Number.isNaN(correctAnswer)) {
+                      toast.error(`${label}번 문항의 정답을 숫자로 입력해 주세요.`);
+                      return;
+                    }
+
+                    const points = parseInt(formData.get(`points_${idx}`) as string, 10);
+                    if (Number.isNaN(points)) {
+                      toast.error(`${label}번 문항의 배점을 숫자로 입력해 주세요.`);
+                      return;
+                    }
+
+                    questionsData.push({
+                      ...q,
+                      difficulty: text(`difficulty_${idx}`, q.difficulty),
+                      domain: text(`domain_${idx}`, q.domain),
+                      typeAnalysis: text(`typeAnalysis_${idx}`, q.typeAnalysis),
+                      subcategory: text(`subcategory_${idx}`, q.subcategory ?? ''),
+                      explanation: text(`explanation_${idx}`, q.explanation),
+                      correctAnswer,
+                      points,
+                    });
+                  }
 
                   const data = {
                     title: formData.get('title'),
@@ -1008,26 +1034,27 @@ export default function AdminDashboard({ user }: { user: User }) {
                 }} className="space-y-6">
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-semibold text-ink">시험명 *</label>
-                      <Input name="title" defaultValue={viewingExam.title} required className="mt-1" />
+                      <label htmlFor="edit-exam-title" className="block text-sm font-semibold text-ink">시험명 *</label>
+                      <Input id="edit-exam-title" name="title" defaultValue={viewingExam.title} required className="mt-1" />
                     </div>
                     <div>
-                      <label className="block text-sm font-semibold text-ink">과목</label>
-                      <Input name="subject" defaultValue={viewingExam.subject} className="mt-1" />
+                      <label htmlFor="edit-exam-subject" className="block text-sm font-semibold text-ink">과목</label>
+                      <Input id="edit-exam-subject" name="subject" defaultValue={viewingExam.subject} className="mt-1" />
                     </div>
                     <div>
-                      <label className="block text-sm font-semibold text-ink">학년</label>
-                      <Input name="grade" defaultValue={viewingExam.grade} className="mt-1" />
+                      <label htmlFor="edit-exam-grade" className="block text-sm font-semibold text-ink">학년</label>
+                      <Input id="edit-exam-grade" name="grade" defaultValue={viewingExam.grade} className="mt-1" />
                     </div>
                     <div>
-                      <label className="block text-sm font-semibold text-ink">총 문제 수</label>
-                      <Input value={viewingExam.totalQuestions} disabled className="mt-1 bg-surface-subtle" />
+                      <label htmlFor="edit-exam-total-questions" className="block text-sm font-semibold text-ink">총 문제 수</label>
+                      <Input id="edit-exam-total-questions" value={viewingExam.totalQuestions} disabled className="mt-1 bg-surface-subtle" />
                     </div>
                   </div>
 
                   <div>
-                    <label className="block text-sm font-semibold text-ink">설명</label>
+                    <label htmlFor="edit-exam-description" className="block text-sm font-semibold text-ink">설명</label>
                     <textarea
+                      id="edit-exam-description"
                       name="description"
                       defaultValue={viewingExam.description}
                       className="mt-1 w-full rounded-md border border-line p-2 text-sm"
@@ -1127,8 +1154,9 @@ export default function AdminDashboard({ user }: { user: User }) {
                   )}
 
                   <div>
-                    <label className="block text-sm font-semibold text-ink">종합 평가</label>
+                    <label htmlFor="edit-exam-overall-review" className="block text-sm font-semibold text-ink">종합 평가</label>
                     <textarea
+                      id="edit-exam-overall-review"
                       name="overallReview"
                       defaultValue={viewingExam.overallReview}
                       className="mt-1 w-full rounded-md border border-line p-2 text-sm"
