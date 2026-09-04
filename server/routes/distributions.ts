@@ -3,9 +3,18 @@ import { db } from '../db/index';
 import { examDistributions, exams, distributionStudents, students, studentClasses, examAttempts, users, aiReports, branches, classes } from '../db/schema';
 import { eq, and, inArray } from 'drizzle-orm';
 import { requireAdminOrBranch, requireBranchManager } from '../middleware/auth';
-import { parseLocalDateStart, parseLocalDateEnd } from '../utils/helpers';
+import {
+  parseLocalDateStart,
+  parseLocalDateEnd,
+  resolveDistributionTargetKind,
+  distributionAppliesToStudent,
+  type DistributionTargetKind,
+} from '../utils/helpers';
 import { validateStudentsInBranch } from '../utils/branchScope';
 import { log, errorFields } from '../utils/logger';
+
+/** 판정 함수에 넘길 빈 집합. 매 행마다 new Set() 을 만들지 않기 위한 상수다. */
+const NO_IDS: ReadonlySet<string> = new Set<string>();
 
 /**
  * 배포 1건에 속한 학생 1명의 응답 행을 만든다.
@@ -139,6 +148,17 @@ router.post('/', requireAdminOrBranch, async (req, res) => {
       return res.status(404).json({ message: '시험을 찾을 수 없습니다.' });
     }
 
+    // 대상 종류를 먼저 확정한다. 저장·응답·판정이 모두 이 값을 따른다.
+    const normalizedStudentIds: string[] = Array.isArray(studentIds)
+      ? studentIds.filter((s: unknown): s is string => typeof s === 'string' && s.length > 0)
+      : [];
+
+    // 'students' 인데 실제로 배정될 학생이 없으면 "대상 없는 배포" 가 만들어진다.
+    // 예전에는 그 상태가 지점 전원 공개로 승격됐다. 아예 만들지 못하게 막는다.
+    if (Array.isArray(studentIds) && studentIds.length > 0 && normalizedStudentIds.length === 0) {
+      return res.status(400).json({ message: '배포 대상 학생을 1명 이상 지정해주세요.' });
+    }
+
     const distributions = [];
 
     if (user.role === 'admin') {
@@ -157,6 +177,11 @@ router.post('/', requireAdminOrBranch, async (req, res) => {
         return res.status(404).json({ message: '존재하지 않는 지점이 포함되어 있습니다.' });
       }
 
+      // admin 다지점 배포는 학생 지정 배정을 만들지 않는다(studentIds 는 저장되지 않는다).
+      // 따라서 target_kind 도 실제로 저장되는 것(반 또는 지점 전원)만 보고 정한다.
+      // 여기서 'students' 를 쓰면 배정 0건인 대상 없는 배포가 된다.
+      const adminTargetKind = resolveDistributionTargetKind({ classId, studentIds: undefined });
+
       for (const branchId of branchIds) {
         const [distribution] = await db
           .insert(examDistributions)
@@ -164,6 +189,7 @@ router.post('/', requireAdminOrBranch, async (req, res) => {
             examId,
             branchId,
             classId: classId || null,
+            targetKind: adminTargetKind,
             parentDistributionId: null,
             startDate: start,
             endDate: end,
@@ -175,47 +201,65 @@ router.post('/', requireAdminOrBranch, async (req, res) => {
       }
     } else {
       // Branch manager can distribute to their branch with class or specific students
-      const [distribution] = await db
-        .insert(examDistributions)
-        .values({
-          examId,
-          branchId: user.branchId!,
-          classId: classId || null,
-          parentDistributionId: parentDistributionId || null,
-          startDate: start,
-          endDate: end,
-          distributedBy: user.id,
-        })
-        .returning();
+      const branchTargetKind = resolveDistributionTargetKind({
+        classId,
+        studentIds: normalizedStudentIds,
+      });
 
-      // If specific students are selected, create student assignments
-      if (studentIds && Array.isArray(studentIds) && studentIds.length > 0) {
-        // 지정 학생이 전부 본인 지점 소속인지 검증
-        const studentError = await validateStudentsInBranch(studentIds, user.branchId!);
+      // 지정 학생이 전부 본인 지점 소속인지 검증 (INSERT 전에 끝낸다)
+      if (branchTargetKind === 'students') {
+        const studentError = await validateStudentsInBranch(normalizedStudentIds, user.branchId!);
         if (studentError) {
-          await db.delete(examDistributions).where(eq(examDistributions.id, distribution.id));
           return res.status(403).json({ message: studentError });
         }
-
-        const studentAssignments = studentIds.map((studentId: string) => ({
-          distributionId: distribution.id,
-          studentId,
-        }));
-
-        await db.insert(distributionStudents).values(studentAssignments);
       }
+
+      // 배포 INSERT 와 학생 배정 INSERT 는 한 트랜잭션이다.
+      // 예전에는 두 문장이 따로 나가고 실패 시 보상 삭제로 되돌렸는데,
+      // 그 삭제가 실패하면 "지정 0건인 배포" 가 남아 지점 전원 공개로 승격됐다.
+      const distribution = await db.transaction(async (tx) => {
+        const [created] = await tx
+          .insert(examDistributions)
+          .values({
+            examId,
+            branchId: user.branchId!,
+            classId: classId || null,
+            targetKind: branchTargetKind,
+            parentDistributionId: parentDistributionId || null,
+            startDate: start,
+            endDate: end,
+            distributedBy: user.id,
+          })
+          .returning();
+
+        if (branchTargetKind === 'students') {
+          await tx.insert(distributionStudents).values(
+            normalizedStudentIds.map((studentId) => ({
+              distributionId: created.id,
+              studentId,
+            }))
+          );
+        }
+
+        return created;
+      });
 
       distributions.push(distribution);
     }
 
+    // 메시지는 실제로 저장된 대상을 인용한다.
+    // (admin 경로는 studentIds 를 저장하지 않으므로 그 개수를 말하지 않는다.)
+    const savedTargetKind: string = distributions[0]?.targetKind ?? 'branch';
+
     res.status(201).json({
       success: true,
       distributions,
-      message: studentIds && studentIds.length > 0
-        ? `${studentIds.length}명의 학생에게 시험이 배포되었습니다.`
-        : classId
-        ? '반에 시험이 배포되었습니다.'
-        : `${distributions.length}개 지점에 시험이 배포되었습니다.`,
+      message:
+        savedTargetKind === 'students'
+          ? `${normalizedStudentIds.length}명의 학생에게 시험이 배포되었습니다.`
+          : savedTargetKind === 'class'
+          ? '반에 시험이 배포되었습니다.'
+          : `${distributions.length}개 지점에 시험이 배포되었습니다.`,
     });
   } catch (error) {
     log.error('distribution.create_distribution_failed', errorFields(error));
@@ -280,11 +324,12 @@ router.get('/students', requireBranchManager, async (req, res) => {
           .from(studentClasses)
           .where(inArray(studentClasses.classId, classIds))
       : [];
-    const studentIdsByClassId = new Map<string, string[]>();
+    // 판정 함수는 "학생이 속한 반 집합" 을 받으므로 학생 기준으로 뒤집어 둔다.
+    const classIdsByStudentId = new Map<string, Set<string>>();
     for (const row of classMemberRows) {
-      const list = studentIdsByClassId.get(row.classId);
-      if (list) list.push(row.studentId);
-      else studentIdsByClassId.set(row.classId, [row.studentId]);
+      const set = classIdsByStudentId.get(row.studentId);
+      if (set) set.add(row.classId);
+      else classIdsByStudentId.set(row.studentId, new Set([row.classId]));
     }
 
     // ③ 학생 지정 배포들의 지정 대상 (1회)
@@ -297,11 +342,11 @@ router.get('/students', requireBranchManager, async (req, res) => {
           .from(distributionStudents)
           .where(inArray(distributionStudents.distributionId, distributionIds))
       : [];
-    const studentIdsByDistributionId = new Map<string, string[]>();
+    const studentIdsByDistributionId = new Map<string, Set<string>>();
     for (const row of assignedRows) {
-      const list = studentIdsByDistributionId.get(row.distributionId);
-      if (list) list.push(row.studentId);
-      else studentIdsByDistributionId.set(row.distributionId, [row.studentId]);
+      const set = studentIdsByDistributionId.get(row.distributionId);
+      if (set) set.add(row.studentId);
+      else studentIdsByDistributionId.set(row.distributionId, new Set([row.studentId]));
     }
 
     // ④ 지점 학생 전체 (1회). 다른 지점 학생은 여기서부터 들어오지 않는다.
@@ -313,7 +358,6 @@ router.get('/students', requireBranchManager, async (req, res) => {
       .from(students)
       .innerJoin(users, eq(students.userId, users.id))
       .where(eq(students.branchId, branchId));
-    const branchStudentById = new Map(branchStudents.map((row) => [row.student.id, row]));
 
     // ⑤ 응시 (1회).
     //    키는 반드시 (distributionId, studentId) 복합이다. studentId 만으로 잡으면
@@ -347,28 +391,23 @@ router.get('/students', requireBranchManager, async (req, res) => {
       if (!reportByAttemptId.has(report.attemptId)) reportByAttemptId.set(report.attemptId, report);
     }
 
-    // 조립. 배포별 대상 학생 결정 규칙은 /:id/students 와 동일하다.
+    // 조립. 대상 판정은 /my-exams·/:id/students 와 같은 순수 함수 하나를 쓴다.
+    //
+    // 지점 학생 전체를 후보로 두고 걸러낸다. 어떤 대상 종류든 결과가 "지점 소속" 으로
+    // 한정되고(다른 지점 학생은 애초에 후보에 없다) 목록 순서도 배포 종류와 무관하게
+    // 같아진다. 'branch' 배포는 예전에도 branchStudents 를 그대로 돌려줬으므로
+    // 기존 데이터(전부 지점 전원)의 응답은 순서까지 동일하다.
     const data = validRows.map(({ distribution, exam }) => {
-      let studentsList: (typeof branchStudents)[number][];
-
-      if (distribution.classId) {
-        // 반 배포 → 그 반에 속한 지점 학생
-        studentsList = (studentIdsByClassId.get(distribution.classId) ?? [])
-          .map((studentId) => branchStudentById.get(studentId))
-          .filter((row): row is (typeof branchStudents)[number] => !!row);
-      } else {
-        const assigned = studentIdsByDistributionId.get(distribution.id) ?? [];
-        if (assigned.length > 0) {
-          // 학생 지정 배포 → 지정된 학생 중 지점 소속인 것만
-          // (단건 조회의 inArray 는 중복 id 를 한 행으로 접으므로 여기서도 중복을 제거한다)
-          studentsList = Array.from(new Set(assigned))
-            .map((studentId) => branchStudentById.get(studentId))
-            .filter((row): row is (typeof branchStudents)[number] => !!row);
-        } else {
-          // 그 외 → 지점 학생 전체
-          studentsList = branchStudents;
-        }
-      }
+      const assignedStudentIds = studentIdsByDistributionId.get(distribution.id) ?? NO_IDS;
+      const studentsList = branchStudents.filter((row) =>
+        distributionAppliesToStudent({
+          targetKind: distribution.targetKind,
+          classId: distribution.classId,
+          studentId: row.student.id,
+          studentClassIds: classIdsByStudentId.get(row.student.id) ?? NO_IDS,
+          assignedStudentIds,
+        })
+      );
 
       return {
         distribution,
@@ -444,6 +483,10 @@ router.put('/:id', requireAdminOrBranch, async (req, res) => {
     // 배정 대상이 배포 지점 소속인지 검증 (admin 도 배포 지점 기준으로 확인)
     const targetBranchId: string = distribution.branchId;
 
+    const normalizedStudentIds: string[] = Array.isArray(studentIds)
+      ? studentIds.filter((s: unknown): s is string => typeof s === 'string' && s.length > 0)
+      : [];
+
     if (classId) {
       const [cls] = await db
         .select()
@@ -456,8 +499,8 @@ router.put('/:id', requireAdminOrBranch, async (req, res) => {
       }
     }
 
-    if (studentIds && Array.isArray(studentIds) && studentIds.length > 0) {
-      const studentError = await validateStudentsInBranch(studentIds, targetBranchId);
+    if (normalizedStudentIds.length > 0) {
+      const studentError = await validateStudentsInBranch(normalizedStudentIds, targetBranchId);
       if (studentError) {
         return res.status(403).json({ message: studentError });
       }
@@ -493,8 +536,16 @@ router.put('/:id', requireAdminOrBranch, async (req, res) => {
     }
 
     // Update distribution with classId
-    const updates: { classId: string | null; startDate?: Date; endDate?: Date } = {
+    // 대상(classId / studentIds)이 바뀌면 target_kind 도 같은 함수로 함께 갱신한다.
+    // 컬럼과 실제 배정이 어긋나면 판정이 다시 파생으로 돌아간다.
+    const updates: {
+      classId: string | null;
+      targetKind: DistributionTargetKind;
+      startDate?: Date;
+      endDate?: Date;
+    } = {
       classId: classId || null,
+      targetKind: resolveDistributionTargetKind({ classId, studentIds: normalizedStudentIds }),
     };
     if (nextStart) updates.startDate = nextStart;
     if (nextEnd) updates.endDate = nextEnd;
@@ -510,8 +561,8 @@ router.put('/:id', requireAdminOrBranch, async (req, res) => {
       .where(eq(distributionStudents.distributionId, id));
 
     // If specific students are selected, create student assignments
-    if (studentIds && Array.isArray(studentIds) && studentIds.length > 0) {
-      const studentAssignments = studentIds.map((studentId: string) => ({
+    if (updates.targetKind === 'students') {
+      const studentAssignments = normalizedStudentIds.map((studentId) => ({
         distributionId: id,
         studentId,
       }));
@@ -521,11 +572,12 @@ router.put('/:id', requireAdminOrBranch, async (req, res) => {
 
     res.json({
       success: true,
-      message: studentIds && studentIds.length > 0
-        ? `${studentIds.length}명의 학생에게 시험이 배포되었습니다.`
-        : classId
-        ? '반에 시험이 배포되었습니다.'
-        : '배포가 업데이트되었습니다.',
+      message:
+        updates.targetKind === 'students'
+          ? `${normalizedStudentIds.length}명의 학생에게 시험이 배포되었습니다.`
+          : updates.targetKind === 'class'
+          ? '반에 시험이 배포되었습니다.'
+          : '배포가 업데이트되었습니다.',
     });
   } catch (error) {
     log.error('distribution.update_distribution_failed', errorFields(error));
@@ -595,30 +647,37 @@ router.get('/:id/students', requireBranchManager, async (req, res) => {
       return res.status(404).json({ message: '시험을 찾을 수 없습니다.' });
     }
 
-    // Get all students in this distribution
-    let studentsList = [];
+    // 대상 학생 조회. 어떤 대상인지는 target_kind 컬럼이 정한다.
+    // "class_id 가 없고 지정 행도 없으면 전원" 이라는 파생 판정은 더 이상 쓰지 않는다.
+    // 조회 방식(반 조인 / inArray / 지점 전원)만 종류별로 다르고, 판정 규칙 자체는
+    // distributionAppliesToStudent 와 동일하다.
+    type StudentRow = { student: typeof students.$inferSelect; user: typeof users.$inferSelect };
+    let studentsList: StudentRow[] = [];
 
-    if (distribution.classId) {
-      // Class-specific distribution - need to join through studentClasses
-      studentsList = await db
-        .select({
-          student: students,
-          user: users,
-        })
-        .from(studentClasses)
-        .innerJoin(students, eq(studentClasses.studentId, students.id))
-        .innerJoin(users, eq(students.userId, users.id))
-        .where(and(eq(students.branchId, branchId), eq(studentClasses.classId, distribution.classId)));
-    } else {
-      // Check if specific students
+    if (distribution.targetKind === 'class') {
+      // 반 배포 → 그 반에 속한 지점 학생. class_id 가 비어 있으면 대상 없음.
+      if (distribution.classId) {
+        studentsList = await db
+          .select({
+            student: students,
+            user: users,
+          })
+          .from(studentClasses)
+          .innerJoin(students, eq(studentClasses.studentId, students.id))
+          .innerJoin(users, eq(students.userId, users.id))
+          .where(
+            and(eq(students.branchId, branchId), eq(studentClasses.classId, distribution.classId))
+          );
+      }
+    } else if (distribution.targetKind === 'students') {
       const specificStudents = await db
         .select()
         .from(distributionStudents)
         .where(eq(distributionStudents.distributionId, id));
 
+      // ⚠ 배정 0건이면 대상이 없다. 여기서 지점 전원으로 넘어가면 S-4 가 되살아난다.
       if (specificStudents.length > 0) {
-        // Get those specific students
-        const studentIds = specificStudents.map(s => s.studentId);
+        const studentIds = specificStudents.map((s) => s.studentId);
         studentsList = await db
           .select({
             student: students,
@@ -627,17 +686,17 @@ router.get('/:id/students', requireBranchManager, async (req, res) => {
           .from(students)
           .innerJoin(users, eq(students.userId, users.id))
           .where(and(eq(students.branchId, branchId), inArray(students.id, studentIds)));
-      } else {
-        // All students in branch
-        studentsList = await db
-          .select({
-            student: students,
-            user: users,
-          })
-          .from(students)
-          .innerJoin(users, eq(students.userId, users.id))
-          .where(eq(students.branchId, branchId));
       }
+    } else {
+      // 'branch' → 지점 학생 전체
+      studentsList = await db
+        .select({
+          student: students,
+          user: users,
+        })
+        .from(students)
+        .innerJoin(users, eq(students.userId, users.id))
+        .where(eq(students.branchId, branchId));
     }
 
     // 학생마다 examAttempts·aiReports 를 개별 조회하면 학생 N명에 최대 2N 회 왕복이 생긴다.

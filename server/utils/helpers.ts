@@ -111,6 +111,59 @@ export function sanitizeStudentAnswers(answers: unknown): Record<string, unknown
 }
 
 /**
+ * 배포 대상 종류. `exam_distributions.target_kind` 컬럼과 1:1 이다.
+ *   'branch'   : 지점 전원 공개
+ *   'class'    : classId 가 가리키는 반의 구성원
+ *   'students' : distribution_students 에 배정된 학생만
+ */
+export type DistributionTargetKind = 'branch' | 'class' | 'students';
+
+/**
+ * 배포 생성·수정 입력으로부터 target_kind 를 정한다.
+ *
+ * 우선순위는 studentIds > classId 다. 둘 다 왔을 때 예전 코드가
+ * "지정 학생 행을 넣고 class_id 도 채우는" 상태를 만들 수 있었는데,
+ * 그 경우 판정은 학생 지정이 이겼다(class_id 를 보기 전에 지정 행을 먼저 봤다).
+ * 그 동작을 그대로 옮긴다.
+ */
+export function resolveDistributionTargetKind(input: {
+  classId: string | null | undefined;
+  studentIds: readonly string[] | undefined;
+}): DistributionTargetKind {
+  if (input.studentIds && input.studentIds.length > 0) return 'students';
+  if (input.classId) return 'class';
+  return 'branch';
+}
+
+/**
+ * 배포 1건이 학생 1명에게 적용되는지 판정한다. **판정은 이 함수 하나뿐이다.**
+ *
+ * 예전에는 라우트 세 곳(/my-exams, GET /students, GET /:id/students)이 각자
+ * "class_id 가 없고 지정 행도 없으면 전원" 이라는 파생 규칙을 들고 있었다.
+ * 그래서 배정 INSERT 가 실패하거나 지정 학생이 CASCADE 로 사라지면
+ * "지정 0명" 이 "전원 공개" 와 구별되지 않았다.
+ *
+ * ⚠ 'students' 인데 assignedStudentIds 가 비어 있으면 **누구에게도 적용되지 않는다**.
+ *    전원으로 승격시키지 않는다. 이것이 이 함수의 핵심 계약이다.
+ */
+export function distributionAppliesToStudent(input: {
+  targetKind: DistributionTargetKind;
+  classId: string | null;
+  studentId: string;
+  studentClassIds: ReadonlySet<string>;
+  assignedStudentIds: ReadonlySet<string>;
+}): boolean {
+  switch (input.targetKind) {
+    case 'branch':
+      return true;
+    case 'class':
+      return !!input.classId && input.studentClassIds.has(input.classId);
+    case 'students':
+      return input.assignedStudentIds.has(input.studentId);
+  }
+}
+
+/**
  * 채점 코어. 두 경로(학생 온라인 제출 / 지점 수동 O·X 입력)가 같은 함수를 쓴다.
  *
  * 채점 방식은 answers 의 `_gradingMode` 메타키로 갈린다.

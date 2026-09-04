@@ -16,6 +16,7 @@ import { eq, and, isNotNull, isNull, inArray } from 'drizzle-orm';
 import { requireStudent, requireBranchManager, type SessionUser } from '../middleware/auth';
 import {
   calculateGrade,
+  distributionAppliesToStudent,
   endOfLocalDay,
   gradeAnswers,
   hasReservedAnswerKey,
@@ -53,7 +54,10 @@ router.get('/my-exams', requireStudent, async (req, res) => {
     // 판정 로직과 응답 형태는 기존과 동일하다.
     const distributionIds = allDistributions.map((row) => row.distribution.id);
 
-    // ① 개별 지정 대상: 배포별로 "지정이 존재하는가" 와 "내가 포함되는가" 두 가지가 필요하다.
+    // ① 개별 지정 대상: 배포별로 "내가 배정되어 있는가" 만 알면 된다.
+    //    "지정이 하나라도 있는가"(hasAnyTarget)는 더 이상 보지 않는다.
+    //    대상 종류는 distribution.targetKind 컬럼이 들고 있고, 'students' 인데
+    //    배정이 0건이면 대상 없음이지 전원 공개가 아니다.
     const targetRows = distributionIds.length
       ? await db
           .select({
@@ -61,15 +65,23 @@ router.get('/my-exams', requireStudent, async (req, res) => {
             studentId: distributionStudents.studentId,
           })
           .from(distributionStudents)
-          .where(inArray(distributionStudents.distributionId, distributionIds))
+          .where(
+            and(
+              inArray(distributionStudents.distributionId, distributionIds),
+              eq(distributionStudents.studentId, student.id)
+            )
+          )
       : [];
 
-    const hasAnyTarget = new Set<string>();
-    const targetsMe = new Set<string>();
+    // 내 행만 읽었으므로 배포별 집합은 {내 id} 이거나 비어 있다.
+    // 판정 함수가 보는 것도 "내가 그 집합에 있는가" 뿐이라 이것으로 충분하다.
+    const assignedByDistribution = new Map<string, Set<string>>();
     for (const t of targetRows) {
-      hasAnyTarget.add(t.distributionId);
-      if (t.studentId === student.id) targetsMe.add(t.distributionId);
+      const set = assignedByDistribution.get(t.distributionId);
+      if (set) set.add(t.studentId);
+      else assignedByDistribution.set(t.distributionId, new Set([t.studentId]));
     }
+    const NO_ASSIGNED: ReadonlySet<string> = new Set<string>();
 
     // ② 내가 속한 반 목록 (반 배포 판정용)
     const myClassRows = await db
@@ -105,22 +117,15 @@ router.get('/my-exams', requireStudent, async (req, res) => {
     // Filter distributions that apply to this student
     const result = [];
     for (const row of allDistributions) {
-      let applies = false;
-
-      // Check 1: Distribution has no classId (distributed to all students in branch)
-      if (!row.distribution.classId) {
-        if (!hasAnyTarget.has(row.distribution.id)) {
-          // No specific students, so applies to all
-          applies = true;
-        } else {
-          // Check if this student is in the list
-          applies = targetsMe.has(row.distribution.id);
-        }
-      }
-      // Check 2: Distribution is for a class - check if student is in that class
-      else if (row.distribution.classId) {
-        applies = myClassIds.has(row.distribution.classId);
-      }
+      // 판정은 utils/helpers 의 순수 함수 하나로 통일한다.
+      // 여기서 분기를 다시 쓰면 distributions.ts 의 두 목록과 결과가 갈라진다.
+      const applies = distributionAppliesToStudent({
+        targetKind: row.distribution.targetKind,
+        classId: row.distribution.classId,
+        studentId: student.id,
+        studentClassIds: myClassIds,
+        assignedStudentIds: assignedByDistribution.get(row.distribution.id) ?? NO_ASSIGNED,
+      });
 
       if (!applies) continue;
 

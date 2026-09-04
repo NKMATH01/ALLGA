@@ -106,6 +106,22 @@ export const examDistributions: any = pgTable('exam_distributions', {
   examId: varchar('exam_id', { length: 255 }).notNull().references(() => exams.id, { onDelete: 'cascade' }),
   branchId: varchar('branch_id', { length: 255 }).notNull().references(() => branches.id, { onDelete: 'cascade' }),
   classId: varchar('class_id', { length: 255 }).references(() => classes.id, { onDelete: 'cascade' }),
+  /**
+   * 이 배포가 "누구에게" 가는지를 명시하는 컬럼. 파생 판정을 대체한다.
+   *
+   *   'branch'   : 지점 전원 공개. class_id 와 distribution_students 를 보지 않는다.
+   *   'class'    : class_id 가 가리키는 반의 구성원.
+   *   'students' : distribution_students 에 배정된 학생만.
+   *
+   * ⚠ 빈 지정 = 아무도 아님.
+   *   'students' 인데 distribution_students 가 0건이면 **대상이 없는 것**이지
+   *   지점 전원이 아니다. 예전에는 "class_id 없음 + 지정 0건"을 전원 공개로 읽었기 때문에
+   *   배정 INSERT 가 실패하거나 지정 학생이 CASCADE 로 사라지면 배포가 조용히
+   *   전원 공개로 승격됐다. 이 컬럼이 그 승격 경로를 끊는다.
+   *
+   * 기본값 'branch' 는 기존 행(전부 지점 전원)의 동작을 그대로 보존하기 위한 것이다.
+   */
+  targetKind: text('target_kind', { enum: ['branch', 'class', 'students'] }).notNull().default('branch'),
   parentDistributionId: varchar('parent_distribution_id', { length: 255 }).references(() => examDistributions.id, { onDelete: 'cascade' }),
   startDate: timestamp('start_date').notNull(),
   endDate: timestamp('end_date').notNull(),
