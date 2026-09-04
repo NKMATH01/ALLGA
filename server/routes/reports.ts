@@ -651,18 +651,11 @@ ${JSON.stringify(userData, null, 2)}`;
         ? Math.round(100 * (1 - rank / attemptCount) * 10) / 10
         : 0;
 
-    // 표준점수는 채점 결과(등급·원점수·만점)가 모두 있을 때만 산출한다.
-    // 값이 없으면 임의의 숫자를 만들지 않고 null 로 둔다.
-    const hasScoreData =
-      attempt.grade !== null && attempt.score !== null && attempt.maxScore !== null && attempt.maxScore > 0;
-    const scoreRatio = hasScoreData ? attempt.score! / attempt.maxScore! : 0;
-    const standardScore = !hasScoreData
-      ? null
-      : attempt.grade! <= 2
-      ? Math.round(80 + scoreRatio * 20)
-      : attempt.grade! <= 4
-      ? Math.round(70 + scoreRatio * 10)
-      : Math.round(60 + scoreRatio * 10);
+    // 표준점수는 항상 null 이다 (DESIGN.md 10.3 지면이 지어내는 수치는 없다).
+    // 이전에는 등급 구간별 임의식(2등급 이하 80+비율*20 등)으로 값을 만들었지만
+    // 그 식에는 산출 근거가 없다. 실제 표준점수 산출 체계가 생기기 전까지
+    // 지면에는 '기준 축적 중'으로 나가야 하므로 필드는 유지하되 값은 두지 않는다.
+    const standardScore: number | null = null;
 
     // ===== OLD HARDCODED TEMPLATES REMOVED =====
     // studyPlan, learningStrategy 등 하드코딩된 템플릿 모두 제거
@@ -931,12 +924,10 @@ ${JSON.stringify(userData, null, 2)}`;
           student: domainStats.map(d => d.percentage),
           average: domainStats.map(d => domainAverage(d.name).avgPercentage),
         },
-        predictionChartData: [
-          Math.round((attempt.score || 0) / (attempt.maxScore || 100) * 100),
-          Math.min(Math.round((attempt.score || 0) / (attempt.maxScore || 100) * 100) + 5, 100),
-          Math.min(Math.round((attempt.score || 0) / (attempt.maxScore || 100) * 100) + 10, 100),
-          Math.min(Math.round((attempt.score || 0) / (attempt.maxScore || 100) * 100) + 15, 100),
-        ],
+        // '관리 목표' 곡선은 현재 정답률에 +5/+10/+15 를 더한 산술이었을 뿐
+        // 예측 근거가 없다. 근거 있는 예측 모델이 생기기 전까지 null 로 둔다
+        // (DESIGN.md 10.3 지면이 지어내는 수치는 없다).
+        predictionChartData: null,
       },
       analysis: {
         olgaSummary: aiAnalysisData.olgaSummary || `${studentUser.name} 학생의 성적 분석 결과입니다.`,

@@ -11,12 +11,16 @@ export function generateReportHTML(data: any): string {
       date: data.studentInfo?.date || '',
       level: data.studentInfo?.level || '미지정',
     },
+    // 값이 없을 때 0 으로 채우면 지면에 '0등급' 같은 없는 수치가 인쇄된다.
+    // 없는 값은 null 로 두고, 지면에서 '-' 또는 '기준 축적 중'으로 적는다
+    // (DESIGN.md 10.3 지면이 지어내는 수치는 없다).
+    // rawScoreMax 만 분모로 쓰이므로 100 을 기본값으로 유지한다.
     scoreSummary: {
-      grade: data.scoreSummary?.grade || 0,
-      rawScore: data.scoreSummary?.rawScore || 0,
+      grade: data.scoreSummary?.grade ?? null,
+      rawScore: data.scoreSummary?.rawScore ?? null,
       rawScoreMax: data.scoreSummary?.rawScoreMax || 100,
-      standardScore: data.scoreSummary?.standardScore || 0,
-      percentile: data.scoreSummary?.percentile || 0,
+      standardScore: data.scoreSummary?.standardScore ?? null,
+      percentile: data.scoreSummary?.percentile ?? null,
     },
     analysis: {
       olgaSummary: data.analysis?.olgaSummary || '분석 생성 중입니다.',
@@ -53,14 +57,11 @@ export function generateReportHTML(data: any): string {
         labels: (data.analysis?.subjectDetails || []).map((s: any) => s.name),
         values: (data.analysis?.subjectDetails || []).map((s: any) => s.score || 0),
       },
+      // 관리 목표 곡선은 서버가 준 값이 있을 때만 그린다. 백분위에 +5/+10/+15 를
+      // 더하던 폴백은 산출 근거가 없는 날조라 삭제했다 (DESIGN.md 10.3).
       predictionData: {
         labels: ['현재', '4주 후', '8주 후', '12주 후'],
-        values: data.charts?.predictionChartData || [
-          data.scoreSummary?.percentile || 0,
-          Math.min((data.scoreSummary?.percentile || 0) + 5, 100),
-          Math.min((data.scoreSummary?.percentile || 0) + 10, 100),
-          Math.min((data.scoreSummary?.percentile || 0) + 15, 100),
-        ],
+        values: Array.isArray(data.charts?.predictionChartData) ? data.charts.predictionChartData : null,
       },
     },
     // 시험 분석지 도판이 클라이언트에서 쓰는 값. 서버에서 DB 실데이터로 계산되어 넘어온 것을
@@ -125,6 +126,12 @@ export function generateReportHTML(data: any): string {
   const minSample = Number(overview?.referenceMinSample) || 5;
 
   const rateText = (r: any) => (r === null || r === undefined ? '-' : r + '%');
+  /** 값이 없으면 0 이 아니라 '-' 로 적는다 (DESIGN.md 10.3). */
+  const numText = (v: any) =>
+    v === null || v === undefined || Number.isNaN(Number(v)) ? '-' : String(v);
+  /** 등급 문구. 등급이 없으면 '0등급' 대신 기준이 없다고 적는다. */
+  const gradeText = (g: any) =>
+    g === null || g === undefined || Number.isNaN(Number(g)) ? '등급 기준 축적 중' : g + '등급';
 
   // DESIGN.md 10.5.2 영역 색은 이름 기준으로 고정 배정한다 (지면마다 같은 색).
   const CAT_VAR: Record<string, string> = {
@@ -317,7 +324,11 @@ export function generateReportHTML(data: any): string {
 
   /** 등급 척도. 1 ~ 9 를 판정 구간 색으로 칠하고 수검자 자리를 표시한다. */
   const gradeToneOf = (g: number) => (g <= 2 ? 'vd-a' : g <= 4 ? 'vd-b' : g <= 6 ? 'vd-c' : 'vd-r');
-  const myGrade = Number(reportData.scoreSummary.grade) || 0;
+  // 등급이 없으면 게이지에 수검자 마커를 찍지 않는다 (0 을 채워 1등급 밖에 두던 방식 대신).
+  const myGrade =
+    reportData.scoreSummary.grade === null || reportData.scoreSummary.grade === undefined
+      ? null
+      : Number(reportData.scoreSummary.grade);
   // 판정 척도(A/B/C/R)와 등급 게이지는 같은 정보를 두 번 그리므로 하나로 합친다.
   // 게이지 위에 판정 구간 머리를 얹고, 아래 칸에 등급을 둔다.
   const gradeGaugeHTML =
@@ -652,8 +663,8 @@ export function generateReportHTML(data: any): string {
       title: '재검사 시점과 목표 구간',
       body: '12주 교정 일정을 마치는 시점에 동일 형식으로 재검사합니다. ' +
         '금회 기준선은 전체 정답률 ' + rateText(overallRate) +
-        (overallRef && overallRef.available ? ' (참고치 ' + refText(overallRef) + ')' : '') + ', 등급 ' +
-        reportData.scoreSummary.grade + '등급입니다. ' +
+        (overallRef && overallRef.available ? ' (참고치 ' + refText(overallRef) + ')' : '') + ', ' +
+        gradeText(reportData.scoreSummary.grade) + '입니다. ' +
         (targetLow !== null
           ? '1차 목표는 ' + escapeHtml(rxAreas[0].name) + ' 영역을 참고치 하한 ' + targetLow + '% 이상으로 올려 기준 미달 판정을 해소하는 것입니다. '
           : '1차 목표는 기준 미달 판정 항목을 0으로 만드는 것입니다. ') +
@@ -980,7 +991,7 @@ export function generateReportHTML(data: any): string {
                     </div>
                     <div class="verdict-body">
                         <p class="verdict-line">
-                            <span class="verdict-grade">${reportData.scoreSummary.grade}</span><span class="verdict-gradeunit">등급</span>
+                            <span class="verdict-grade">${numText(reportData.scoreSummary.grade)}</span>${reportData.scoreSummary.grade === null ? '' : '<span class="verdict-gradeunit">등급</span>'}
                             <span class="verdict-band">판정 기준 ${verdict.band}</span>
                         </p>
                         <p class="verdict-mean">${verdict.meaning}</p>
@@ -989,9 +1000,9 @@ export function generateReportHTML(data: any): string {
                 ${gradeGaugeHTML}
                 ${outlookHTML}
                 <div class="statrow">
-                    <div class="stat"><p class="stat-k">원점수</p><p class="stat-v">${reportData.scoreSummary.rawScore}<span class="stat-u">/${reportData.scoreSummary.rawScoreMax}</span></p></div>
-                    <div class="stat"><p class="stat-k">표준점수</p><p class="stat-v">${reportData.scoreSummary.standardScore}</p></div>
-                    <div class="stat"><p class="stat-k">백분위</p><p class="stat-v">${reportData.scoreSummary.percentile}<span class="stat-u">%</span></p></div>
+                    <div class="stat"><p class="stat-k">원점수</p><p class="stat-v">${numText(reportData.scoreSummary.rawScore)}<span class="stat-u">/${reportData.scoreSummary.rawScoreMax}</span></p></div>
+                    <div class="stat"><p class="stat-k">표준점수</p><p class="stat-v">${numText(reportData.scoreSummary.standardScore)}</p></div>
+                    <div class="stat"><p class="stat-k">백분위</p><p class="stat-v">${numText(reportData.scoreSummary.percentile)}${reportData.scoreSummary.percentile === null ? '' : '<span class="stat-u">%</span>'}</p></div>
                     <div class="stat"><p class="stat-k">전체 정답률</p><p class="stat-v">${overallRate === null ? '-' : overallRate}<span class="stat-u">%</span></p>
                         <p class="stat-ref">참고치 ${refText(overallRef)}</p></div>
                 </div>
@@ -1158,7 +1169,7 @@ export function generateReportHTML(data: any): string {
   addPage('OPINION', '종합 진단 소견', `
             <div class="opinion-head ${verdict.tone}">
                 <span class="opinion-code">${verdict.code}</span>
-                <p class="opinion-line"><b>${verdict.name}</b> · ${reportData.scoreSummary.grade}등급 · 전체 정답률 ${rateText(overallRate)}${overallRef && overallRef.available ? ' (참고치 ' + refText(overallRef) + ')' : ''}</p>
+                <p class="opinion-line"><b>${verdict.name}</b> · ${gradeText(reportData.scoreSummary.grade)} · 전체 정답률 ${rateText(overallRate)}${overallRef && overallRef.available ? ' (참고치 ' + refText(overallRef) + ')' : ''}</p>
             </div>
             <div class="opinion-body">${escapeHtml(reportData.analysis.olgaSummary)}</div>
 
@@ -1190,7 +1201,7 @@ export function generateReportHTML(data: any): string {
             ${adviceHTML}
             <div class="recheck">
                 <p class="recheck-title">경과 관찰 및 재검사 계획</p>
-                <p class="recheck-text">처치 일정을 마치는 12주 후 동일 형식의 검사를 다시 받아 이번 결과와 비교하십시오. 이번 검사의 전체 정답률 ${rateText(overallRate)}가 다음 검사의 기준선이 되며, 4주 간격 관리 목표는 ${(reportData.charts.predictionData.values || []).join('% → ')}%입니다. 예측된 성적이 아니라 관리 목표입니다.</p>
+                <p class="recheck-text">처치 일정을 마치는 12주 후 동일 형식의 검사를 다시 받아 이번 결과와 비교하십시오. 이번 검사의 전체 정답률 ${rateText(overallRate)}가 다음 검사의 기준선이 됩니다. ${Array.isArray(reportData.charts.predictionData.values) && reportData.charts.predictionData.values.length > 0 ? `4주 간격 관리 목표는 ${reportData.charts.predictionData.values.join('% → ')}%입니다. 예측된 성적이 아니라 관리 목표입니다.` : '4주 간격 관리 목표는 산출 근거가 모일 때까지 기준 축적 중입니다.'}</p>
             </div>`);
 
   const totalPages = pageBlocks.length;
@@ -2113,13 +2124,15 @@ export function generateReportHTML(data: any): string {
             const dist = reportData.scoreDistribution || { cumulative: [], sampleSize: 0 };
             if (ctxDist && dist.cumulative.length > 0) {
                 const labels = dist.cumulative.map((_, i) => ((i + 1) * 10) + '%');
-                const myRate = reportData.scoreSummary.rawScoreMax
-                    ? Math.round((reportData.scoreSummary.rawScore / reportData.scoreSummary.rawScoreMax) * 100)
-                    : 0;
-                const myIndex = Math.min(9, Math.max(0, Math.ceil(myRate / 10) - 1));
+                // 원점수가 없으면 0% 자리에 마커를 찍지 않는다 (없는 수치를 그리지 않는다).
+                const myRate = reportData.scoreSummary.rawScore === null || !reportData.scoreSummary.rawScoreMax
+                    ? null
+                    : Math.round((reportData.scoreSummary.rawScore / reportData.scoreSummary.rawScoreMax) * 100);
+                const myIndex = myRate === null ? null : Math.min(9, Math.max(0, Math.ceil(myRate / 10) - 1));
                 const markerLine = {
                     id: 'markerLine',
                     afterDatasetsDraw(chart) {
+                        if (myIndex === null) return;
                         const x = chart.scales.x.getPixelForValue(myIndex);
                         const { ctx, chartArea } = chart;
                         ctx.save();
@@ -2207,7 +2220,8 @@ export function generateReportHTML(data: any): string {
 
             // 단계별 목표 정답률 (예측이 아니라 관리 목표선)
             const ctxPlan = document.getElementById('predictionChart');
-            if (ctxPlan) {
+            // 관리 목표 값이 없으면 곡선을 그리지 않는다 (지어낸 곡선을 그리지 않는다).
+            if (ctxPlan && Array.isArray(reportData.charts.predictionData.values) && reportData.charts.predictionData.values.length > 0) {
                 new Chart(ctxPlan, {
                     type: 'line',
                     data: {
