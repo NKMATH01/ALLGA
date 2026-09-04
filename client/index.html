@@ -5,6 +5,19 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>올가 미수등 - ALLGA Academy Management System</title>
+    <!--
+      DESIGN.md 6.1 야간 모드. 첫 페인트 전에 테마를 확정해 깜빡임(FOUC)을 없앤다.
+      규칙은 src/lib/useTheme.ts 의 STORAGE_KEY·applyTheme 과 같아야 한다.
+      색값은 index.css 토큰이 가지고 있고 여기서는 표시자만 세팅한다.
+    -->
+    <script>
+      try {
+        var t = localStorage.getItem('olga-theme');
+        if (t !== 'light' && t !== 'dark') t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        document.documentElement.setAttribute('data-theme', t);
+        document.documentElement.classList.toggle('dark', t === 'dark');
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>
