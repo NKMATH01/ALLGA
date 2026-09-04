@@ -307,7 +307,7 @@ UI login-as(강하준): /auth/me role=student originalUser=null · restore → 4
 
 ## 10. 수정 현황 (2026-09-04, 점검 당일)
 
-§4 의 높음 11건은 점검 당일 전부 수정 커밋됐다. 커밋은 모두 점검 기준 HEAD `399e9fc` 이후이며 아직 push 하지 않았다.
+§4 의 높음 11건과 중간 4건(P-2·P-4·P-5·P-6)은 점검 당일 수정 커밋됐다. 커밋은 모두 점검 기준 HEAD `399e9fc` 이후다. 높음 11건은 push 했고(`origin/main` = `8fe91aa`), 중간 4건은 아직 push 하지 않았다.
 
 | ID | 결함 | 커밋 | 검증 수준 |
 |---|---|---|---|
@@ -322,8 +322,12 @@ UI login-as(강하준): /auth/me role=student originalUser=null · restore → 4
 | U-6 | 로딩 3상태(`components/ui/list-state.tsx`), 학생 19·지점 21·관리자 9곳, 관리자 isLoading 구독 | `f337c3d` | **런타임**: 지점 로딩 중 `role=status` 스켈레톤 4~6개·"없습니다" 0, 로드 후 스켈레톤 0; 학생 화면 로드 후 거짓 문구 0 |
 | S-3 | 답안 복원 실패 → 오류+재시도, `answersBlocked` 로 입력·저장·제출 차단 | `36b60cf` | 코드(실패 주입 불가) |
 | S-4 | `exam_distributions.target_kind` 컬럼+CHECK+백필, 순수 함수 2개로 판정 단일화, POST 트랜잭션, 테스트 45→61 | `4c2f6dc` | **런타임**: 배치 `/distributions/students` 3건·33행·전부 branch(수정 전 33행과 동일), `/my-exams` 3건. **운영 DB 마이그레이션 0007 적용 완료(2026-09-04, 사용자 승인)**: `__drizzle_migrations` 8건, 52행 전부 `branch`, CHECK 존재, 행수 52/20/30/12/0/10 불변 |
+| P-5 | 역할 미들웨어 4개를 `requireRole` 생성기로 통일(세션 없음 401·역할 불일치 403), `GET /students/me` 도 같은 분리 | `846e404` | **런타임**: 미인증 `GET /api/distributions`·`/admin/stats`·`/students`·`/exams`·`/students/me` 전부 401, 지점장 세션 `/api/admin/stats`·`/api/branches` 403. 신설 `server/middleware/auth.test.ts`(describe.each 로 미인증·역할별·허용)로 vitest 3파일 61건 → 4파일 83건 |
+| P-6 | `logImpersonation` actor 와 impersonate 3경로 target 에서 `username` 제거(id·role 만) | `09aa2d3` | **런타임**: 서버 stdout `[AUDIT][impersonation]` 2줄(impersonate_student·impersonate_restore)에 `username` 0건, actor·target 은 id·role 만 |
+| P-2 | `GET /distributions/:id` 지점 스코프. 타 지점은 403 아닌 404(존재 열거 오라클 차단), admin 은 제한 없음 | `42a70bd` | **런타임**: 지점장(allga1) 타 지점 배포 `72c94503-…` 404, 자기 지점 배포 `7bee1029-…` 200 |
+| P-4 | 클라이언트 학생 전환을 `POST /auth/impersonate/student/:id` 로 교체, `POST /students/:id/login-as` 라우트 제거, `App.tsx` 가 버리던 `/auth/me` 의 `originalUser` 병합, `RestoreIdentityButton` 신설(학생·학부모 사이드바 푸터) | `320ad43` | **런타임**: `login-as` 404, impersonate 후 `user.role=student`·`originalUser.role=branch`, `/auth/me` 도 동일, `restore` 200 후 role=branch |
 
-정적 확정만 된 항목(S-2·P-3·U-1·U-5·S-3)의 런타임 확인은 다음 기회에 한다. 미수정으로 남은 중간·낮음 결함은 §4 를 그대로 둔다.
+정적 확정만 된 항목(S-2·P-3·U-1·U-5·S-3)의 런타임 확인은 다음 기회에 한다. P-2·P-4·P-5·P-6 을 제외한 중간·낮음 결함은 §4 를 그대로 둔다.
 
 ### 10.1 운영 DB 마이그레이션 0007
 
@@ -337,11 +341,13 @@ UI login-as(강하준): /auth/me role=student originalUser=null · restore → 4
 
 ### 10.2 검증 방법과 한계
 
-최종 게이트는 서버·클라이언트 `tsc --noEmit` 각각 오류 0, `vitest run` 3파일 61건 통과, 하드코딩 hex 0건(주석 1건)이다.
+최종 게이트는 서버·클라이언트 `tsc --noEmit` 각각 오류 0, `vitest run` 4파일 83건 통과(중간 4건 수정 후, 미들웨어 테스트 22건 추가), 하드코딩 hex 0건(주석 1건)이다.
 
-부작용 1건을 기록한다. 미인증 `GET /api/exams` 응답이 401 에서 403 으로 바뀌었다. P-1 의 미들웨어 교체에서 온 것으로, §4 의 P-5(401/403 혼용)와 같은 종류다.
+부작용 1건을 기록한다. 미인증 `GET /api/exams` 응답이 401 에서 403 으로 바뀌었다. P-1 의 미들웨어 교체에서 온 것으로, §4 의 P-5(401/403 혼용)와 같은 종류다. P-5 수정(`846e404`)으로 다시 401 이 됐다(런타임 확인).
 
 런타임 검증 중 확인한 도구 한계는 둘이다. 숨겨진 브라우저 페인에서는 `innerWidth` 가 0 이고 Esc 키가 페이지에 도달하지 않는다. 375px 뷰포트 에뮬레이션에서는 렌더러가 반복해서 멈췄다. 이 때문에 U-5 의 375px 재현은 하지 못했고 코드 확정에 머물렀다. 다만 모달 취소 버튼으로 닫을 때 `body.style.overflow` 가 정상 복원되는 것은 확인했다.
+
+중간 4건 수정 뒤에도 남은 항목 2건을 기록한다. `server/routes/attempts.ts:733` 의 `GET /api/branch/completed`(클라이언트 호출 0건인 죽은 엔드포인트)는 인라인 검사라 미인증 요청에 여전히 403 을 낸다. P-5 의 미들웨어 범위 밖이다. `PUT /distributions/:id` 는 타 지점 배포에 404 가 아닌 403 을 내므로 존재 열거 오라클이 남아 있다(쓰기 전에 끊기므로 부작용은 없다).
 
 ---
 
