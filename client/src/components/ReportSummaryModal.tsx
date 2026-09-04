@@ -1,6 +1,11 @@
 import { useEffect, useState } from 'react';
 import { X, ExternalLink, Loader2 } from 'lucide-react';
-import { fetchReportSummary, openFullReport, type ReportSummary } from '../lib/reportClient';
+import {
+  fetchReportSummary,
+  openFullReport,
+  openReportWindowSync,
+  type ReportSummary,
+} from '../lib/reportClient';
 import { toast } from './ui/toast';
 import { useModalA11y } from '../lib/useModalA11y';
 
@@ -45,9 +50,12 @@ export function ReportSummaryModal({
 
   const handleOpenFull = async () => {
     setOpening(true);
+    // 클릭 동기 구간에서 창을 먼저 잡아야 팝업 차단을 피한다 (U-11 과 같은 이유).
+    const win = openReportWindowSync();
     try {
-      await openFullReport({ reportId });
+      await openFullReport({ reportId }, win);
     } catch (error: any) {
+      win?.close();
       toast.error(error.message || '보고서를 열지 못했습니다.');
     } finally {
       setOpening(false);
