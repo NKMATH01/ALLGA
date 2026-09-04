@@ -307,7 +307,7 @@ UI login-as(강하준): /auth/me role=student originalUser=null · restore → 4
 
 ## 10. 수정 현황 (2026-09-04, 점검 당일)
 
-§4 의 높음 11건과 중간 4건(P-2·P-4·P-5·P-6)은 점검 당일 수정 커밋됐다. 커밋은 모두 점검 기준 HEAD `399e9fc` 이후다. 높음 11건과 중간 4건은 push 했고(`origin/main` = `d45d54d`), 이어 수정한 중간 9건(U-7·U-2·U-8·U-9·U-10·U-11·U-12·U-13·U-19, 화면·요청 마감)은 아직 push 하지 않았다.
+§4 의 높음 11건과 중간 4건(P-2·P-4·P-5·P-6)은 점검 당일 수정 커밋됐다. 커밋은 모두 점검 기준 HEAD `399e9fc` 이후다. 높음 11건과 중간 4건은 push 했고(`origin/main` = `d45d54d`), 이어 수정한 중간 9건(U-7·U-2·U-8·U-9·U-10·U-11·U-12·U-13·U-19, 화면·요청 마감)은 push 했고(`origin/main` = `1fe177b`), 데이터 구조 5건(D-1·D-2·D-5·D-6·D-7)은 아직 push 하지 않았다.
 
 | ID | 결함 | 커밋 | 검증 수준 |
 |---|---|---|---|
@@ -335,8 +335,13 @@ UI login-as(강하준): /auth/me role=student originalUser=null · restore → 4
 | U-12 | 학생 `<h1>` 2개·학부모 0개 → 사이드바 브랜드 `<p>`, 학부모 상단 제목 `<h1>` | `0a5e03c` | grep: 네 대시보드 실제 `<h1>` 요소 각 1(Admin 의 추가 2건은 주석 문자열) |
 | U-13 | 보고서 배포 카드 `div onClick` → `role="button" tabIndex=0 onKeyDown(Enter·Space)` + aria-label, 삭제 아이콘 버튼 aria-label | `0a5e03c` | 코드. 같은 파일의 다른 아이콘 버튼은 텍스트 라벨 동반이라 대상 없음 |
 | U-19 | `BranchDashboard` `console.log` 16줄(학생 객체·답안, 3줄은 매 렌더) 삭제 | `0a5e03c` | grep: `client/src/pages`·`client/src/lib` 의 `console.log` 0건 |
+| D-6 | 학생 등록 users→students INSERT 비트랜잭션(실패 시 고아 users·username 점유) → `db.transaction`, 동시 중복은 23505 → 400 | `ef84fbe` | 코드(parents.ts 와 같은 패턴) |
+| D-7 | 0005 `ADD CONSTRAINT` 무가드 → `DO $$ … EXCEPTION WHEN duplicate_object OR duplicate_table` 가드 | `d85dfd4` | 코드. 마이그레이터는 created_at 만 비교하므로 적용된 운영 DB 에 영향 없음 |
+| D-1 | `users.branch_id` FK 없음 → `REFERENCES branches(id) ON DELETE SET NULL`(스펙의 CASCADE 대신, 지점 삭제 시 계정을 비활성으로 남기는 설계와 일치) | `bee869f` | **운영 DB 0008 적용**: `pg_constraint` 에 FK 실존, 고아 0 |
+| D-2 | 중간 테이블 UNIQUE 없음 → `student_classes(student_id,class_id)`·`student_parents(student_id,parent_id)` UNIQUE, 반 생성 시 studentIds 중복 제거 | `bee869f` | **운영 DB 0008 적용**: UNIQUE 2개 실존, 중복 0 |
+| D-5 | `updated_at` 미갱신 → users·branches `$onUpdate(() => new Date())` | `bee869f` | 코드(SQL 변화 없음) |
 
-정적 확정만 된 항목(S-2·P-3·U-1·U-5·S-3)의 런타임 확인은 다음 기회에 한다. P-2·P-4·P-5·P-6 과 U-7·U-2·U-8~U-13·U-19 를 제외한 중간·낮음 결함은 §4 를 그대로 둔다.
+정적 확정만 된 항목(S-2·P-3·U-1·U-5·S-3)의 런타임 확인은 다음 기회에 한다. P-2·P-4·P-5·P-6, U-7·U-2·U-8~U-13·U-19, D-1·D-2·D-5·D-6·D-7 을 제외한 중간·낮음 결함은 §4 를 그대로 둔다.
 
 ### 10.1 운영 DB 마이그레이션 0007
 
@@ -347,6 +352,18 @@ UI login-as(강하준): /auth/me role=student originalUser=null · restore → 4
 3. **백필** 기존 행을 `class_id` 가 있으면 `class`, `distribution_students` 에 행이 있으면 `students`, 아니면 `branch` 로 갱신한다.
 
 적용 전후 확인값이다. `__drizzle_migrations` 7건 → 8건. `exam_distributions` 52행의 `target_kind` 는 전부 `branch`(§3 A 의 "52건 전부 ALL_BRANCH" 와 일치). CHECK 제약 실존. 주요 테이블 행수 52/20/30/12/0/10 은 적용 전과 같다.
+
+### 10.1.1 운영 DB 마이그레이션 0008
+
+D-1·D-2 수정으로 생긴 두 번째 쓰기다. 사용자 승인 후 `npm run db:migrate` 를 한 번 실행해 적용했다(`drizzle/0008_eager_the_hood.sql`, "Migrations completed!"). 문장은 셋이고 모두 재실행 안전한 `DO $$ … EXCEPTION` 블록이다.
+
+1. **users FK** `users_branch_id_branches_id_fk` 로 `users.branch_id` 를 `branches(id)` 에 묶고 `ON DELETE SET NULL` 을 건다.
+2. **student_classes UNIQUE** `student_classes_student_class_unique` 로 `(student_id, class_id)` 중복 배정을 막는다.
+3. **student_parents UNIQUE** `student_parents_student_parent_unique` 로 `(student_id, parent_id)` 중복 연결을 막는다.
+
+적용 전후 확인값이다. `__drizzle_migrations` 8건 → 9건(마지막 `created_at` 1788504219241). 제약 3개는 `pg_constraint` 조회로 실존을 확인했다. 주요 테이블 행수 users 30 / students 12 / student_classes 0 / student_parents 1 / branches 17 / exam_attempts 20 / exam_distributions 52 는 적용 전과 같다. 적용 전 대조에서 고아 `branch_id` 0건, 중간 테이블 중복 조합 0건이었으므로 제약 신설로 끊긴 행은 없다.
+
+삭제 동작은 스펙 §3.1 이 시사하던 CASCADE 대신 SET NULL 로 잡았다. `server/routes/branches.ts` 의 `DELETE /:id` 가 소속 계정을 지우지 않고 `isActive=false` 로 남겨 감사 추적을 유지하는 설계라, CASCADE 면 그 계정이 함께 사라져 설계와 충돌한다. admin 계정의 `branch_id` 가 NULL 인 것도 이 정의에서는 정상이다.
 
 ### 10.2 검증 방법과 한계
 

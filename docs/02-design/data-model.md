@@ -108,6 +108,8 @@
 - `idx_users_role` ON (role)
 - `idx_users_branch` ON (branchId)
 
+**외래키**: `branchId` → branches.id (SET NULL ON DELETE, 2026-09-04 마이그레이션 0008. 지점 삭제 시 계정은 비활성으로 남기므로 CASCADE 가 아님)
+
 ---
 
 ### 3.2 branches (지점)
@@ -192,7 +194,7 @@
 | studentId | VARCHAR(255) | FK, NOT NULL | 학생 ID |
 | parentId | VARCHAR(255) | FK, NOT NULL | 학부모 ID |
 
-**제약**: UNIQUE (studentId, parentId)
+**제약**: UNIQUE (studentId, parentId) (2026-09-04 0008 로 DB 반영)
 
 **외래키**:
 - `studentId` → students.id (CASCADE DELETE)
@@ -211,7 +213,7 @@
 | classId | VARCHAR(255) | FK, NOT NULL | 반 ID |
 | enrolledAt | TIMESTAMP | DEFAULT NOW() | 배정일시 |
 
-**제약**: UNIQUE (studentId, classId)
+**제약**: UNIQUE (studentId, classId) (2026-09-04 0008 로 DB 반영)
 
 **외래키**:
 - `studentId` → students.id (CASCADE DELETE)

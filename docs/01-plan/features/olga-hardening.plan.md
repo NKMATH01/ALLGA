@@ -108,7 +108,7 @@ npx vitest run                             → 2 files / 37 tests passed
 
 ### 3.4 전체 점검(2026-09-04) 결함 수정 현황
 
-`docs/03-analysis/olga-full-audit-2026-09-04.md` 가 확정한 높음 11건, 중간 4건(권한·감사), 중간 9건(화면·요청 마감)을 수정해 커밋했다. 높음 11건과 중간 4건은 push 했고(`origin/main` = `d45d54d`), 화면·요청 9건은 아직 push 하지 않았다.
+`docs/03-analysis/olga-full-audit-2026-09-04.md` 가 확정한 높음 11건, 중간 4건(권한·감사), 중간 9건(화면·요청 마감)을 수정해 커밋했다. 높음 11건과 중간 4건은 push 했고(`origin/main` = `d45d54d`), 화면·요청 9건은 push 했고(`origin/main` = `1fe177b`), 데이터 구조 5건(D-1·D-2·D-5·D-6·D-7)은 아직 push 하지 않았다.
 
 | ID | 결함 | 커밋 | 검증 수준 |
 |---|---|---|---|
@@ -136,10 +136,15 @@ npx vitest run                             → 2 files / 37 tests passed
 | U-12 | 학생 `<h1>` 2개·학부모 0개 → 사이드바 브랜드 `<p>`, 학부모 상단 제목 `<h1>` | `0a5e03c` | grep: 네 대시보드 실제 `<h1>` 요소 각 1(Admin 의 추가 2건은 주석 문자열) |
 | U-13 | 보고서 배포 카드 `div onClick` → `role="button" tabIndex=0 onKeyDown(Enter·Space)` + aria-label, 삭제 아이콘 버튼 aria-label | `0a5e03c` | 코드. 같은 파일의 다른 아이콘 버튼은 텍스트 라벨 동반이라 대상 없음 |
 | U-19 | `BranchDashboard` `console.log` 16줄(학생 객체·답안, 3줄은 매 렌더) 삭제 | `0a5e03c` | grep: `client/src/pages`·`client/src/lib` 의 `console.log` 0건 |
+| D-6 | 학생 등록 users→students INSERT 비트랜잭션(실패 시 고아 users·username 점유) → `db.transaction`, 동시 중복은 23505 → 400 | `ef84fbe` | 코드(parents.ts 와 같은 패턴) |
+| D-7 | 0005 `ADD CONSTRAINT` 무가드 → `DO $$ … EXCEPTION WHEN duplicate_object OR duplicate_table` 가드 | `d85dfd4` | 코드. 마이그레이터는 created_at 만 비교하므로 적용된 운영 DB 에 영향 없음 |
+| D-1 | `users.branch_id` FK 없음 → `REFERENCES branches(id) ON DELETE SET NULL`(스펙의 CASCADE 대신, 지점 삭제 시 계정을 비활성으로 남기는 설계와 일치) | `bee869f` | **운영 DB 0008 적용**: `pg_constraint` 에 FK 실존, 고아 0 |
+| D-2 | 중간 테이블 UNIQUE 없음 → `student_classes(student_id,class_id)`·`student_parents(student_id,parent_id)` UNIQUE, 반 생성 시 studentIds 중복 제거 | `bee869f` | **운영 DB 0008 적용**: UNIQUE 2개 실존, 중복 0 |
+| D-5 | `updated_at` 미갱신 → users·branches `$onUpdate(() => new Date())` | `bee869f` | 코드(SQL 변화 없음) |
 
 정적 확정만 된 항목(S-2·P-3·U-1·U-5·S-3)의 런타임 확인은 다음 기회에 한다.
 
-미수정으로 남은 중간·낮음 결함(D-1/D-2, D-4, D-5~D-8, U-14~U-18, U-20, U-21, R-1~R-3)은 보고서 §4 를 참조한다.
+미수정으로 남은 중간·낮음 결함(D-4, D-8, U-14~U-18, U-20, U-21, R-1~R-3)은 보고서 §4 를 참조한다. D-4(16지점 × 2건 동일 배포)는 데이터 삭제라 별도 결정으로 남겼다.
 
 중간 4건 수정 뒤에도 남은 항목 2건을 기록한다. `server/routes/attempts.ts:733` 의 `GET /api/branch/completed`(클라이언트 호출 0건인 죽은 엔드포인트)는 인라인 검사라 미인증 요청에 여전히 403 을 낸다. P-5 의 미들웨어 범위 밖이다. `PUT /distributions/:id` 는 타 지점 배포에 404 가 아닌 403 을 내므로 존재 열거 오라클이 남아 있다(쓰기 전에 끊기므로 부작용은 없다). 묶음 F 뒤 새로 관찰된 접근성 항목 1건: `BranchDashboard` O/X 수동 채점 컨트롤이 시각적으로 숨긴 radio + 아이콘만 든 label 이라 접근 가능한 이름이 없다(U-13 범위 밖, 미수정).
 
