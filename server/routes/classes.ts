@@ -74,8 +74,13 @@ router.post('/', requireBranchManager, async (req, res) => {
 
     // 클라이언트가 보낸 studentIds 를 실제로 배정 (기존에는 무시되고 있었음)
     if (hasStudents) {
+      // 클라이언트가 같은 id 를 두 번 보내면 student_classes UNIQUE 위반으로 500 이 되므로
+      // 삽입 전에 중복을 제거한다.
       await db.insert(studentClasses).values(
-        studentIds.map((studentId: string) => ({ studentId, classId: newClass.id }))
+        Array.from(new Set<string>(studentIds)).map((studentId) => ({
+          studentId,
+          classId: newClass.id,
+        }))
       );
     }
 

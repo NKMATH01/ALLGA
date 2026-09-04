@@ -57,6 +57,13 @@
       "when": 1788491365590,
       "tag": "0007_keen_captain_cross",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1788504219241,
+      "tag": "0008_eager_the_hood",
+      "breakpoints": true
     }
   ]
 }

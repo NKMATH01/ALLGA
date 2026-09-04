@@ -168,8 +168,8 @@ router.delete('/:id', requireAdmin, async (req, res) => {
       });
     }
 
-    // users.branchId 에는 FK 가 없어 지점 삭제 시 고아행이 남는다.
-    // 계정을 지우면 감사 추적이 끊기므로 비활성 처리만 한다.
+    // users.branchId 의 FK 는 ON DELETE SET NULL 이라 지점 삭제 시 포인터만 비고
+    // 계정 자체는 남는다. 계정을 지우면 감사 추적이 끊기므로 비활성 처리만 한다.
     const orphanRoles = ['branch', 'student', 'parent'];
     const deactivated = await db
       .update(users)

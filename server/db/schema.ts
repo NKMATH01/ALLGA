@@ -10,10 +10,13 @@ export const users = pgTable('users', {
   name: text('name').notNull(),
   email: text('email'),
   phone: text('phone'),
-  branchId: varchar('branch_id', { length: 255 }),
+  // 지점이 삭제돼도 계정은 남긴다(감사 추적). branches.ts DELETE /:id 가 계정을
+  // isActive=false 로만 내리는 설계이므로 cascade 가 아니라 set null 이어야 한다.
+  // admin 처럼 branch_id 가 NULL 인 계정은 원래 정상 상태다.
+  branchId: varchar('branch_id', { length: 255 }).references(() => branches.id, { onDelete: 'set null' }),
   isActive: boolean('is_active').default(true).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
-  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull().$onUpdate(() => new Date()),
 });
 
 // Branches table
@@ -26,7 +29,7 @@ export const branches = pgTable('branches', {
   displayOrder: integer('display_order').default(0).notNull(),
   isActive: boolean('is_active').default(true).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
-  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull().$onUpdate(() => new Date()),
 });
 
 // Classes table
@@ -70,7 +73,13 @@ export const studentParents = pgTable('student_parents', {
   id: varchar('id', { length: 255 }).primaryKey().$defaultFn(() => crypto.randomUUID()),
   studentId: varchar('student_id', { length: 255 }).notNull().references(() => students.id, { onDelete: 'cascade' }),
   parentId: varchar('parent_id', { length: 255 }).notNull().references(() => parents.id, { onDelete: 'cascade' }),
-});
+}, (table) => ({
+  // 같은 학생-학부모 쌍을 두 번 연결할 수 없다.
+  studentParentUnique: unique('student_parents_student_parent_unique').on(
+    table.studentId,
+    table.parentId
+  ),
+}));
 
 // Student-Classes relationship table
 export const studentClasses = pgTable('student_classes', {
@@ -79,6 +88,11 @@ export const studentClasses = pgTable('student_classes', {
   classId: varchar('class_id', { length: 255 }).notNull().references(() => classes.id, { onDelete: 'cascade' }),
   enrolledAt: timestamp('enrolled_at').defaultNow().notNull(),
 }, (table) => ({
+  // 같은 학생을 같은 반에 두 번 배정할 수 없다.
+  studentClassUnique: unique('student_classes_student_class_unique').on(
+    table.studentId,
+    table.classId
+  ),
   // attempts.ts /my-exams : WHERE student_id = ? (반 배포 대상 판정, 전 학생 진입점)
   studentIdx: index('student_classes_student_id_idx').on(table.studentId),
 }));
