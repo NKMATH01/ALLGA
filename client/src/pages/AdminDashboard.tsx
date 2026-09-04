@@ -6,6 +6,7 @@ import { ThemeToggle } from '../components/ui/theme-toggle';
 import { StatValue } from '../components/ui/stat-value';
 import { StatStrip, StatStripItem } from '../components/ui/stat-strip';
 import { useModalA11y, isMobileViewport } from '../lib/useModalA11y';
+import { ListLoading, LoadingRows, ErrorState, ErrorRow } from '../components/ui/list-state';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
@@ -84,7 +85,13 @@ export default function AdminDashboard({ user }: { user: User }) {
     },
   });
 
-  const { data: branches, refetch: refetchBranches } = useQuery({
+  // 목록이 비어 보이는 이유가 로딩인지 실패인지 0건인지 화면에서 갈라야 한다 (11.7)
+  const {
+    data: branches,
+    refetch: refetchBranches,
+    isLoading: branchesLoading,
+    isError: branchesError,
+  } = useQuery({
     queryKey: ['branches'],
     queryFn: async () => {
       const res = await api.get('/branches');
@@ -92,7 +99,12 @@ export default function AdminDashboard({ user }: { user: User }) {
     },
   });
 
-  const { data: exams, refetch: refetchExams } = useQuery({
+  const {
+    data: exams,
+    refetch: refetchExams,
+    isLoading: examsLoading,
+    isError: examsError,
+  } = useQuery({
     queryKey: ['exams'],
     queryFn: async () => {
       const res = await api.get('/exams');
@@ -100,7 +112,12 @@ export default function AdminDashboard({ user }: { user: User }) {
     },
   });
 
-  const { data: distributions, refetch: refetchDistributions } = useQuery({
+  const {
+    data: distributions,
+    refetch: refetchDistributions,
+    isLoading: distributionsLoading,
+    isError: distributionsError,
+  } = useQuery({
     queryKey: ['distributions'],
     queryFn: async () => {
       const res = await api.get('/distributions');
@@ -505,7 +522,12 @@ export default function AdminDashboard({ user }: { user: User }) {
                 </tr>
               </thead>
               <tbody>
-                {pagedBranchStats.pageItems.map((branch: any) => (
+                {/* KPI 만 스켈레톤이고 표는 빈 채로 뜨면 "지점 0개"로 읽힌다 (11.7) */}
+                {statsLoading && <LoadingRows cols={4} />}
+                {!statsLoading && statsError && (
+                  <ErrorRow cols={4} detail="지점별 통계 조회가 실패했습니다." onRetry={() => refetchStats()} />
+                )}
+                {!statsLoading && !statsError && pagedBranchStats.pageItems.map((branch: any) => (
                   <tr
                     key={branch.branchName}
                     className="border-b border-line-subtle hover:bg-surface-subtle transition-colors duration-150 ease-out"
@@ -581,7 +603,12 @@ export default function AdminDashboard({ user }: { user: User }) {
                 </tr>
               </thead>
               <tbody>
-                {branches?.map((branch: any, index: number) => (
+                {/* 못 받아온 것과 0개는 다르다 (11.7) */}
+                {branchesLoading && <LoadingRows cols={6} />}
+                {!branchesLoading && branchesError && (
+                  <ErrorRow cols={6} detail="지점 목록 조회가 실패했습니다." onRetry={() => refetchBranches()} />
+                )}
+                {!branchesLoading && !branchesError && branches?.map((branch: any, index: number) => (
                   <tr key={branch.id} className="border-b border-line-subtle hover:bg-surface-subtle transition-colors duration-150 ease-out">
                     <td className="px-4 py-3">
                       <div className="flex gap-1 justify-center">
@@ -793,7 +820,12 @@ export default function AdminDashboard({ user }: { user: User }) {
           </div>
         </CardHeader>
         <CardContent className="p-6">
-          {exams && exams.length > 0 ? (
+          {/* 못 받아온 것과 0건은 다르다 (11.7) */}
+          {examsLoading ? (
+            <ListLoading />
+          ) : examsError ? (
+            <ErrorState detail="시험 목록 조회가 실패했습니다." onRetry={() => refetchExams()} />
+          ) : exams && exams.length > 0 ? (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[640px] [&_td]:whitespace-nowrap [&_thead_th:first-child]:sticky [&_thead_th:first-child]:left-0 [&_thead_th:first-child]:z-10 [&_tbody_td:first-child]:sticky [&_tbody_td:first-child]:left-0 [&_tbody_td:first-child]:bg-surface">
                 <thead>
@@ -1280,7 +1312,12 @@ export default function AdminDashboard({ user }: { user: User }) {
           </div>
         </CardHeader>
         <CardContent className="p-6">
-          {distributions && distributions.length > 0 ? (
+          {/* 못 받아온 것과 0건은 다르다 (11.7) */}
+          {distributionsLoading ? (
+            <ListLoading />
+          ) : distributionsError ? (
+            <ErrorState detail="배포 목록 조회가 실패했습니다." onRetry={() => refetchDistributions()} />
+          ) : distributions && distributions.length > 0 ? (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[640px] [&_td]:whitespace-nowrap [&_thead_th:first-child]:sticky [&_thead_th:first-child]:left-0 [&_thead_th:first-child]:z-10 [&_tbody_td:first-child]:sticky [&_tbody_td:first-child]:left-0 [&_tbody_td:first-child]:bg-surface">
                 <thead>

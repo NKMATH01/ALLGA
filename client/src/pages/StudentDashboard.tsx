@@ -5,6 +5,7 @@ import { toast } from '../components/ui/toast';
 import { ThemeToggle } from '../components/ui/theme-toggle';
 import { useTheme } from '../lib/useTheme';
 import { StatValue } from '../components/ui/stat-value';
+import { ListLoading, LoadingBlock, ErrorState } from '../components/ui/list-state';
 import { ensureReport, openFullReport, prefersSummaryView } from '../lib/reportClient';
 import { ReportSummaryModal } from '../components/ReportSummaryModal';
 import { useModalA11y, isMobileViewport } from '../lib/useModalA11y';
@@ -1342,7 +1343,17 @@ export default function StudentDashboard({ user }: { user: User }) {
                 <Card>
                   <CardContent className="p-5 pt-5">
                     <p className="text-xs font-semibold tracking-[0.08em] text-ink-tertiary">대기 시험</p>
-                    {availableExams.length + inProgressExams.length > 0 ? (
+                    {/* 아직 못 받아온 것을 "배정 없음"으로 확정해 그리지 않는다 (11.7) */}
+                    {examsLoading || examsError ? (
+                      <div className="mt-3">
+                        <StatValue
+                          value={availableExams.length + inProgressExams.length}
+                          isLoading={examsLoading}
+                          isError={examsError}
+                          onRetry={() => refetchExams()}
+                        />
+                      </div>
+                    ) : availableExams.length + inProgressExams.length > 0 ? (
                       <p className="mt-3 text-4xl font-bold leading-none tracking-[-0.03em] text-ink">
                         {availableExams.length + inProgressExams.length}<span className="ml-1 text-xs font-medium tracking-normal text-ink-tertiary">개</span>
                       </p>
@@ -1365,7 +1376,18 @@ export default function StudentDashboard({ user }: { user: User }) {
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="p-6">
-                    {completedExams.length > 0 ? (
+                    {/* 못 받아온 것과 0건은 다르다 (11.7) */}
+                    {examsLoading ? (
+                      <LoadingBlock className="h-72" />
+                    ) : examsError ? (
+                      <div className="flex h-72 flex-col items-center justify-center">
+                        <ErrorState
+                          className="py-0"
+                          detail="시험 목록 조회가 실패했습니다."
+                          onRetry={() => refetchExams()}
+                        />
+                      </div>
+                    ) : completedExams.length > 0 ? (
                       <div className="h-72">
                         {/* key 에 테마를 넣어 Chart.js 인스턴스를 새로 만든다.
                             옵션 객체만 바꾸면 축·툴팁 색이 갱신되지 않는다 */}
@@ -1389,7 +1411,18 @@ export default function StudentDashboard({ user }: { user: User }) {
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="p-6">
-                    {completedExams.length > 0 ? (
+                    {/* 못 받아온 것과 0건은 다르다 (11.7) */}
+                    {examsLoading ? (
+                      <LoadingBlock className="h-72" />
+                    ) : examsError ? (
+                      <div className="flex h-72 flex-col items-center justify-center">
+                        <ErrorState
+                          className="py-0"
+                          detail="시험 목록 조회가 실패했습니다."
+                          onRetry={() => refetchExams()}
+                        />
+                      </div>
+                    ) : completedExams.length > 0 ? (
                       <div className="h-72">
                         <Doughnut key={`doughnut-${theme}`} data={gradeChartData} options={doughnutOptions} />
                       </div>
@@ -1414,7 +1447,12 @@ export default function StudentDashboard({ user }: { user: User }) {
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="p-2">
-                    {completedExams.length > 0 ? (
+                    {/* 못 받아온 것과 0건은 다르다 (11.7) */}
+                    {examsLoading ? (
+                      <ListLoading className="px-2" />
+                    ) : examsError ? (
+                      <ErrorState detail="시험 목록 조회가 실패했습니다." onRetry={() => refetchExams()} />
+                    ) : completedExams.length > 0 ? (
                       <div>
                         {completedExams.slice(0, 4).map((item, idx) => (
                           <div
@@ -1456,7 +1494,12 @@ export default function StudentDashboard({ user }: { user: User }) {
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="p-2">
-                    {availableExams.length > 0 || inProgressExams.length > 0 ? (
+                    {/* 못 받아온 것과 0건은 다르다 (11.7) */}
+                    {examsLoading ? (
+                      <ListLoading className="px-2" />
+                    ) : examsError ? (
+                      <ErrorState detail="시험 목록 조회가 실패했습니다." onRetry={() => refetchExams()} />
+                    ) : availableExams.length > 0 || inProgressExams.length > 0 ? (
                       <div>
                         {/* In Progress */}
                         {inProgressExams.map((item) => (
@@ -1544,7 +1587,8 @@ export default function StudentDashboard({ user }: { user: User }) {
                     >
                       <Icon className="w-4 h-4 flex-shrink-0" strokeWidth={1.5} />
                       <span>{tab.label}</span>
-                      {tab.count > 0 && (
+                      {/* 로딩 중 0 을 배지로 그리면 "없음"으로 읽힌다. 그때는 배지를 감춘다 (11.7) */}
+                      {!examsLoading && !examsError && tab.count > 0 && (
                         <span className={`px-1.5 py-0.5 rounded-sm text-xs ${
                           activeExamTab === tab.id ? 'bg-line-inverse' : 'bg-surface-subtle text-ink-secondary'
                         }`}>
@@ -1559,7 +1603,12 @@ export default function StudentDashboard({ user }: { user: User }) {
               {/* Available Exams */}
               {activeExamTab === 'available' && (
                 <div className="space-y-4">
-                  {availableExams.length > 0 ? (
+                  {/* 못 받아온 것과 0건은 다르다 (11.7) */}
+                  {examsLoading ? (
+                    <ListLoading rows={3} />
+                  ) : examsError ? (
+                    <ErrorState detail="시험 목록 조회가 실패했습니다." onRetry={() => refetchExams()} />
+                  ) : availableExams.length > 0 ? (
                     availableExams.map((item) => (
                       <Card key={item.distribution.id} className="transition-colors duration-150 ease-out hover:border-line-strong">
                         <CardContent className="p-6 pt-6">
@@ -1625,7 +1674,12 @@ export default function StudentDashboard({ user }: { user: User }) {
               {/* In Progress Exams */}
               {activeExamTab === 'in_progress' && (
                 <div className="space-y-4">
-                  {inProgressExams.length > 0 ? (
+                  {/* 못 받아온 것과 0건은 다르다 (11.7) */}
+                  {examsLoading ? (
+                    <ListLoading rows={3} />
+                  ) : examsError ? (
+                    <ErrorState detail="시험 목록 조회가 실패했습니다." onRetry={() => refetchExams()} />
+                  ) : inProgressExams.length > 0 ? (
                     inProgressExams.map((item) => (
                       <Card key={item.distribution.id} className="border-l-[3px] border-l-fn-warning-border">
                         <CardContent className="p-6 pt-6">
@@ -1677,7 +1731,12 @@ export default function StudentDashboard({ user }: { user: User }) {
               {/* Completed Exams */}
               {activeExamTab === 'completed' && (
                 <div className="space-y-4">
-                  {completedExams.length > 0 ? (
+                  {/* 못 받아온 것과 0건은 다르다 (11.7) */}
+                  {examsLoading ? (
+                    <ListLoading rows={3} />
+                  ) : examsError ? (
+                    <ErrorState detail="시험 목록 조회가 실패했습니다." onRetry={() => refetchExams()} />
+                  ) : completedExams.length > 0 ? (
                     completedExams.map((item) => (
                       <Card key={item.distribution.id} className="transition-colors duration-150 ease-out hover:border-line-strong">
                         <CardContent className="p-6 pt-6">
@@ -1741,7 +1800,12 @@ export default function StudentDashboard({ user }: { user: User }) {
               {/* Upcoming Exams */}
               {activeExamTab === 'upcoming' && (
                 <div className="space-y-4">
-                  {upcomingExams.length > 0 ? (
+                  {/* 못 받아온 것과 0건은 다르다 (11.7) */}
+                  {examsLoading ? (
+                    <ListLoading rows={3} />
+                  ) : examsError ? (
+                    <ErrorState detail="시험 목록 조회가 실패했습니다." onRetry={() => refetchExams()} />
+                  ) : upcomingExams.length > 0 ? (
                     upcomingExams.map((item) => (
                       <Card key={item.distribution.id}>
                         <CardContent className="p-6 pt-6">
@@ -1831,7 +1895,12 @@ export default function StudentDashboard({ user }: { user: User }) {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-6">
-                  {completedExams.length > 0 ? (
+                  {/* 못 받아온 것과 0건은 다르다 (11.7) */}
+                  {examsLoading ? (
+                    <ListLoading rows={4} />
+                  ) : examsError ? (
+                    <ErrorState detail="시험 목록 조회가 실패했습니다." onRetry={() => refetchExams()} />
+                  ) : completedExams.length > 0 ? (
                     <div className="space-y-4">
                       {completedExams.map((item) => {
                         const percentage = Math.round(
@@ -2008,25 +2077,26 @@ export default function StudentDashboard({ user }: { user: User }) {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-6">
+                  {/* 로딩 중 0 을 그리면 "한 번도 안 봤음"과 구분되지 않는다 (11.7) */}
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div className="p-4 bg-surface-subtle border border-line rounded-sm">
-                      <p className="text-3xl font-bold tracking-[-0.03em] text-ink">{completedExams.length}</p>
-                      <p className="text-xs text-ink-secondary mt-1.5">총 응시 횟수</p>
-                    </div>
-                    <div className="p-4 bg-surface-subtle border border-line rounded-sm">
-                      <p className="text-3xl font-bold tracking-[-0.03em] text-ink">{averageScore}</p>
-                      <p className="text-xs text-ink-secondary mt-1.5">평균 점수</p>
-                    </div>
-                    <div className="p-4 bg-surface-subtle border border-line rounded-sm">
-                      <p className="text-3xl font-bold tracking-[-0.03em] text-ink">{highestScore}</p>
-                      <p className="text-xs text-ink-secondary mt-1.5">최고 점수</p>
-                    </div>
-                    <div className="p-4 bg-surface-subtle border border-line rounded-sm">
-                      <p className="text-3xl font-bold tracking-[-0.03em] text-ink">
-                        {availableExams.length + inProgressExams.length}
-                      </p>
-                      <p className="text-xs text-ink-secondary mt-1.5">대기 중 시험</p>
-                    </div>
+                    {[
+                      { label: '총 응시 횟수', value: completedExams.length },
+                      { label: '평균 점수', value: averageScore },
+                      { label: '최고 점수', value: highestScore },
+                      { label: '대기 중 시험', value: availableExams.length + inProgressExams.length },
+                    ].map((s) => (
+                      <div key={s.label} className="p-4 bg-surface-subtle border border-line rounded-sm">
+                        <StatValue
+                          value={s.value}
+                          isLoading={examsLoading}
+                          isError={examsError}
+                          onRetry={() => refetchExams()}
+                          valueClassName="text-3xl font-bold tracking-[-0.03em] text-ink"
+                          skeletonClassName="h-8 w-16"
+                        />
+                        <p className="text-xs text-ink-secondary mt-1.5">{s.label}</p>
+                      </div>
+                    ))}
                   </div>
                 </CardContent>
               </Card>

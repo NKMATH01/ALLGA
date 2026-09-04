@@ -15,6 +15,7 @@ import { Input } from '../components/ui/input';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Pagination, paginate } from '../components/ui/pagination';
+import { ListLoading, ErrorState } from '../components/ui/list-state';
 import { Users, GraduationCap, FileText, BarChart3, LogOut, LayoutDashboard, Menu, Home, Plus, Trash2, CheckCircle, XCircle, Edit, Sparkles, ArrowLeft, Search } from 'lucide-react';
 
 interface User {
@@ -735,7 +736,12 @@ export default function BranchDashboard({ user }: { user: User }) {
         <section className="mb-6">
           <h2 className="mb-2 border-l-[3px] border-action pl-2 text-sm font-bold tracking-wide text-ink">학생 목록</h2>
           <div>
-            {students && students.length > 0 ? (
+            {/* 못 받아온 것과 0명은 다르다. 확정 문구를 먼저 그리지 않는다 (11.7). */}
+            {studentsLoading ? (
+              <ListLoading />
+            ) : studentsError ? (
+              <ErrorState detail="학생 목록 조회가 실패했습니다." onRetry={() => refetchStudents()} />
+            ) : students && students.length > 0 ? (
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[640px] text-sm [&_td]:whitespace-nowrap">
                   <thead>
@@ -783,7 +789,12 @@ export default function BranchDashboard({ user }: { user: User }) {
         <section className="mb-6">
           <h2 className="mb-2 border-l-[3px] border-action pl-2 text-sm font-bold tracking-wide text-ink">반 목록</h2>
           <div>
-            {classes && classes.length > 0 ? (
+            {/* 못 받아온 것과 0개는 다르다 (11.7). */}
+            {classesLoading ? (
+              <ListLoading />
+            ) : classesError ? (
+              <ErrorState detail="반 목록 조회가 실패했습니다." onRetry={() => refetchClasses()} />
+            ) : classes && classes.length > 0 ? (
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[640px] text-sm [&_td]:whitespace-nowrap">
                   <thead>
@@ -826,7 +837,18 @@ export default function BranchDashboard({ user }: { user: User }) {
         <section className="mb-6">
           <h2 className="mb-2 border-l-[3px] border-action pl-2 text-sm font-bold tracking-wide text-ink">시험 응시 및 채점 학생</h2>
           <div>
-            {allDistributionStudents && allDistributionStudents.length > 0 ? (
+            {/* 못 받아온 것과 0건은 다르다 (11.7). */}
+            {distributionsLoading || allDistLoading ? (
+              <ListLoading rows={4} />
+            ) : distributionsError || allDistError ? (
+              <ErrorState
+                detail="배포 목록 또는 배포별 학생 조회가 실패했습니다."
+                onRetry={() => {
+                  refetchDistributions();
+                  refetchAllDistributionStudents();
+                }}
+              />
+            ) : allDistributionStudents && allDistributionStudents.length > 0 ? (
               <div className="space-y-6">
                 {allDistributionStudents
                   .filter((distData: any) => !selectedDistributionId || distData.distribution.id === selectedDistributionId)
@@ -1047,7 +1069,18 @@ export default function BranchDashboard({ user }: { user: User }) {
         <section className="mb-6">
           <h2 className="mb-2 border-l-[3px] border-action pl-2 text-sm font-bold tracking-wide text-ink">시험 응시 학생</h2>
           <div>
-            {allDistributionStudents && allDistributionStudents.length > 0 ? (
+            {/* 못 받아온 것과 0명은 다르다 (11.7). */}
+            {distributionsLoading || allDistLoading ? (
+              <ListLoading rows={4} />
+            ) : distributionsError || allDistError ? (
+              <ErrorState
+                detail="배포 목록 또는 배포별 학생 조회가 실패했습니다."
+                onRetry={() => {
+                  refetchDistributions();
+                  refetchAllDistributionStudents();
+                }}
+              />
+            ) : allDistributionStudents && allDistributionStudents.length > 0 ? (
               <div className="space-y-6">
                 {allDistributionStudents.map((distData: any) => {
                   // 최근 활동에서는 응시한 학생만 표시
@@ -1965,7 +1998,19 @@ export default function BranchDashboard({ user }: { user: User }) {
         </div>
 
         {studentTab === 'history' && (
-          selectedStudentExams.length === 0 ? (
+          // 못 받아온 것과 0건은 다르다 (11.7)
+          distributionsLoading || allDistLoading ? (
+            <ListLoading className="mt-4" />
+          ) : distributionsError || allDistError ? (
+            <ErrorState
+              className="mt-4 border border-line bg-surface-subtle py-10"
+              detail="배포 목록 또는 배포별 학생 조회가 실패했습니다."
+              onRetry={() => {
+                refetchDistributions();
+                refetchAllDistributionStudents();
+              }}
+            />
+          ) : selectedStudentExams.length === 0 ? (
             <p className="mt-4 border border-line bg-surface-subtle py-10 text-center text-sm text-ink-secondary">
               배포된 시험이 없습니다.
             </p>
@@ -2340,6 +2385,15 @@ export default function BranchDashboard({ user }: { user: User }) {
             onPageChange={setStudentPage}
           />
         </>
+      ) : studentsLoading ? (
+        // 목록이 비어 보이는 이유가 "아직 못 받아옴"일 수 있다 (11.7)
+        <ListLoading className="mt-3" />
+      ) : studentsError ? (
+        <ErrorState
+          className="mt-3 border border-line bg-surface-subtle py-12"
+          detail="학생 목록 조회가 실패했습니다."
+          onRetry={() => refetchStudents()}
+        />
       ) : (
         <div className="mt-3 border border-line bg-surface-subtle py-12 text-center">
           <p className="text-sm text-ink-secondary">
@@ -2621,6 +2675,15 @@ export default function BranchDashboard({ user }: { user: User }) {
           {/* 페이저 (11.2) */}
           <Pagination page={curPage} totalItems={rows.length} onPageChange={setClassPage} />
         </>
+      ) : classesLoading ? (
+        // 로딩 중에 "첫 반 만들기" CTA 까지 띄우면 이미 만든 반이 사라진 것처럼 보인다 (11.7)
+        <ListLoading className="mt-3" />
+      ) : classesError ? (
+        <ErrorState
+          className="mt-3 border border-line bg-surface-subtle py-12"
+          detail="반 목록 조회가 실패했습니다."
+          onRetry={() => refetchClasses()}
+        />
       ) : (
         <div className="mt-3 border border-line bg-surface-subtle py-12 text-center">
           <p className="text-sm text-ink-secondary">
@@ -2849,6 +2912,15 @@ export default function BranchDashboard({ user }: { user: User }) {
           {/* 페이저 (11.2) */}
           <Pagination page={curPage} totalItems={rows.length} onPageChange={setExamPage} />
         </>
+      ) : distributionsLoading ? (
+        // 아직 못 받아온 것을 "없습니다"로 확정해 그리지 않는다 (11.7)
+        <ListLoading className="mt-3" />
+      ) : distributionsError ? (
+        <ErrorState
+          className="mt-3 border border-line bg-surface-subtle py-12"
+          detail="배포 목록 조회가 실패했습니다."
+          onRetry={() => refetchDistributions()}
+        />
       ) : (
         <div className="mt-3 border border-line bg-surface-subtle py-12 text-center">
           <p className="text-sm text-ink-secondary">본사에서 내려온 배포가 없습니다.</p>
@@ -3204,6 +3276,15 @@ export default function BranchDashboard({ user }: { user: User }) {
             {/* 페이저 (11.2) */}
             <Pagination page={curPage} totalItems={rows.length} onPageChange={setDistPage} />
           </>
+        ) : distributionsLoading ? (
+          // 못 받아온 것과 0건은 다르다 (11.7)
+          <ListLoading className="mt-3" />
+        ) : distributionsError ? (
+          <ErrorState
+            className="mt-3 border border-line bg-surface-subtle py-12"
+            detail="배포 목록 조회가 실패했습니다."
+            onRetry={() => refetchDistributions()}
+          />
         ) : (
           <div className="mt-3 border border-line bg-surface-subtle py-12 text-center">
             <p className="text-sm text-ink-secondary">
@@ -3222,7 +3303,12 @@ export default function BranchDashboard({ user }: { user: User }) {
         <section className="mb-6">
           <h2 className="mb-2 border-l-[3px] border-action pl-2 text-sm font-bold tracking-wide text-ink">보고서 및 성적 관리</h2>
           <div>
-            {distributions && distributions.length > 0 ? (
+            {/* 못 받아온 것과 0건은 다르다 (11.7). */}
+            {distributionsLoading ? (
+              <ListLoading rows={3} />
+            ) : distributionsError ? (
+              <ErrorState detail="배포 목록 조회가 실패했습니다." onRetry={() => refetchDistributions()} />
+            ) : distributions && distributions.length > 0 ? (
               <div className="grid gap-4">
                 {distributions.map((dist: any) => (
                   <Card
