@@ -176,31 +176,36 @@ router.post('/', requireBranchManager, async (req, res) => {
     // 안전한 랜덤 비밀번호 생성 (8자리)
     const password = generateSecurePassword();
 
-    // Create user
     const passwordHash = await hashPassword(password);
-    const [user] = await db
-      .insert(users)
-      .values({
-        username,
-        passwordHash,
-        role: 'student',
-        name,
-        phone,
-        branchId,
-      })
-      .returning();
 
-    // Create student
-    const [student] = await db
-      .insert(students)
-      .values({
-        userId: user.id,
-        branchId,
-        school,
-        grade,
-        parentPhone,
-      })
-      .returning();
+    // users → students 는 하나의 등록 절차다. 중간에 실패하면 고아 users 행이 남아
+    // username(전화번호)만 점유되므로 트랜잭션으로 묶는다.
+    const { user, student } = await db.transaction(async (tx) => {
+      const [createdUser] = await tx
+        .insert(users)
+        .values({
+          username,
+          passwordHash,
+          role: 'student',
+          name,
+          phone,
+          branchId,
+        })
+        .returning();
+
+      const [createdStudent] = await tx
+        .insert(students)
+        .values({
+          userId: createdUser.id,
+          branchId,
+          school,
+          grade,
+          parentPhone,
+        })
+        .returning();
+
+      return { user: createdUser, student: createdStudent };
+    });
 
     res.status(201).json({
       success: true,
@@ -211,6 +216,14 @@ router.post('/', requireBranchManager, async (req, res) => {
       message: `학생이 등록되었습니다. 초기 비밀번호: ${password} (반드시 학생에게 전달 후 변경 안내)`,
     });
   } catch (error) {
+    // 위 선조회와 INSERT 사이에 같은 연락처로 동시 요청이 들어오면
+    // users_username_unique 위반이 난다. 500 이 아니라 선조회와 같은 400 으로 돌려준다.
+    const code =
+      (error as { code?: string })?.code ??
+      (error as { cause?: { code?: string } })?.cause?.code;
+    if (code === '23505') {
+      return res.status(400).json({ message: '이미 사용 중인 연락처입니다.' });
+    }
     log.error('student.create_student_failed', errorFields(error));
     res.status(500).json({ message: '학생 등록 중 오류가 발생했습니다.' });
   }
