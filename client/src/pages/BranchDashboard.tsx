@@ -57,6 +57,19 @@ const gradeBadgeOperate = (grade?: number | string | null): string => {
   return 'border-line-strong bg-surface-subtle text-ink-secondary';
 };
 
+/*
+  보고서 전체 HTML 은 서버가 `/api/reports/:id` 로 직접 서빙한다.
+  `/reports/:id` 는 SPA 라우트가 아니라 404 다. 이 화면에 같은 열기 동작이 세 벌
+  복붙돼 있었고 한 벌만 `/api/` 가 빠져 있었으므로 여기 한 곳으로 모은다.
+
+  reportClient 의 openFullReport 는 쓰지 않는다. 그쪽은 htmlContent 가 없으면
+  api.get 을 await 한 뒤 창을 열기 때문에, 클릭 핸들러에서 부르면 팝업 차단에 걸린다.
+  이 함수는 동기 호출이라 클릭 제스처를 잃지 않는다.
+*/
+function openReportWindow(reportId: string): void {
+  window.open(`/api/reports/${reportId}`, '_blank', 'width=1000,height=800');
+}
+
 export default function BranchDashboard({ user }: { user: User }) {
   const queryClient = useQueryClient();
   const [activeSection, setActiveSection] = useState<MenuSection>('dashboard');
@@ -948,8 +961,7 @@ export default function BranchDashboard({ user }: { user: User }) {
                                             e.stopPropagation();
                                             if (student.hasReport) {
                                               // Open report in new window (HTML format)
-                                              const reportUrl = `/api/reports/${student.reportId}`;
-                                              window.open(reportUrl, '_blank', 'width=1000,height=800');
+                                              openReportWindow(student.reportId);
                                             } else {
                                               // Generate report
                                               if (confirm(`${student.studentName} 학생의 AI 분석을 시작하시겠습니까?`)) {
@@ -1159,8 +1171,7 @@ export default function BranchDashboard({ user }: { user: User }) {
                                         e.stopPropagation();
                                         if (student.hasReport) {
                                           // Open report in new window (HTML format)
-                                          const reportUrl = `/api/reports/${student.reportId}`;
-                                          window.open(reportUrl, '_blank', 'width=1000,height=800');
+                                          openReportWindow(student.reportId);
                                         } else {
                                           // Generate report
                                           if (confirm(`${student.studentName} 학생의 AI 분석을 시작하시겠습니까?`)) {
@@ -3424,7 +3435,7 @@ export default function BranchDashboard({ user }: { user: User }) {
                                   e.stopPropagation();
                                   if (student.hasReport) {
                                     // View report
-                                    window.open(`/reports/${student.reportId}`, '_blank');
+                                    openReportWindow(student.reportId);
                                   } else {
                                     // Generate report
                                     if (confirm(`${student.studentName} 학생의 AI 분석을 시작하시겠습니까?`)) {
