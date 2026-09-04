@@ -307,7 +307,7 @@ UI login-as(강하준): /auth/me role=student originalUser=null · restore → 4
 
 ## 10. 수정 현황 (2026-09-04, 점검 당일)
 
-§4 의 높음 11건과 중간 4건(P-2·P-4·P-5·P-6)은 점검 당일 수정 커밋됐다. 커밋은 모두 점검 기준 HEAD `399e9fc` 이후다. 높음 11건은 push 했고(`origin/main` = `8fe91aa`), 중간 4건은 아직 push 하지 않았다.
+§4 의 높음 11건과 중간 4건(P-2·P-4·P-5·P-6)은 점검 당일 수정 커밋됐다. 커밋은 모두 점검 기준 HEAD `399e9fc` 이후다. 높음 11건과 중간 4건은 push 했고(`origin/main` = `d45d54d`), 이어 수정한 중간 9건(U-7·U-2·U-8·U-9·U-10·U-11·U-12·U-13·U-19, 화면·요청 마감)은 아직 push 하지 않았다.
 
 | ID | 결함 | 커밋 | 검증 수준 |
 |---|---|---|---|
@@ -326,8 +326,17 @@ UI login-as(강하준): /auth/me role=student originalUser=null · restore → 4
 | P-6 | `logImpersonation` actor 와 impersonate 3경로 target 에서 `username` 제거(id·role 만) | `09aa2d3` | **런타임**: 서버 stdout `[AUDIT][impersonation]` 2줄(impersonate_student·impersonate_restore)에 `username` 0건, actor·target 은 id·role 만 |
 | P-2 | `GET /distributions/:id` 지점 스코프. 타 지점은 403 아닌 404(존재 열거 오라클 차단), admin 은 제한 없음 | `42a70bd` | **런타임**: 지점장(allga1) 타 지점 배포 `72c94503-…` 404, 자기 지점 배포 `7bee1029-…` 200 |
 | P-4 | 클라이언트 학생 전환을 `POST /auth/impersonate/student/:id` 로 교체, `POST /students/:id/login-as` 라우트 제거, `App.tsx` 가 버리던 `/auth/me` 의 `originalUser` 병합, `RestoreIdentityButton` 신설(학생·학부모 사이드바 푸터) | `320ad43` | **런타임**: `login-as` 404, impersonate 후 `user.role=student`·`originalUser.role=branch`, `/auth/me` 도 동일, `restore` 200 후 role=branch |
+| U-7 | 관리자 배포 목록 지점 열 UUID → `GET /distributions` 응답에 `branchName` 추가(branchId 중복 제거 후 `inArray` 1회), 화면은 `branchName ?? branchId` | `2c50f2c` | **런타임**: admin `GET /api/distributions` 52행 전부 `branchName` 존재·null 0, 표본 `branch-songdo → 송도지점`, 기존 키 8개(id·examId·branchId·startDate·endDate·targetKind·exam·parentDistribution) 보존 |
+| U-2 | 오답 모달이 `commentary` 만 읽어 현 파서의 `explanation` 해설이 "제공되지 않았습니다"로 표시 → 두 키 폴백 | `2c50f2c` | 코드(`explanation || commentary`, reports.ts 와 같은 폴백) |
+| U-9 | `AIReportButton` 마운트마다 `GET /reports/attempt/:id` → `/my-exams` 의 `hasReport` 를 prop 으로 받아 초기 상태 결정, useEffect 삭제 | `401411f` | 코드: StudentDashboard 에서 `reports/attempt` GET 호출 0건(grep) |
+| U-8 | 404 외 오류에서 `'checking'` 고착 → 호출 자체가 사라져 `'checking'` 상태·분기 제거 | `401411f` | 코드(원인 제거, `'checking'` 유니온 삭제) |
+| U-10 | 지점 진입마다 미사용 `GET /branch-students/stats` → `useQuery` 블록 삭제(키 소비자 0 확인) | `401411f` | 코드(grep `branch-students/stats` 클라이언트 0건) |
+| U-11 | 보고서 새 창이 await 뒤 `window.open` 으로 차단 → `openReportWindowSync` 로 클릭 동기 구간에 창 확보, `openFullReport(ref, win)`, 실패 시 `win.close()`. 호출부 학생·학부모·지점 3곳 + 요약 모달 1곳 | `2a28098`, `dc0ae42` | 코드(호출 4곳 전부 `win` 전달, 요약 뷰 경로는 창 안 열음). 실브라우저 팝업 재현은 미실시 |
+| U-12 | 학생 `<h1>` 2개·학부모 0개 → 사이드바 브랜드 `<p>`, 학부모 상단 제목 `<h1>` | `0a5e03c` | grep: 네 대시보드 실제 `<h1>` 요소 각 1(Admin 의 추가 2건은 주석 문자열) |
+| U-13 | 보고서 배포 카드 `div onClick` → `role="button" tabIndex=0 onKeyDown(Enter·Space)` + aria-label, 삭제 아이콘 버튼 aria-label | `0a5e03c` | 코드. 같은 파일의 다른 아이콘 버튼은 텍스트 라벨 동반이라 대상 없음 |
+| U-19 | `BranchDashboard` `console.log` 16줄(학생 객체·답안, 3줄은 매 렌더) 삭제 | `0a5e03c` | grep: `client/src/pages`·`client/src/lib` 의 `console.log` 0건 |
 
-정적 확정만 된 항목(S-2·P-3·U-1·U-5·S-3)의 런타임 확인은 다음 기회에 한다. P-2·P-4·P-5·P-6 을 제외한 중간·낮음 결함은 §4 를 그대로 둔다.
+정적 확정만 된 항목(S-2·P-3·U-1·U-5·S-3)의 런타임 확인은 다음 기회에 한다. P-2·P-4·P-5·P-6 과 U-7·U-2·U-8~U-13·U-19 를 제외한 중간·낮음 결함은 §4 를 그대로 둔다.
 
 ### 10.1 운영 DB 마이그레이션 0007
 
@@ -347,7 +356,7 @@ UI login-as(강하준): /auth/me role=student originalUser=null · restore → 4
 
 런타임 검증 중 확인한 도구 한계는 둘이다. 숨겨진 브라우저 페인에서는 `innerWidth` 가 0 이고 Esc 키가 페이지에 도달하지 않는다. 375px 뷰포트 에뮬레이션에서는 렌더러가 반복해서 멈췄다. 이 때문에 U-5 의 375px 재현은 하지 못했고 코드 확정에 머물렀다. 다만 모달 취소 버튼으로 닫을 때 `body.style.overflow` 가 정상 복원되는 것은 확인했다.
 
-중간 4건 수정 뒤에도 남은 항목 2건을 기록한다. `server/routes/attempts.ts:733` 의 `GET /api/branch/completed`(클라이언트 호출 0건인 죽은 엔드포인트)는 인라인 검사라 미인증 요청에 여전히 403 을 낸다. P-5 의 미들웨어 범위 밖이다. `PUT /distributions/:id` 는 타 지점 배포에 404 가 아닌 403 을 내므로 존재 열거 오라클이 남아 있다(쓰기 전에 끊기므로 부작용은 없다).
+중간 4건 수정 뒤에도 남은 항목 2건을 기록한다. `server/routes/attempts.ts:733` 의 `GET /api/branch/completed`(클라이언트 호출 0건인 죽은 엔드포인트)는 인라인 검사라 미인증 요청에 여전히 403 을 낸다. P-5 의 미들웨어 범위 밖이다. `PUT /distributions/:id` 는 타 지점 배포에 404 가 아닌 403 을 내므로 존재 열거 오라클이 남아 있다(쓰기 전에 끊기므로 부작용은 없다). 묶음 F 뒤 새로 관찰된 접근성 항목 1건: `BranchDashboard` O/X 수동 채점 컨트롤이 시각적으로 숨긴 radio + 아이콘만 든 label 이라 접근 가능한 이름이 없다(U-13 범위 밖, 미수정).
 
 ---
 
