@@ -397,29 +397,20 @@ function WrongQuestionsModal({ attemptId, examTitle }: { attemptId: string; exam
 // ===============================
 // AI Report Button Component
 // ===============================
-function AIReportButton({ attemptId }: { attemptId: string }) {
+/*
+  보고서 존재 여부는 목록을 그린 /my-exams 응답의 hasReport 가 이미 알고 있다.
+  예전에는 버튼이 마운트될 때마다 GET /reports/attempt/:id 를 다시 불렀는데,
+  행마다 왕복이 생기는 데다 404 가 아닌 오류(500·네트워크)에서는 상태가 'checking'
+  에 고착돼 버튼이 "확인 중..."인 채 영구히 비활성이 됐다. 부모가 넘겨주는 값으로
+  초기 상태를 잡으면 두 문제의 원인이 함께 사라진다.
+  실제 존재 확인은 클릭 시 handleViewReport 의 ensureReport 가 그대로 한다.
+*/
+function AIReportButton({ attemptId, hasReport }: { attemptId: string; hasReport: boolean }) {
   const [loading, setLoading] = useState(false);
-  const [reportStatus, setReportStatus] = useState<'checking' | 'completed' | 'none'>('checking');
+  const [reportStatus, setReportStatus] = useState<'completed' | 'none'>(
+    hasReport ? 'completed' : 'none'
+  );
   const [summaryReportId, setSummaryReportId] = useState<string | null>(null);
-
-  useEffect(() => {
-    const checkReportStatus = async () => {
-      try {
-        const response = await api.get(`/reports/attempt/${attemptId}`);
-        const reportData = response.data.data;
-        if (reportData && reportData.htmlContent) {
-          setReportStatus('completed');
-        } else {
-          setReportStatus('none');
-        }
-      } catch (error: any) {
-        if (error.response?.status === 404) {
-          setReportStatus('none');
-        }
-      }
-    };
-    checkReportStatus();
-  }, [attemptId]);
 
   // 생성 전이면 큐에 적재하고 완료까지 폴링한다. 모바일은 요약 뷰 우선.
   const handleViewReport = async () => {
@@ -446,15 +437,6 @@ function AIReportButton({ attemptId }: { attemptId: string }) {
       setLoading(false);
     }
   };
-
-  if (reportStatus === 'checking') {
-    return (
-      <Button disabled variant="outline" className="opacity-50">
-        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-        확인 중...
-      </Button>
-    );
-  }
 
   if (reportStatus === 'completed') {
     return (
@@ -2011,7 +1993,7 @@ export default function StudentDashboard({ user }: { user: User }) {
                                       attemptId={item.attempt.id}
                                       examTitle={item.exam.title}
                                     />
-                                    <AIReportButton attemptId={item.attempt.id} />
+                                    <AIReportButton attemptId={item.attempt.id} hasReport={item.hasReport} />
                                   </>
                                 )}
                               </div>

@@ -175,16 +175,6 @@ export default function BranchDashboard({ user }: { user: User }) {
     onClose: () => setPanelOpen(false),
   });
 
-  // 결과값은 쓰지 않지만 캐시 예열 목적으로 조회는 유지한다 (구독을 없애면 요청 자체가 사라진다)
-  useQuery({
-    queryKey: ['branch', 'stats', user.branchId],
-    queryFn: async () => {
-      const res = await api.get(`/branch-students/stats`);
-      return res.data.data;
-    },
-    enabled: !!user.branchId,
-  });
-
   const {
     data: students,
     refetch: refetchStudents,
