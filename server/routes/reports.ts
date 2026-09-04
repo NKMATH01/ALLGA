@@ -80,17 +80,16 @@ async function checkAttemptAccess(user: SessionUser | undefined, attemptId: stri
   return denied;
 }
 
-console.log('🔑 GEMINI_API_KEY 확인:', process.env.GEMINI_API_KEY ? '설정됨 ✅' : '설정 안됨 ❌');
-
+// 키 값은 절대 로그에 남기지 않는다. 존재 여부만 남긴다.
 if (!process.env.GEMINI_API_KEY) {
-  console.warn('⚠️ GEMINI_API_KEY not set. AI report generation will not work.');
+  log.warn('report.gemini_key_missing', { hasKey: false });
 }
 
 const genAI = process.env.GEMINI_API_KEY
   ? new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
   : null;
 
-console.log('🤖 Gemini 초기화:', genAI ? '성공 ✅' : '실패 ❌');
+log.info('report.gemini_init', { hasKey: Boolean(process.env.GEMINI_API_KEY), initialized: Boolean(genAI) });
 
 /* ===========================================================================
  * 시험별 코호트 통계 캐시
@@ -306,7 +305,7 @@ async function runWithRetry(attemptId: string): Promise<string> {
       await markReportFailed(attemptId, error.message);
       throw error;
     }
-    console.warn('[report-queue] 1차 실패, 1회 재시도:', attemptId, error?.message);
+    log.warn('report.generate_retry', { attemptId, message: error?.message });
     try {
       return await runReportGeneration(attemptId);
     } catch (retryError: any) {
@@ -329,10 +328,14 @@ function enqueueReport(attemptId: string): ReportJob {
   job.promise = (async () => {
     await acquireSlot();
     job.state = 'processing';
-    console.log('[report-queue] 생성 시작:', attemptId, `(동시 ${runningReports}/${MAX_CONCURRENT_REPORTS})`);
+    log.info('report.queue_started', {
+      attemptId,
+      running: runningReports,
+      maxConcurrent: MAX_CONCURRENT_REPORTS,
+    });
     try {
       const reportId = await runWithRetry(attemptId);
-      console.log('[report-queue] 생성 완료:', attemptId);
+      log.info('report.queue_completed', { attemptId });
       return reportId;
     } finally {
       releaseSlot();
@@ -609,7 +612,7 @@ ${JSON.stringify(userData, null, 2)}`;
     // 학생명·학년·점수·틀린문항·학생답안이 담긴 userData 를 로그로 남기지 않는다(PII).
 
     // Call Gemini API (Gemini 2.5 Flash)
-    console.log('🤖 Google Gemini 2.5 Flash로 전문 보고서 생성 중...');
+    log.info('report.gemini_call_started', { model: 'gemini-2.5-flash' });
 
     let responseText = '';
 
@@ -633,7 +636,7 @@ ${JSON.stringify(userData, null, 2)}`;
       const response = result.response;
       responseText = response.text();
 
-      console.log('✅ Google Gemini 전문 보고서 생성 완료');
+      log.info('report.gemini_call_completed', { responseLength: responseText.length });
     } catch (error: any) {
       log.error('report.gemini_call_failed', { message: error?.message });
       // AI 분석 실패 시 기본 분석 데이터 생성
@@ -671,9 +674,9 @@ ${JSON.stringify(userData, null, 2)}`;
       // metaVersion 검증. v3 프롬프트를 보냈으므로 v3 응답을 기대한다.
       // v2 응답은 highSchoolPrep 이 없고 영역 소견이 짧지만, 지면이 폴백을 갖고 있어 렌더는 된다.
       if (aiAnalysis.metaVersion !== 'v3') {
-        console.warn('⚠️ 경고: 이전 버전의 프롬프트 응답 감지됨. metaVersion:', aiAnalysis.metaVersion);
+        log.warn('report.meta_version_outdated', { metaVersion: aiAnalysis.metaVersion });
       } else {
-        console.log('✅ 새로운 메타 프롬프트 v3 응답 확인');
+        log.info('report.meta_version_ok', { metaVersion: aiAnalysis.metaVersion });
       }
     } catch (e) {
       log.error('report.json_failed', errorFields(e));
@@ -1023,7 +1026,7 @@ ${JSON.stringify(userData, null, 2)}`;
 
     // metaVersion 검증
     if (reportData.metaVersion !== 'v3') {
-      console.warn('[WARN] Old style reportData detected:', reportData.metaVersion);
+      log.warn('report.report_data_version_outdated', { metaVersion: reportData.metaVersion });
     }
 
     // Generate HTML content with new reportData structure (using new template)
