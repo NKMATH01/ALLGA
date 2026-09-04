@@ -106,11 +106,12 @@ router.get('/my-exams', requireStudent, async (req, res) => {
 
     // ④ 보고서 존재 여부만 필요하므로 id 만 가져온다(htmlContent 는 수십~수백 KB).
     const attemptIds = attemptRows.map((a) => a.id);
+    // 생성 중이거나 실패한 행도 남아 있으므로 완료된 것만 '보고서 있음'으로 센다 (R-2).
     const reportRows = attemptIds.length
       ? await db
           .select({ attemptId: aiReports.attemptId })
           .from(aiReports)
-          .where(inArray(aiReports.attemptId, attemptIds))
+          .where(and(inArray(aiReports.attemptId, attemptIds), eq(aiReports.status, 'completed')))
       : [];
     const attemptIdsWithReport = new Set(reportRows.map((r) => r.attemptId));
 
@@ -769,11 +770,14 @@ router.get('/branch/completed', async (req, res) => {
     // 존재 여부와 id 만 필요하다. select() 로 전체 행을 가져오면
     // htmlContent(수십~수백 KB)가 매 행마다 네트워크로 실려 온다.
     const submittedAttemptIds = submittedRows.map((row) => row.attempt.id);
+    // 생성 중이거나 실패한 행은 열어 볼 지면이 없으므로 완료된 것만 센다 (R-2).
     const reportRows = submittedAttemptIds.length
       ? await db
           .select({ id: aiReports.id, attemptId: aiReports.attemptId })
           .from(aiReports)
-          .where(inArray(aiReports.attemptId, submittedAttemptIds))
+          .where(
+            and(inArray(aiReports.attemptId, submittedAttemptIds), eq(aiReports.status, 'completed'))
+          )
       : [];
     // 기존 .limit(1) 과 동일하게 attempt 당 한 건만 남긴다(먼저 들어온 것 유지).
     const reportIdByAttemptId = new Map<string, string>();

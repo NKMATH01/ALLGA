@@ -203,6 +203,13 @@ export const aiReports = pgTable('ai_reports', {
   expectedGrade: integer('expected_grade'),
   summary: text('summary'),
   htmlContent: text('html_content'), // Full HTML report
+  // 생성 진행 상태. 행이 곧 잠금이라 큐 적재 전에 processing 으로 먼저 넣는다.
+  // 실패가 클라이언트에 전달되지 않고 폴링 타임아웃으로만 끝나던 문제(R-2)를 막는다.
+  status: text('status', { enum: ['processing', 'completed', 'failed'] })
+    .notNull()
+    .default('processing'),
+  // 실패 사유. 사용자에게 그대로 보여줄 수 있는 짧은 문구만 저장한다.
+  failureReason: text('failure_reason'),
   generatedAt: timestamp('generated_at').defaultNow().notNull(),
 });
 

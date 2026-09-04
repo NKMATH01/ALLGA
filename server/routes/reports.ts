@@ -285,14 +285,37 @@ interface ReportJob {
 /** attempt 별 진행 중 작업. 존재 = 잠금. */
 const reportJobs = new Map<string, ReportJob>();
 
+/** 최종 실패를 DB 에 남긴다. 클라이언트가 폴링 타임아웃이 아니라 사유를 받도록. */
+async function markReportFailed(attemptId: string, message: string) {
+  try {
+    await db
+      .update(aiReports)
+      .set({ status: 'failed', failureReason: message.slice(0, 500) })
+      .where(eq(aiReports.attemptId, attemptId));
+  } catch (error) {
+    log.error('report.mark_failed_failed', errorFields(error));
+  }
+}
+
 async function runWithRetry(attemptId: string): Promise<string> {
   try {
     return await runReportGeneration(attemptId);
   } catch (error: any) {
     // 데이터 문제(4xx)는 다시 해도 같으므로 재시도하지 않는다
-    if (error instanceof ReportError) throw error;
+    if (error instanceof ReportError) {
+      await markReportFailed(attemptId, error.message);
+      throw error;
+    }
     console.warn('[report-queue] 1차 실패, 1회 재시도:', attemptId, error?.message);
-    return await runReportGeneration(attemptId);
+    try {
+      return await runReportGeneration(attemptId);
+    } catch (retryError: any) {
+      await markReportFailed(
+        attemptId,
+        retryError?.message || '보고서 생성에 실패했습니다. 다시 시도해주세요.'
+      );
+      throw retryError;
+    }
   }
 }
 
@@ -335,14 +358,25 @@ router.post('/generate/:attemptId', requireAuth, async (req, res) => {
       return res.status(access.status).json({ message: access.message });
     }
 
-    // Check if report already exists
+    // 큐 적재 전에 행을 먼저 넣는다. attempt_id UNIQUE 가 인스턴스 간 잠금 역할을 한다.
+    // 이미 행이 있으면 아무것도 삽입되지 않고, 아래에서 현재 상태를 보고 판단한다.
+    await db
+      .insert(aiReports)
+      .values({
+        attemptId,
+        studentId: access.attempt.studentId,
+        examId: access.attempt.examId,
+        status: 'processing',
+      })
+      .onConflictDoNothing({ target: aiReports.attemptId });
+
     const [existingReport] = await db
       .select()
       .from(aiReports)
       .where(eq(aiReports.attemptId, attemptId))
       .limit(1);
 
-    if (existingReport) {
+    if (existingReport && existingReport.status === 'completed') {
       // 기존 계약 유지: report 필드를 그대로 두고 status/reportId 를 추가한다
       return res.status(200).json({
         success: true,
@@ -360,6 +394,15 @@ router.post('/generate/:attemptId', requireAuth, async (req, res) => {
         status: alreadyRunning.state,
         message: '보고서를 생성하고 있습니다.',
       });
+    }
+
+    // failed 는 재시도 대상이고, processing 인데 메모리 큐에 없으면 서버 재시작으로
+    // 진행 중이던 작업이 사라진 것이므로 역시 다시 돌린다.
+    if (existingReport && existingReport.status === 'failed') {
+      await db
+        .update(aiReports)
+        .set({ status: 'processing', failureReason: null })
+        .where(eq(aiReports.attemptId, attemptId));
     }
 
     const job = enqueueReport(attemptId);
@@ -986,20 +1029,37 @@ ${JSON.stringify(userData, null, 2)}`;
     // Generate HTML content with new reportData structure (using new template)
     const htmlContent = generateNewReportHTML(reportData);
 
-    // Save report with AI analysis data
+    // 행은 요청 시점에 processing 으로 이미 들어가 있다. 여기서 결과를 채우고
+    // completed 로 넘긴다. (구버전 경로로 행이 없을 수 있어 없으면 새로 만든다)
     const [report] = await db
+      .update(aiReports)
+      .set({
+        analysis: reportData,  // 새 구조로 저장
+        summary: reportData.analysis.olgaSummary || '분석 완료',
+        htmlContent,
+        status: 'completed',
+        failureReason: null,
+        generatedAt: new Date(),
+      })
+      .where(eq(aiReports.attemptId, attemptId))
+      .returning();
+
+    if (report) return report.id;
+
+    const [created] = await db
       .insert(aiReports)
       .values({
         attemptId,
         studentId: attempt.studentId,
         examId: attempt.examId,
-        analysis: reportData,  // 새 구조로 저장
+        analysis: reportData,
         summary: reportData.analysis.olgaSummary || '분석 완료',
         htmlContent,
+        status: 'completed',
       })
       .returning();
 
-    return report.id;
+    return created.id;
   }
 }
 
@@ -1018,13 +1078,15 @@ router.get('/:reportId/summary', requireAuth, async (req, res) => {
         attemptId: aiReports.attemptId,
         analysis: aiReports.analysis,
         generatedAt: aiReports.generatedAt,
+        status: aiReports.status,
       })
       .from(aiReports)
       .where(eq(aiReports.id, req.params.reportId))
       .limit(1);
 
-    if (!report) {
-      return res.status(404).json({ message: '보고서를 찾을 수 없습니다.' });
+    // 생성이 끝나지 않은 행은 analysis 가 비어 있으므로 아직 없는 것으로 다룬다.
+    if (!report || report.status !== 'completed') {
+      return res.status(404).json({ message: '보고서가 아직 생성되지 않았습니다.' });
     }
 
     const access = await checkAttemptAccess(req.session.user, report.attemptId);
@@ -1133,8 +1195,9 @@ router.get('/:reportId', requireAuth, async (req, res) => {
       .where(eq(aiReports.id, req.params.reportId))
       .limit(1);
 
-    if (!report) {
-      return res.status(404).send('<h1>보고서를 찾을 수 없습니다.</h1>');
+    // 생성이 끝나지 않은 행은 지면이 비어 있으므로 아직 없는 것으로 다룬다.
+    if (!report || report.status !== 'completed') {
+      return res.status(404).send('<h1>보고서가 아직 생성되지 않았습니다.</h1>');
     }
 
     const access = await checkAttemptAccess(req.session.user, report.attemptId);
@@ -1168,6 +1231,8 @@ router.get('/attempt/:attemptId', requireAuth, async (req, res) => {
       return res.status(404).json({ message: '보고서를 찾을 수 없습니다.' });
     }
 
+    // 행 전체를 그대로 내려보내므로 status·failureReason 도 함께 나간다.
+    // 클라이언트는 status 로 완료/실패/진행 중을 구분한다 (R-2).
     res.json({
       success: true,
       data: report,

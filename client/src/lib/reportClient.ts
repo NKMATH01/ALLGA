@@ -19,16 +19,52 @@ export interface ReportRef {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-/** 이미 생성된 보고서를 찾는다. 없으면 null. */
+/** 서버가 생성 실패로 표시한 보고서. 네트워크 오류와 구분하기 위해 따로 둔다. */
+export class ReportGenerationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ReportGenerationError';
+  }
+}
+
+/**
+ * 응답의 status 로 폴링을 어떻게 이어갈지 정한다. 네트워크와 무관한 순수 함수다.
+ *   ready   : 보고서를 열 수 있다
+ *   waiting : 아직 생성 중이므로 폴링을 계속한다
+ *   failed  : 서버가 실패로 표시했다. 폴링 타임아웃까지 끌지 않고 즉시 알린다
+ * status 가 없는 구버전 응답은 행 존재 여부로만 판단하던 예전 규칙을 따른다.
+ */
+export function resolveReportPollState(
+  status: unknown,
+  hasReportRow: boolean
+): 'ready' | 'waiting' | 'failed' {
+  if (status === 'completed') return 'ready';
+  if (status === 'failed') return 'failed';
+  if (status === 'processing') return 'waiting';
+  return hasReportRow ? 'ready' : 'waiting';
+}
+
+/**
+ * 이미 생성된 보고서를 찾는다. 아직 생성 중이면 null(폴링 계속),
+ * 실패했으면 서버가 남긴 사유로 즉시 던진다(폴링 타임아웃으로 끌지 않는다, R-2).
+ */
 async function findExisting(attemptId: string): Promise<ReportRef | null> {
   try {
     const res = await api.get(`/reports/attempt/${attemptId}`);
     const report = res.data?.data;
-    if (report?.id) {
-      return { reportId: report.id, htmlContent: report.htmlContent };
+    if (!report) return null;
+
+    const state = resolveReportPollState(report.status, Boolean(report.id));
+    if (state === 'failed') {
+      throw new ReportGenerationError(
+        report.failureReason || '보고서 생성에 실패했습니다. 다시 시도해주세요.'
+      );
     }
-    return null;
+    if (state === 'waiting') return null;
+
+    return { reportId: report.id, htmlContent: report.htmlContent };
   } catch (error: any) {
+    if (error instanceof ReportGenerationError) throw error;
     if (error.response?.status === 404) return null;
     throw error;
   }
