@@ -4,6 +4,7 @@ import { parents, users, studentParents, students, examAttempts, exams } from '.
 import { eq, and, inArray, isNotNull, desc, sql } from 'drizzle-orm';
 import { requireBranchManager, requireAuth } from '../middleware/auth';
 import { hashPassword } from '../utils/helpers';
+import { validateStudentsInBranch } from '../utils/branchScope';
 import { log, errorFields } from '../utils/logger';
 
 const router = express.Router();
@@ -170,33 +171,45 @@ router.post('/', requireBranchManager, async (req, res) => {
       return res.status(400).json({ message: '이미 사용 중인 아이디입니다.' });
     }
 
-    // Create user
+    // P-3: 링크할 학생이 요청자 지점 소속인지 확인한다. 이 검사가 없으면 타 지점 학생을
+    // 학부모에 연결한 뒤 그 학부모로 성적·보고서를 열람할 수 있다.
+    // 반드시 INSERT 전에 한다 — 뒤에서 막으면 users 행이 이미 만들어져 아이디가 점유된다.
+    const studentError = await validateStudentsInBranch([studentId], branchId);
+    if (studentError) {
+      return res.status(403).json({ message: '해당 학생은 이 지점 소속이 아닙니다.' });
+    }
+
     const passwordHash = await hashPassword(password);
-    const [user] = await db
-      .insert(users)
-      .values({
-        username,
-        passwordHash,
-        role: 'parent',
-        name,
-        phone,
-        branchId,
-      })
-      .returning();
 
-    // Create parent
-    const [parent] = await db
-      .insert(parents)
-      .values({
-        userId: user.id,
-        branchId,
-      })
-      .returning();
+    // users → parents → student_parents 는 하나의 등록 절차다. 중간에 실패하면
+    // 고아 users 행이 남아 아이디만 점유되므로 트랜잭션으로 묶는다.
+    const { user, parent } = await db.transaction(async (tx) => {
+      const [createdUser] = await tx
+        .insert(users)
+        .values({
+          username,
+          passwordHash,
+          role: 'parent',
+          name,
+          phone,
+          branchId,
+        })
+        .returning();
 
-    // Link parent to student
-    await db.insert(studentParents).values({
-      studentId,
-      parentId: parent.id,
+      const [createdParent] = await tx
+        .insert(parents)
+        .values({
+          userId: createdUser.id,
+          branchId,
+        })
+        .returning();
+
+      await tx.insert(studentParents).values({
+        studentId,
+        parentId: createdParent.id,
+      });
+
+      return { user: createdUser, parent: createdParent };
     });
 
     res.status(201).json({

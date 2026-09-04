@@ -3,24 +3,10 @@ import { db } from '../db/index';
 import { classes, studentClasses, students, users } from '../db/schema';
 import { eq, and, inArray, sql } from 'drizzle-orm';
 import { requireBranchManager } from '../middleware/auth';
+import { validateStudentsInBranch } from '../utils/branchScope';
 import { log, errorFields } from '../utils/logger';
 
 const router = express.Router();
-
-/**
- * studentIds 가 전부 지정 지점 소속인지 검증. 문제가 있으면 메시지, 정상이면 null.
- */
-async function validateStudentsInBranch(studentIds: string[], branchId: string): Promise<string | null> {
-  const rows = await db
-    .select({ id: students.id })
-    .from(students)
-    .where(and(inArray(students.id, studentIds), eq(students.branchId, branchId)));
-
-  if (rows.length !== studentIds.length) {
-    return '본인 지점에 속하지 않은 학생이 포함되어 있습니다.';
-  }
-  return null;
-}
 
 // GET /api/classes - 반 목록 조회
 router.get('/', requireBranchManager, async (req, res) => {
