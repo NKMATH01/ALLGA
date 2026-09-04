@@ -345,17 +345,25 @@ export default function BranchDashboard({ user }: { user: User }) {
     },
   });
 
+  /*
+    학생 화면 전환.
+
+    students/:id/login-as 가 아니라 auth/impersonate/student 를 쓴다. 후자만
+    originalUser 를 세션에 보존해 [AUDIT] 감사 로그를 남기고, 학생 화면의
+    "원래 계정으로 돌아가기" 로 복귀할 수 있다(P-4). 응답은 { user, originalUser }.
+  */
   const loginAsStudentMutation = useMutation({
     mutationFn: async (studentId: string) => {
-      const res = await api.post(`/students/${studentId}/login-as`);
+      const res = await api.post(`/auth/impersonate/student/${studentId}`);
       return res.data;
     },
     onSuccess: (data) => {
-      toast.success(data.message || '학생으로 로그인되었습니다.');
-      window.location.href = '/student';
+      toast.success(data.message || '학생 화면으로 전환되었습니다.');
+      // 세션 역할이 바뀌었으므로 캐시를 버리고 전체를 다시 띄운다.
+      window.location.href = '/';
     },
     onError: (error: any) => {
-      toast.error(error.response?.data?.message || '학생 로그인에 실패했습니다.');
+      toast.error(error.response?.data?.message || '학생 화면 전환에 실패했습니다.');
     },
   });
 
@@ -1296,7 +1304,7 @@ export default function BranchDashboard({ user }: { user: User }) {
   };
 
   const impersonateStudent = (student: any) => {
-    if (confirm(`${student.user?.name} 학생으로 로그인하시겠습니까?`)) {
+    if (confirm(`${student.user?.name} 학생 화면으로 전환하시겠습니까? 학생 화면에서 원래 계정으로 돌아올 수 있습니다.`)) {
       loginAsStudentMutation.mutate(student.id);
     }
   };

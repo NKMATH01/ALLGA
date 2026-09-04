@@ -8,6 +8,7 @@ import { StatValue } from '../components/ui/stat-value';
 import { ListLoading, LoadingBlock, ErrorState } from '../components/ui/list-state';
 import { ensureReport, openFullReport, prefersSummaryView } from '../lib/reportClient';
 import { ReportSummaryModal } from '../components/ReportSummaryModal';
+import { RestoreIdentityButton } from '../components/RestoreIdentityButton';
 import { useModalA11y, isMobileViewport } from '../lib/useModalA11y';
 import { Button } from '../components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
@@ -81,6 +82,8 @@ interface User {
   username: string;
   name: string;
   role: string;
+  /** impersonation 중일 때만 채워진다(전환 전 지점장/관리자 신원). */
+  originalUser?: { id: string; name: string; role: string } | null;
 }
 
 interface StudentInfo {
@@ -1202,7 +1205,11 @@ export default function StudentDashboard({ user }: { user: User }) {
         </div>
 
         {/* Logout Button */}
-        <div className="p-6 border-t border-line">
+        <div className="p-6 border-t border-line space-y-2">
+          <RestoreIdentityButton
+            originalUser={user.originalUser}
+            className="w-full justify-start"
+          />
           <Button
             onClick={() => logoutMutation.mutate()}
             variant="ghost"

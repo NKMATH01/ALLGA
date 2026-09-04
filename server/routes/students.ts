@@ -417,52 +417,13 @@ router.get('/stats', requireBranchManager, async (req, res) => {
   }
 });
 
-// POST /api/students/:id/login-as - 학생 계정으로 로그인
-router.post('/:id/login-as', requireBranchManager, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const branchId = req.session.user!.branchId!;
+/*
+  POST /:id/login-as 는 제거했다(P-4).
 
-    // Get student
-    const [student] = await db
-      .select()
-      .from(students)
-      .where(and(eq(students.id, id), eq(students.branchId, branchId)))
-      .limit(1);
-
-    if (!student) {
-      return res.status(404).json({ message: '학생을 찾을 수 없습니다.' });
-    }
-
-    // Get user
-    const [user] = await db
-      .select()
-      .from(users)
-      .where(eq(users.id, student.userId))
-      .limit(1);
-
-    if (!user) {
-      return res.status(404).json({ message: '사용자를 찾을 수 없습니다.' });
-    }
-
-    // Update session to login as student
-    req.session.user = {
-      id: user.id,
-      username: user.username,
-      role: user.role as any,
-      name: user.name,
-      branchId: user.branchId || undefined,
-    };
-
-    res.json({
-      success: true,
-      user: req.session.user,
-      message: `${user.name} 학생으로 로그인되었습니다.`,
-    });
-  } catch (error) {
-    log.error('student.login_as_student_failed', errorFields(error));
-    res.status(500).json({ message: '학생 로그인 중 오류가 발생했습니다.' });
-  }
-});
+  originalUser 를 보존하지 않고 감사 로그도 남기지 않아, 한 번 쓰면 지점장이
+  재로그인해야만 원래 화면으로 돌아올 수 있었다. 같은 일을 하는 온전한 경로가
+  POST /api/auth/impersonate/student/:studentId 에 이미 있으므로(복귀 +
+  [AUDIT] 기록) 열등한 경로를 남겨 두지 않는다.
+*/
 
 export default router;

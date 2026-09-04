@@ -7,6 +7,7 @@ import { ThemeToggle } from '../components/ui/theme-toggle';
 import { toast } from '../components/ui/toast';
 import { ensureReport, openFullReport, prefersSummaryView } from '../lib/reportClient';
 import { ReportSummaryModal } from '../components/ReportSummaryModal';
+import { RestoreIdentityButton } from '../components/RestoreIdentityButton';
 import { useModalA11y, isMobileViewport } from '../lib/useModalA11y';
 import {
   LayoutDashboard,
@@ -24,6 +25,8 @@ interface User {
   username: string;
   name: string;
   role: string;
+  /** impersonation 중일 때만 채워진다(전환 전 지점장/관리자 신원). */
+  originalUser?: { id: string; name: string; role: string } | null;
 }
 
 interface Child {
@@ -213,7 +216,11 @@ export default function ParentDashboard({ user }: { user: User }) {
           })}
         </nav>
 
-        <div className="border-t border-line p-3">
+        <div className="space-y-2 border-t border-line p-3">
+          <RestoreIdentityButton
+            originalUser={user.originalUser}
+            className="w-full justify-start"
+          />
           <button
             onClick={() => logoutMutation.mutate()}
             className="flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium text-ink-secondary transition-colors duration-150 ease-out hover:bg-surface-subtle hover:text-ink"

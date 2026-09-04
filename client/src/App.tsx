@@ -14,7 +14,10 @@ function App() {
     queryFn: async () => {
       try {
         const res = await api.get('/auth/me');
-        return res.data.user;
+        if (!res.data.user) return null;
+        // impersonation 중이면 원 신원을 함께 실어 보낸다. 학생·학부모 화면이
+        // 이걸 보고 "원래 계정으로 돌아가기" 버튼을 띄운다.
+        return { ...res.data.user, originalUser: res.data.originalUser ?? null };
       } catch {
         return null;
       }
