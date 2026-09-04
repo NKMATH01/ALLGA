@@ -352,7 +352,7 @@ export default function ParentDashboard({ user }: { user: User }) {
                     </p>
                   ) : (
                     <div className="overflow-x-auto">
-                      <table className="w-full text-sm">
+                      <table className="w-full min-w-[640px] text-sm [&_thead_th:first-child]:sticky [&_thead_th:first-child]:left-0 [&_thead_th:first-child]:z-10 [&_thead_th:first-child]:bg-surface [&_tbody_td:first-child]:sticky [&_tbody_td:first-child]:left-0 [&_tbody_td:first-child]:bg-surface [&_tbody_tr:hover_td:first-child]:bg-surface-subtle">
                         <thead>
                           <tr className="border-b border-line text-left text-ink-secondary">
                             <th className="px-4 py-3 font-semibold">시험명</th>

@@ -741,7 +741,7 @@ export default function BranchDashboard({ user }: { user: User }) {
               <ErrorState detail="학생 목록 조회가 실패했습니다." onRetry={() => refetchStudents()} />
             ) : students && students.length > 0 ? (
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[640px] text-sm [&_td]:whitespace-nowrap">
+                <table className="w-full min-w-[640px] text-sm [&_td]:whitespace-nowrap [&_thead_th:first-child]:sticky [&_thead_th:first-child]:left-0 [&_thead_th:first-child]:z-10 [&_thead_th:first-child]:bg-surface [&_tbody_td:first-child]:sticky [&_tbody_td:first-child]:left-0 [&_tbody_td:first-child]:bg-surface [&_tbody_tr:hover_td:first-child]:bg-surface-subtle">
                   <thead>
                     <tr className="border-b border-line-strong">
                       <th className="text-left px-3 py-2 text-xs font-semibold text-ink-secondary whitespace-nowrap">이름</th>
@@ -794,7 +794,7 @@ export default function BranchDashboard({ user }: { user: User }) {
               <ErrorState detail="반 목록 조회가 실패했습니다." onRetry={() => refetchClasses()} />
             ) : classes && classes.length > 0 ? (
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[640px] text-sm [&_td]:whitespace-nowrap">
+                <table className="w-full min-w-[640px] text-sm [&_td]:whitespace-nowrap [&_thead_th:first-child]:sticky [&_thead_th:first-child]:left-0 [&_thead_th:first-child]:z-10 [&_thead_th:first-child]:bg-surface [&_tbody_td:first-child]:sticky [&_tbody_td:first-child]:left-0 [&_tbody_td:first-child]:bg-surface [&_tbody_tr:hover_td:first-child]:bg-surface-subtle">
                   <thead>
                     <tr className="border-b border-line-strong">
                       <th className="text-left px-3 py-2 text-xs font-semibold text-ink-secondary whitespace-nowrap">반 이름</th>
@@ -871,7 +871,7 @@ export default function BranchDashboard({ user }: { user: User }) {
                       </div>
 
                       <div className="overflow-x-auto">
-                        <table className="w-full min-w-[640px] text-sm [&_td]:whitespace-nowrap">
+                        <table className="w-full min-w-[640px] text-sm [&_td]:whitespace-nowrap [&_thead_th:first-child]:sticky [&_thead_th:first-child]:left-0 [&_thead_th:first-child]:z-10 [&_thead_th:first-child]:bg-surface [&_tbody_td:first-child]:sticky [&_tbody_td:first-child]:left-0 [&_tbody_td:first-child]:bg-surface [&_tbody_tr:hover_td:first-child]:bg-surface-subtle">
                           <thead>
                             <tr className="border-b border-line-subtle">
                               <th className="text-left px-3 py-2 text-xs font-semibold text-ink-secondary whitespace-nowrap">학생</th>
@@ -1095,7 +1095,7 @@ export default function BranchDashboard({ user }: { user: User }) {
                       </div>
 
                       <div className="overflow-x-auto">
-                        <table className="w-full min-w-[640px] text-sm [&_td]:whitespace-nowrap">
+                        <table className="w-full min-w-[640px] text-sm [&_td]:whitespace-nowrap [&_thead_th:first-child]:sticky [&_thead_th:first-child]:left-0 [&_thead_th:first-child]:z-10 [&_thead_th:first-child]:bg-surface [&_tbody_td:first-child]:sticky [&_tbody_td:first-child]:left-0 [&_tbody_td:first-child]:bg-surface [&_tbody_tr:hover_td:first-child]:bg-surface-subtle">
                           <thead>
                             <tr className="border-b border-line">
                               <th className="text-left px-3 py-2 text-xs font-semibold text-ink-secondary whitespace-nowrap">학생</th>
@@ -2008,7 +2008,9 @@ export default function BranchDashboard({ user }: { user: User }) {
               배포된 시험이 없습니다.
             </p>
           ) : (
-            <table className="mt-3 w-full text-sm">
+            // 5.4 스크롤 표 첫 열 고정. 행 배경이 펼침 상태에 따라 바뀌므로
+            // 첫 칸 배경은 bg-inherit 로 두고 tr 이 배경을 정하게 한다.
+            <table className="mt-3 w-full text-sm [&_thead_th:first-child]:sticky [&_thead_th:first-child]:left-0 [&_thead_th:first-child]:z-10 [&_thead_th:first-child]:bg-surface [&_tbody_td:first-child]:sticky [&_tbody_td:first-child]:left-0 [&_tbody_td:first-child]:bg-inherit">
               <thead>
                 <tr className="border-b border-line-strong">
                   <th className="px-3 py-2 text-left text-xs font-semibold text-ink-secondary">시험</th>
@@ -2027,7 +2029,7 @@ export default function BranchDashboard({ user }: { user: User }) {
                     aria-expanded={r.attemptId ? openAttemptId === r.attemptId : undefined}
                     className={`border-b border-line-subtle ${
                       r.isSubmitted ? 'cursor-pointer hover:bg-surface-subtle' : 'cursor-default'
-                    } ${openAttemptId && openAttemptId === r.attemptId ? 'bg-surface-subtle' : ''}`}
+                    } ${openAttemptId && openAttemptId === r.attemptId ? 'bg-surface-subtle' : 'bg-surface'}`}
                   >
                     <td className="px-3 py-1.5">
                       <span className="block leading-tight font-medium text-ink">
@@ -2256,7 +2258,7 @@ export default function BranchDashboard({ user }: { user: User }) {
       {sortedStudents.length > 0 ? (
         <>
           {/* 데스크톱: 표가 본문 폭 전체를 쓴다. 카드로 감싸지 않는다 (11.2) */}
-          <table className="mt-3 hidden w-full text-sm md:table">
+          <table className="mt-3 hidden w-full text-sm md:table [&_thead_th:first-child]:sticky [&_thead_th:first-child]:left-0 [&_thead_th:first-child]:z-10 [&_thead_th:first-child]:bg-surface [&_tbody_td:first-child]:sticky [&_tbody_td:first-child]:left-0 [&_tbody_td:first-child]:bg-surface [&_tbody_tr:hover_td:first-child]:bg-surface-subtle">
             <thead>
               <tr className="border-b border-line-strong">
                 <th className="w-20 whitespace-nowrap px-3 py-2 text-left text-xs font-semibold text-ink-secondary">
@@ -2591,7 +2593,7 @@ export default function BranchDashboard({ user }: { user: User }) {
 
       {rows.length > 0 ? (
         <>
-          <table className="mt-3 hidden w-full text-sm md:table">
+          <table className="mt-3 hidden w-full text-sm md:table [&_thead_th:first-child]:sticky [&_thead_th:first-child]:left-0 [&_thead_th:first-child]:z-10 [&_thead_th:first-child]:bg-surface [&_tbody_td:first-child]:sticky [&_tbody_td:first-child]:left-0 [&_tbody_td:first-child]:bg-surface [&_tbody_tr:hover_td:first-child]:bg-surface-subtle">
             <thead>
               <tr className="border-b border-line-strong">
                 <th className="px-3 py-2 text-left text-xs font-semibold text-ink-secondary">반 이름</th>
@@ -2839,7 +2841,7 @@ export default function BranchDashboard({ user }: { user: User }) {
 
       {rows.length > 0 ? (
         <>
-          <table className="mt-3 hidden w-full text-sm md:table">
+          <table className="mt-3 hidden w-full text-sm md:table [&_thead_th:first-child]:sticky [&_thead_th:first-child]:left-0 [&_thead_th:first-child]:z-10 [&_thead_th:first-child]:bg-surface [&_tbody_td:first-child]:sticky [&_tbody_td:first-child]:left-0 [&_tbody_td:first-child]:bg-surface [&_tbody_tr:hover_td:first-child]:bg-surface-subtle">
             <thead>
               <tr className="border-b border-line-strong">
                 <th className="px-3 py-2 text-left text-xs font-semibold text-ink-secondary">시험명</th>
@@ -3177,7 +3179,7 @@ export default function BranchDashboard({ user }: { user: User }) {
 
         {rows.length > 0 ? (
           <>
-            <table className="mt-3 hidden w-full text-sm md:table">
+            <table className="mt-3 hidden w-full text-sm md:table [&_thead_th:first-child]:sticky [&_thead_th:first-child]:left-0 [&_thead_th:first-child]:z-10 [&_thead_th:first-child]:bg-surface [&_tbody_td:first-child]:sticky [&_tbody_td:first-child]:left-0 [&_tbody_td:first-child]:bg-surface [&_tbody_tr:hover_td:first-child]:bg-surface-subtle">
               <thead>
                 <tr className="border-b border-line-strong">
                   <th className="px-3 py-2 text-left text-xs font-semibold text-ink-secondary">시험명</th>
@@ -3418,7 +3420,7 @@ export default function BranchDashboard({ user }: { user: User }) {
           <CardContent className="p-6">
             {distributionStudents && distributionStudents.students && distributionStudents.students.length > 0 ? (
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[640px] text-sm [&_td]:whitespace-nowrap">
+                <table className="w-full min-w-[640px] text-sm [&_td]:whitespace-nowrap [&_thead_th:first-child]:sticky [&_thead_th:first-child]:left-0 [&_thead_th:first-child]:z-10 [&_thead_th:first-child]:bg-surface [&_tbody_td:first-child]:sticky [&_tbody_td:first-child]:left-0 [&_tbody_td:first-child]:bg-surface [&_tbody_tr:hover_td:first-child]:bg-surface-subtle">
                   <thead>
                     <tr className="border-b border-line-strong">
                       <th className="text-left px-3 py-2 text-xs font-semibold text-ink-secondary whitespace-nowrap">학생</th>
