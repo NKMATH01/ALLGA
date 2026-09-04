@@ -73,11 +73,6 @@ function openReportWindow(reportId: string): void {
 export default function BranchDashboard({ user }: { user: User }) {
   const queryClient = useQueryClient();
   const [activeSection, setActiveSection] = useState<MenuSection>('dashboard');
-  // 데스크톱은 열림, 모바일은 닫힘으로 시작한다.
-  // true 로 고정하면 390px 진입 시 드로어가 첫 화면을 덮는다.
-  const [sidebarOpen, setSidebarOpen] = useState(
-    () => typeof window === 'undefined' || window.matchMedia('(min-width: 768px)').matches
-  );
   const [showStudentModal, setShowStudentModal] = useState(false);
   const [showClassModal, setShowClassModal] = useState(false);
   const [editingStudent, setEditingStudent] = useState<any>(null);
@@ -167,9 +162,16 @@ export default function BranchDashboard({ user }: { user: User }) {
   const classModalRef = useModalA11y<HTMLDivElement>({ active: showClassModal, onClose: closeClassModal });
   const redistributeModalRef = useModalA11y<HTMLDivElement>({ active: showRedistributeModal, onClose: closeRedistributeModal });
   const answerModalRef = useModalA11y<HTMLDivElement>({ active: showAnswerModal, onClose: closeAnswerModal });
+  /*
+    좌측 학생 패널 드로어의 a11y. 이 화면의 실제 드로어 상태는 panelOpen 이다.
+    데스크톱에서는 패널이 본문과 나란한 sticky 사이드바라 트랩을 걸지 않는다.
+    포커스 트랩·Esc·배경 스크롤 잠금·포커스 복원은 useModalA11y 가 전부 해주므로
+    여기서 다시 구현하지 않는다.
+  */
+  const panelIsDialog = panelOpen && isMobileViewport();
   const drawerRef = useModalA11y<HTMLElement>({
-    active: sidebarOpen && isMobileViewport(),
-    onClose: () => setSidebarOpen(false),
+    active: panelIsDialog,
+    onClose: () => setPanelOpen(false),
   });
 
   // 결과값은 쓰지 않지만 캐시 예열 목적으로 조회는 유지한다 (구독을 없애면 요청 자체가 사라진다)
@@ -3559,6 +3561,9 @@ export default function BranchDashboard({ user }: { user: User }) {
             )}
             <aside
               ref={drawerRef}
+              role={panelIsDialog ? 'dialog' : undefined}
+              aria-modal={panelIsDialog ? true : undefined}
+              aria-label={panelIsDialog ? '학생 목록' : undefined}
               className={`fixed inset-y-0 left-0 z-40 w-[264px] border-r border-line bg-surface transition-transform duration-200 ease-out ${
                 panelOpen ? 'translate-x-0' : '-translate-x-full'
               } md:sticky md:top-[57px] md:z-auto md:h-[calc(100dvh-57px)] md:translate-x-0 md:flex-shrink-0`}
