@@ -8,7 +8,7 @@ import { StatStrip, StatStripItem } from '../components/ui/stat-strip';
 import { PageHeader } from '../components/ui/page-header';
 import { SegmentedControl } from '../components/ui/segmented-control';
 import { StatusBoard, StatusBoardCard, type StatusTone } from '../components/ui/status-board';
-import { ensureReport, openFullReport } from '../lib/reportClient';
+import { ensureReport, openFullReport, openReportWindowSync } from '../lib/reportClient';
 import { useModalA11y, isMobileViewport } from '../lib/useModalA11y';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -63,9 +63,9 @@ const gradeBadgeOperate = (grade?: number | string | null): string => {
   `/reports/:id` 는 SPA 라우트가 아니라 404 다. 이 화면에 같은 열기 동작이 세 벌
   복붙돼 있었고 한 벌만 `/api/` 가 빠져 있었으므로 여기 한 곳으로 모은다.
 
-  reportClient 의 openFullReport 는 쓰지 않는다. 그쪽은 htmlContent 가 없으면
-  api.get 을 await 한 뒤 창을 열기 때문에, 클릭 핸들러에서 부르면 팝업 차단에 걸린다.
-  이 함수는 동기 호출이라 클릭 제스처를 잃지 않는다.
+  이 함수는 reportId 를 이미 아는 자리에서 쓴다. 동기 호출이라 클릭 제스처를 잃지 않는다.
+  보고서를 먼저 생성해야 하는 자리(openStudentReport)는 openReportWindowSync 로 창을
+  잡아 둔 뒤 openFullReport 에 넘긴다. 이유는 같다 — await 뒤의 open 은 차단된다.
 */
 function openReportWindow(reportId: string): void {
   window.open(`/api/reports/${reportId}`, '_blank', 'width=1000,height=800');
@@ -1530,15 +1530,18 @@ export default function BranchDashboard({ user }: { user: User }) {
    * 그것만 부르면 사용자에게는 아무 일도 일어나지 않는다 (학생·학부모 화면과 같은 흐름).
    */
   const openStudentReport = async (attemptId: string) => {
+    // await 이후의 window.open 은 사용자 제스처와 분리돼 차단된다. 창은 지금 잡아 둔다.
+    const win = openReportWindowSync();
     try {
       const ref = await ensureReport(attemptId, (stage) => {
         if (stage === 'generating') {
           toast.info('AI 분석을 시작했습니다...', '완료까지 시간이 걸릴 수 있습니다.');
         }
       });
-      await openFullReport(ref);
+      await openFullReport(ref, win);
       refetchAllDistributionStudents();
     } catch (error: any) {
+      win?.close();
       toast.error(error.response?.data?.message || error.message || '보고서를 열 수 없습니다.');
     }
   };

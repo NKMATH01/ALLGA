@@ -5,7 +5,7 @@ import { Button } from '../components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
 import { ThemeToggle } from '../components/ui/theme-toggle';
 import { toast } from '../components/ui/toast';
-import { ensureReport, openFullReport, prefersSummaryView } from '../lib/reportClient';
+import { ensureReport, openFullReport, openReportWindowSync, prefersSummaryView } from '../lib/reportClient';
 import { ReportSummaryModal } from '../components/ReportSummaryModal';
 import { RestoreIdentityButton } from '../components/RestoreIdentityButton';
 import { useModalA11y, isMobileViewport } from '../lib/useModalA11y';
@@ -125,6 +125,8 @@ export default function ParentDashboard({ user }: { user: User }) {
   // 모바일에서는 8쪽 지면 대신 요약 뷰를 먼저 띄운다.
   const openReport = async (attemptId: string) => {
     setOpeningReportFor(attemptId);
+    // await 이후의 window.open 은 사용자 제스처와 분리돼 차단된다. 창은 지금 잡아 둔다.
+    const win = prefersSummaryView() ? null : openReportWindowSync();
     try {
       const ref = await ensureReport(attemptId, (stage) => {
         if (stage === 'generating') {
@@ -135,9 +137,10 @@ export default function ParentDashboard({ user }: { user: User }) {
       if (prefersSummaryView()) {
         setSummaryReportId(ref.reportId);
       } else {
-        await openFullReport(ref);
+        await openFullReport(ref, win);
       }
     } catch (error: any) {
+      win?.close();
       toast.error(error.response?.data?.message || error.message || '보고서를 불러오지 못했습니다.');
     } finally {
       setOpeningReportFor(null);

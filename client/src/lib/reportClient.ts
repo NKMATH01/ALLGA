@@ -67,8 +67,27 @@ export async function ensureReport(
   throw new Error('보고서 생성이 예상보다 오래 걸리고 있습니다. 잠시 후 다시 시도해주세요.');
 }
 
-/** 데스크톱: 전체 보고서 HTML 을 새 창으로 연다. */
-export async function openFullReport(ref: ReportRef): Promise<void> {
+/*
+  브라우저는 사용자 제스처가 살아 있는 동안의 window.open 만 허용한다.
+  ensureReport 를 await 한 뒤에 열면 제스처와 분리돼 새 탭이 조용히 차단된다
+  (학부모 데스크톱에서 재현됨). 그래서 클릭 핸들러의 동기 구간에서 이 함수로
+  빈 창을 먼저 잡아 두고, 내용은 나중에 주입한다.
+*/
+export function openReportWindowSync(): Window | null {
+  const win = window.open('', '_blank');
+  if (win) {
+    // 색·스타일은 넣지 않는다. 보고서 HTML 이 곧 이 문서를 통째로 덮어쓴다.
+    win.document.write('보고서를 준비하는 중…');
+  }
+  return win;
+}
+
+/**
+ * 데스크톱: 전체 보고서 HTML 을 새 창으로 연다.
+ * `win` 을 받으면 클릭 시점에 미리 열어 둔 그 창을 쓴다(팝업 차단 회피).
+ * 없으면 예전처럼 여기서 열되, 차단되면 그대로 에러를 던진다.
+ */
+export async function openFullReport(ref: ReportRef, win?: Window | null): Promise<void> {
   let html = ref.htmlContent;
 
   if (!html) {
@@ -76,17 +95,19 @@ export async function openFullReport(ref: ReportRef): Promise<void> {
     html = res.data?.data?.htmlContent;
   }
 
-  const win = window.open('', '_blank');
-  if (!win) {
+  const target = win ?? window.open('', '_blank');
+  if (!target) {
     throw new Error('팝업이 차단되어 보고서를 열 수 없습니다. 브라우저의 팝업 차단을 해제해주세요.');
   }
 
   if (html) {
-    win.document.write(html);
-    win.document.close();
+    // 미리 열어 둔 창에는 대기 문구가 들어 있으므로 open() 으로 문서를 비우고 다시 쓴다.
+    target.document.open();
+    target.document.write(html);
+    target.document.close();
   } else {
     // htmlContent 를 손에 들고 있지 않으면 서버가 직접 서빙하는 주소로 보낸다
-    win.location.href = `/api/reports/${ref.reportId}`;
+    target.location.href = `/api/reports/${ref.reportId}`;
   }
 }
 
