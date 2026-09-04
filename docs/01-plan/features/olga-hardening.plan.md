@@ -104,6 +104,29 @@ npx vitest run                             → 2 files / 37 tests passed
 
 - **push 여부** — 로컬이 `origin/main` 보다 19 커밋 앞서 있다. 아직 원격에 올리지 않았다
 - `.agents/` · `.claude/` · `skills-lock.json` 을 `.gitignore` 에 등재할지 (현재 미추적 방치)
+- **(2026-09-04 갱신)** 위 "19 커밋" 은 착수 시점의 기록이다. 현재 `origin/main` 은 `819b7d9`, 로컬 HEAD 는 이 문서 커밋 직전 기준 `4c2f6dc` 다. 미push 커밋 수는 `git status -sb` 로 확인한다. 원격에는 여전히 올리지 않았다
+
+### 3.4 전체 점검(2026-09-04) 결함 수정 현황
+
+`docs/03-analysis/olga-full-audit-2026-09-04.md` 가 확정한 높음 11건을 전부 수정해 커밋했다. 아래 커밋은 모두 `399e9fc` 이후이고 아직 push 하지 않았다.
+
+| ID | 결함 | 커밋 | 검증 수준 |
+|---|---|---|---|
+| S-1 | 학생 제출·자동저장 `_gradingMode` 주입 | `a02e956` | 단위 테스트(37→45, 주입 케이스 포함) + 코드 |
+| P-1 | 정답키 노출 → `/exams*` requireAdminOrBranch + `GET /exam-attempts/:id/review` 신설 | `0602575` | **런타임**: 학생 세션 `GET /api/exams/:id` 403, 제출본 `/review` 200(+correctAnswer), 작성 중 `/review` 403, 오답 모달 해설 표시 |
+| S-2 | branch-grade 제출본 덮어쓰기 → 409 + `isNull(submittedAt)` + 총점 가드 | `65de505` | 코드(쓰기 경로라 런타임 미실행) |
+| P-3 | `POST /parents` 지점 검증 + 트랜잭션, `validateStudentsInBranch` → `server/utils/branchScope.ts` | `664c96a` | 코드 |
+| U-1 | 시험 수정 폼 필드명 1:1, 원본 보존, NaN 차단, label 6개 연결 | `68955f8` | 코드(핸들러 name 7개 = 렌더 입력, `category_` 0건). DOM 재확인은 브라우저 도구 멈춤으로 미실시 |
+| U-4 | PUT /distributions/:id startDate/endDate 수용(KST 검증), 클라이언트 전송, 모달 기본값=기존 기간 | `91496c2` | **런타임**: 모달 기본값 `2025-11-18T01:44`(=UTC 16:44+9h), 오늘 아님 |
+| U-3 | 보고서 보기 `/api/reports/` (동기 `openReportWindow` 3곳) | `1444cb2` | **런타임**: `window.open('/api/reports/9e7e48a8-…')` 캡처 |
+| U-5 | 드로어 a11y 를 `panelOpen` 에 배선(`panelIsDialog`), 죽은 `sidebarOpen` 제거 | `e06fca7` | 코드. 375px 런타임은 도구(hidden pane 에서 키 입력 미도달·에뮬레이션 멈춤)로 미실시 |
+| U-6 | 로딩 3상태(`components/ui/list-state.tsx`), 학생 19·지점 21·관리자 9곳, 관리자 isLoading 구독 | `f337c3d` | **런타임**: 지점 로딩 중 `role=status` 스켈레톤 4~6개·"없습니다" 0, 로드 후 스켈레톤 0; 학생 화면 로드 후 거짓 문구 0 |
+| S-3 | 답안 복원 실패 → 오류+재시도, `answersBlocked` 로 입력·저장·제출 차단 | `36b60cf` | 코드(실패 주입 불가) |
+| S-4 | `exam_distributions.target_kind` 컬럼+CHECK+백필, 순수 함수 2개로 판정 단일화, POST 트랜잭션, 테스트 45→61 | `4c2f6dc` | **런타임**: 배치 `/distributions/students` 3건·33행·전부 branch(수정 전 33행과 동일), `/my-exams` 3건. **운영 DB 마이그레이션 0007 적용 완료(2026-09-04, 사용자 승인)**: `__drizzle_migrations` 8건, 52행 전부 `branch`, CHECK 존재, 행수 52/20/30/12/0/10 불변 |
+
+정적 확정만 된 항목(S-2·P-3·U-1·U-5·S-3)의 런타임 확인은 다음 기회에 한다.
+
+미수정으로 남은 중간·낮음 결함(P-2, P-4, P-5, P-6, D-1/D-2, D-4, U-7, U-8~U-21, R-1~R-3)은 보고서 §4 를 참조한다.
 
 ---
 
@@ -120,6 +143,9 @@ npx vitest run                             → 2 files / 37 tests passed
 | 로그에 학생 개인정보가 남지 않는다 | 구조적 로그의 필드에 이름·답안·전화 없음 | 달성 (Wave 3·4~10) |
 | 회귀 없음 | 서버·클라이언트 `tsc --noEmit` EXIT=0, `vitest run` 통과 | 달성 (2026-08-22) |
 | 목록 조회가 행 수에 비례해 느려지지 않는다 | 배포 목록 쿼리 수가 행 수와 무관 | **미달성** (3.1 참조) |
+| 학생이 채점 메타키로 점수를 위조할 수 없다 | 제출 body 에 `_gradingMode` 가 있으면 400 | 달성 (`a02e956`, 테스트) |
+| 학생·학부모가 정답키를 조회할 수 없다 | 학생 세션 `GET /api/exams/:id` → 403 | 달성 (`0602575`, 런타임) |
+| 배포 대상이 비어도 전원 공개로 승격되지 않는다 | `target_kind` 컬럼 + 순수 함수 판정 | 달성 (`4c2f6dc`, 런타임 파리티) |
 
 ---
 
