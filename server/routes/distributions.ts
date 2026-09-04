@@ -437,13 +437,18 @@ router.get('/:id', requireAdminOrBranch, async (req, res) => {
   try {
     const { id } = req.params;
 
+    const user = req.session.user!;
+
     const [distribution] = await db
       .select()
       .from(examDistributions)
       .where(eq(examDistributions.id, id))
       .limit(1);
 
-    if (!distribution) {
+    // 지점장은 자기 지점 배포만 본다. 타 지점 배포는 403 이 아니라 '없음'으로 답한다 —
+    // 403 이면 "그 id 는 존재한다"가 새어 나가 다른 지점 배포 id 를 열거할 수 있다.
+    // 읽기 전용 조회라 존재 자체를 숨기는 쪽이 안전하다. admin 은 제한 없음.
+    if (!distribution || (user.role === 'branch' && distribution.branchId !== user.branchId)) {
       return res.status(404).json({ message: '배포를 찾을 수 없습니다.' });
     }
 
