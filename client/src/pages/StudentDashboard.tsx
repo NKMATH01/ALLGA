@@ -288,7 +288,14 @@ function WrongQuestionsModal({ attemptId, examTitle }: { attemptId: string; exam
             </div>
 
             {/* Wrong Questions List */}
-            {wrongQuestions.map((question, idx) => (
+            {wrongQuestions.map((question, idx) => {
+              /*
+                해설 키가 두 벌이다. 현 파서(server/routes/exams.ts)는 explanation 을 쓰고
+                기존 DB 에 남은 시험은 commentary 를 갖는다. 서버의 reports.ts 도 같은 폴백을
+                쓰므로 여기서도 둘 다 받는다. 한쪽만 읽으면 해설이 있는데도 "없음"이 뜬다.
+              */
+              const explanation: string | undefined = question.explanation || question.commentary;
+              return (
               <div
                 key={idx}
                 className="bg-surface border border-line rounded-md p-6 transition-colors duration-150 ease-out hover:border-line-strong"
@@ -332,14 +339,14 @@ function WrongQuestionsModal({ attemptId, examTitle }: { attemptId: string; exam
                     )}
 
                     {/* Commentary */}
-                    {question.commentary ? (
+                    {explanation ? (
                       <div className="bg-surface-subtle rounded-sm p-4 mb-4 border border-line">
                         <div className="flex items-center gap-2 mb-3">
                           <BookOpen className="w-4 h-4 text-ink-secondary" strokeWidth={1.5} />
                           <h4 className="font-semibold text-ink">문항 해설</h4>
                         </div>
                         <p className="text-ink-secondary leading-relaxed whitespace-pre-wrap">
-                          {question.commentary}
+                          {explanation}
                         </p>
                       </div>
                     ) : (
@@ -378,7 +385,8 @@ function WrongQuestionsModal({ attemptId, examTitle }: { attemptId: string; exam
                   </div>
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </DialogContent>

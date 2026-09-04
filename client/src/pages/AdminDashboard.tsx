@@ -1334,7 +1334,7 @@ export default function AdminDashboard({ user }: { user: User }) {
                   {pagedDistributions.pageItems.map((dist: any) => (
                     <tr key={dist.id} className="border-b border-line-subtle hover:bg-surface-subtle transition-colors duration-150 ease-out">
                       <td className="px-4 py-3 font-medium text-ink">{dist.exam?.title || '-'}</td>
-                      <td className="px-4 py-3 text-ink">{dist.branchId}</td>
+                      <td className="px-4 py-3 text-ink">{dist.branchName ?? dist.branchId}</td>
                       <td className="px-4 py-3 text-ink">
                         {new Date(dist.startDate).toLocaleDateString('ko-KR')}
                       </td>

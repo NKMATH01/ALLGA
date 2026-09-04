@@ -90,6 +90,22 @@ router.get('/', requireAdminOrBranch, async (req, res) => {
       : [];
     const parentById = new Map(parentRows.map((parent) => [parent.id, parent]));
 
+    // 지점 이름도 같은 방식으로 한 번에 모아 온다. 목록 화면이 id 대신 이름을 보여줘야 한다.
+    const branchIds = Array.from(
+      new Set(
+        distributionList
+          .map((row) => row.distribution.branchId)
+          .filter((id): id is string => !!id)
+      )
+    );
+    const branchRows = branchIds.length
+      ? await db
+          .select({ id: branches.id, name: branches.name })
+          .from(branches)
+          .where(inArray(branches.id, branchIds))
+      : [];
+    const branchNameById = new Map(branchRows.map((branch) => [branch.id, branch.name]));
+
     const result = distributionList.map((row) => {
       const parentDistributionId = row.distribution.parentDistributionId;
       // 상위 배포가 없거나 참조가 끊겼으면 기존과 동일하게 null.
@@ -99,6 +115,9 @@ router.get('/', requireAdminOrBranch, async (req, res) => {
 
       return {
         ...row.distribution,
+        branchName: row.distribution.branchId
+          ? branchNameById.get(row.distribution.branchId) ?? null
+          : null,
         exam: {
           id: row.exam.id,
           title: row.exam.title,
