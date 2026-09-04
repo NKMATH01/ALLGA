@@ -23,8 +23,12 @@ const router = express.Router();
 // GET /api/students/me - 현재 로그인한 학생 정보 조회
 router.get('/me', async (req, res) => {
   try {
-    if (!req.session.user || req.session.user.role !== 'student') {
-      return res.status(401).json({ message: '학생 계정으로 로그인해주세요.' });
+    // 세션 없음은 401, 역할 불일치는 403 (api-spec §12)
+    if (!req.session.user) {
+      return res.status(401).json({ message: '로그인이 필요합니다.' });
+    }
+    if (req.session.user.role !== 'student') {
+      return res.status(403).json({ message: '학생 권한이 필요합니다.' });
     }
 
     const userId = req.session.user.id;
