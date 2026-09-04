@@ -14,7 +14,13 @@ import {
 } from '../db/schema';
 import { eq, and, isNotNull, isNull, inArray } from 'drizzle-orm';
 import { requireStudent, requireBranchManager } from '../middleware/auth';
-import { calculateGrade, endOfLocalDay, gradeAnswers } from '../utils/helpers';
+import {
+  calculateGrade,
+  endOfLocalDay,
+  gradeAnswers,
+  hasReservedAnswerKey,
+  sanitizeStudentAnswers,
+} from '../utils/helpers';
 import { log, errorFields } from '../utils/logger';
 
 const router = express.Router();
@@ -471,6 +477,17 @@ router.put('/exam-attempts/:id', requireStudent, async (req, res) => {
     const { answers } = req.body;
     const userId = req.session.user!.id;
 
+    // 자동저장도 제출과 같은 기준으로 검증한다. 객체가 아니면 drizzle 이 던져 500 이 됐다.
+    const cleanAnswers = sanitizeStudentAnswers(answers);
+    if (!cleanAnswers) {
+      return res.status(400).json({ message: '답안 데이터가 올바르지 않습니다.' });
+    }
+
+    // 자동저장으로 `_gradingMode` 를 심어두면 이후 제출·조회가 O/X 로 해석된다. 거부한다.
+    if (hasReservedAnswerKey(answers)) {
+      return res.status(400).json({ message: '답안 데이터에 허용되지 않는 키가 있습니다.' });
+    }
+
     // 현재 로그인한 학생 정보 조회
     const [student] = await db.select().from(students).where(eq(students.userId, userId)).limit(1);
     if (!student) {
@@ -496,7 +513,7 @@ router.put('/exam-attempts/:id', requireStudent, async (req, res) => {
     // WHERE 에 submitted_at IS NULL 을 걸어 원자적으로 막는다. 사전 체크는 이중 방어로 유지.
     const [attempt] = await db
       .update(examAttempts)
-      .set({ answers })
+      .set({ answers: cleanAnswers })
       .where(and(eq(examAttempts.id, id), isNull(examAttempts.submittedAt)))
       .returning();
 
@@ -523,8 +540,16 @@ router.post('/exam-attempts/:id/submit', requireStudent, async (req, res) => {
     const userId = req.session.user!.id;
 
     // answers 누락 시 채점 루프에서 500 이 나므로 400 으로 먼저 거른다
-    if (!answers || typeof answers !== 'object' || Array.isArray(answers)) {
+    const cleanAnswers = sanitizeStudentAnswers(answers);
+    if (!cleanAnswers) {
       return res.status(400).json({ message: '답안 데이터가 올바르지 않습니다.' });
+    }
+
+    // `_gradingMode` 같은 서버 전용 메타키가 학생 body 에 있으면 채점이 O/X 분기를 타
+    // 만점이 위조된다. 조용히 지우면 위조 시도가 흔적 없이 통과하므로 거부한다.
+    // 정상 클라이언트는 이 키를 읽기만 하고 보내지 않는다.
+    if (hasReservedAnswerKey(answers)) {
+      return res.status(400).json({ message: '답안 데이터에 허용되지 않는 키가 있습니다.' });
     }
 
     // 현재 로그인한 학생 정보 조회
@@ -575,7 +600,7 @@ router.post('/exam-attempts/:id/submit', requireStudent, async (req, res) => {
 
     // Auto-grade (채점 코어는 helpers.gradeAnswers 로 공용화)
     const questionsData = exam.questionsData as any[];
-    const { score, correctCount } = gradeAnswers(questionsData, answers);
+    const { score, correctCount } = gradeAnswers(questionsData, cleanAnswers);
 
     const maxScore = exam.totalScore;
 
@@ -597,7 +622,7 @@ router.post('/exam-attempts/:id/submit', requireStudent, async (req, res) => {
     const [updatedAttempt] = await db
       .update(examAttempts)
       .set({
-        answers,
+        answers: cleanAnswers,
         score,
         maxScore,
         grade,

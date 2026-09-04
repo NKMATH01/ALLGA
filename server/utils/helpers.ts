@@ -78,6 +78,39 @@ export function endOfLocalDay(value: Date | string): Date {
 }
 
 /**
+ * answers 의 `_` 접두 키는 **서버 전용 메타키**다.
+ * 현재는 `_gradingMode` 하나뿐이고, 지점 수동 채점 경로(`attempts.ts` 의 branch-grade)
+ * 에서만 서버가 직접 붙인다. 학생이 보내는 답안에는 있을 이유가 없다.
+ */
+export function hasReservedAnswerKey(answers: Record<string, unknown>): boolean {
+  return Object.keys(answers).some((key) => key.startsWith('_'));
+}
+
+/**
+ * 학생이 보낸 answers 에서 서버 전용 메타키(`_` 접두)를 걷어낸 새 객체를 만든다.
+ *
+ * 값을 검사해 걸러내는 대신 키만 보고 **무조건 제거**한다.
+ * 이유: `gradeAnswers` 는 `_gradingMode === 'ox'` 를 보고 O/X 분기를 타서 값이 1 인
+ * 문항을 전부 정답 처리한다. 학생이 제출 body 에 이 키를 끼워 넣으면 만점이 위조된다.
+ * 허용 목록(whitelist)이 아니라 접두 규칙으로 막아야 앞으로 늘어날 메타키까지
+ * 자동으로 차단된다. 채점 대상 키는 문항 번호이므로 `_` 로 시작할 일이 없다.
+ *
+ * 객체가 아니거나 배열이면 null 을 돌려준다(호출부에서 400 처리).
+ */
+export function sanitizeStudentAnswers(answers: unknown): Record<string, unknown> | null {
+  if (!answers || typeof answers !== 'object' || Array.isArray(answers)) {
+    return null;
+  }
+
+  const cleaned: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(answers as Record<string, unknown>)) {
+    if (key.startsWith('_')) continue;
+    cleaned[key] = value;
+  }
+  return cleaned;
+}
+
+/**
  * 채점 코어. 두 경로(학생 온라인 제출 / 지점 수동 O·X 입력)가 같은 함수를 쓴다.
  *
  * 채점 방식은 answers 의 `_gradingMode` 메타키로 갈린다.
