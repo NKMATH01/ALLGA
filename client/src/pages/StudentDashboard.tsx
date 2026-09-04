@@ -498,6 +498,15 @@ function ExamTakingModal({
   const [answers, setAnswers] = useState<Record<number, number>>({});
   const [submitting, setSubmitting] = useState(false);
   const [loadingAnswers, setLoadingAnswers] = useState(true);
+  /*
+    복원 실패 상태. 이걸 화면에 알리지 않으면 학생은 정상처럼 보이는 빈 답안지를
+    받아 이어 풀고, 한 문항만 골라도 자동저장이 로컬 객체를 통째로 PUT 해서
+    (서버는 answers 를 전체 교체한다) 앞서 저장해 둔 답안이 전부 사라진다.
+    그래서 실패하면 문항 UI 자체를 그리지 않고 재시도만 남긴다.
+  */
+  const [loadError, setLoadError] = useState(false);
+  // 재시도 시 복원 useEffect 를 다시 돌리는 신호
+  const [reloadNonce, setReloadNonce] = useState(0);
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
 
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -536,6 +545,10 @@ function ExamTakingModal({
         if (!cancelled) setAnswers(normalize(res.data.data?.answers));
       } catch (error) {
         console.error('Failed to load saved answers:', error);
+        if (!cancelled) {
+          setLoadError(true);
+          toast.error('저장된 답안을 불러오지 못했습니다.');
+        }
       } finally {
         if (!cancelled) setLoadingAnswers(false);
       }
@@ -546,7 +559,16 @@ function ExamTakingModal({
     return () => {
       cancelled = true;
     };
-  }, [attemptId, attempt]);
+  }, [attemptId, attempt, reloadNonce]);
+
+  const retryLoadAnswers = () => {
+    setLoadError(false);
+    setLoadingAnswers(true);
+    setReloadNonce((n) => n + 1);
+  };
+
+  // 복원이 끝나고 성공했을 때만 답안 입력·자동저장·제출을 허용한다
+  const answersBlocked = loadingAnswers || loadError;
 
   // 언마운트 시 대기 중인 debounce 타이머 정리
   useEffect(() => {
@@ -556,6 +578,8 @@ function ExamTakingModal({
   }, []);
 
   const saveAnswers = async (toSave: Record<number, number>) => {
+    // 이중 방어: 복원 전/실패 상태의 로컬 객체를 서버에 통째로 밀어넣지 않는다
+    if (answersBlocked) return false;
     setSaveState('saving');
     try {
       await api.put(`/exam-attempts/${attemptId}`, { answers: toSave });
@@ -581,6 +605,8 @@ function ExamTakingModal({
   };
 
   const handleAnswerChange = (questionNumber: number, choiceIndex: number) => {
+    // 복원 전/실패 상태에서는 입력도 자동저장 타이머도 걸리지 않는다
+    if (answersBlocked) return;
     setAnswers((prev) => {
       const next = { ...prev, [questionNumber]: choiceIndex };
 
@@ -616,6 +642,8 @@ function ExamTakingModal({
   });
 
   const handleSubmit = async () => {
+    // 복원되지 않은 답안을 제출로 확정해 버리지 않는다
+    if (answersBlocked) return;
     if (answeredCount < totalQuestions) {
       if (!confirm(`아직 ${totalQuestions - answeredCount}개 문항이 미응답 상태입니다. 제출하시겠습니까?`)) {
         return;
@@ -688,7 +716,25 @@ function ExamTakingModal({
 
         {/* Questions */}
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
-          {questionsData.length > 0 && !loadingAnswers ? (
+          {/*
+            복원에 실패했으면 문항 선택 UI 를 아예 그리지 않는다. 빈 답안지를
+            이어 풀게 두면 자동저장이 기존 답안을 덮어쓴다 (S-3).
+          */}
+          {loadError ? (
+            <div className="py-12 text-center">
+              <AlertCircle className="mx-auto mb-4 h-8 w-8 text-fn-error" strokeWidth={1.5} />
+              <p className="text-sm font-semibold text-ink">저장된 답안을 불러오지 못했습니다. 다시 시도해 주세요.</p>
+              <p className="mt-1 text-xs text-ink-secondary">
+                답안을 덮어쓰지 않도록 문항은 표시하지 않습니다.
+              </p>
+              <div className="mt-4 flex justify-center gap-3">
+                <Button onClick={retryLoadAnswers}>재시도</Button>
+                <Button variant="outline" onClick={onClose}>
+                  닫기
+                </Button>
+              </div>
+            </div>
+          ) : questionsData.length > 0 && !loadingAnswers ? (
             questionsData.map((question: any, idx: number) => {
               const qNum = question.questionNumber || question.number || idx + 1;
               return (
@@ -780,7 +826,7 @@ function ExamTakingModal({
               <Button variant="outline" onClick={handleCloseLater} disabled={submitting}>
                 나중에 계속하기
               </Button>
-              <Button onClick={handleSubmit} disabled={submitting} className="px-8">
+              <Button onClick={handleSubmit} disabled={submitting || answersBlocked} className="px-8">
                 {submitting ? (
                   <>
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
