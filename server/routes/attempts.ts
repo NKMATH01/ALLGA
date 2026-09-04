@@ -814,6 +814,12 @@ router.post('/exam-attempts/branch-create', requireBranchManager, async (req, re
     const { studentId, distributionId } = req.body;
     const branchId = req.session.user!.branchId!;
 
+    // 입력 검증. 값이 없으면 drizzle 이 던져 500 이 됐다.
+    // (이 라우트는 answers 를 받지 않고 빈 답안지만 만든다 — answers 검증은 branch-grade 쪽)
+    if (typeof studentId !== 'string' || !studentId || typeof distributionId !== 'string' || !distributionId) {
+      return res.status(400).json({ message: '학생과 배포를 모두 선택해주세요.' });
+    }
+
     // Verify student belongs to this branch
     const [student] = await db
       .select()
@@ -834,6 +840,18 @@ router.post('/exam-attempts/branch-create', requireBranchManager, async (req, re
 
     if (!distribution) {
       return res.status(404).json({ message: '배포를 찾을 수 없습니다.' });
+    }
+
+    // 총점 0 인 시험은 채점 단계에서 백분율이 NaN 이 되어 조용히 9등급이 된다.
+    // 채점될 수 없는 답안지를 미리 만들지 않도록 생성 단계에서 같은 기준으로 막는다.
+    const [exam] = await db.select().from(exams).where(eq(exams.id, distribution.examId)).limit(1);
+
+    if (!exam) {
+      return res.status(404).json({ message: '시험을 찾을 수 없습니다.' });
+    }
+
+    if (!exam.totalScore || exam.totalScore <= 0) {
+      return res.status(400).json({ message: '시험 총점이 0 이라 채점할 수 없습니다.' });
     }
 
     // Check if attempt already exists
@@ -876,11 +894,27 @@ router.put('/exam-attempts/:id/branch-grade', requireBranchManager, async (req, 
     const { answers } = req.body;
     const branchId = req.session.user!.branchId!;
 
+    // answers 가 객체가 아니면 아래 스프레드가 `{ _gradingMode: 'ox' }` 만 남겨
+    // 전 문항 오답(0점 · 9등급)으로 조용히 저장된다.
+    if (!answers || typeof answers !== 'object' || Array.isArray(answers)) {
+      return res.status(400).json({ message: '답안 데이터가 올바르지 않습니다.' });
+    }
+
     // Get attempt
     const [attempt] = await db.select().from(examAttempts).where(eq(examAttempts.id, id)).limit(1);
 
     if (!attempt) {
       return res.status(404).json({ message: '시험 응시를 찾을 수 없습니다.' });
+    }
+
+    // S-2: 이 라우트는 answers 를 통째로 교체한다. 학생이 온라인으로 제출한 원본 답안을
+    // 지점 수동 채점이 덮어쓰면 복구할 방법이 없다. 그래서 제출된 응시는 막는다.
+    // (운영상 "제출 후 재채점"이 필요해지면 별도 라우트 + 원본 보존이 전제다.
+    //  이 검사를 푸는 방식으로 처리해서는 안 된다.)
+    if (attempt.submittedAt) {
+      return res
+        .status(409)
+        .json({ message: '이미 제출된 응시입니다. 재채점은 별도 절차가 필요합니다.' });
     }
 
     // Verify student belongs to this branch
@@ -910,10 +944,18 @@ router.put('/exam-attempts/:id/branch-grade', requireBranchManager, async (req, 
     const { score, correctCount } = gradeAnswers(questionsData, gradedAnswers);
 
     const maxScore = exam.totalScore;
+
+    // 총점이 0 이하면 백분율이 NaN 이 되어 calculateGrade 가 조용히 9등급을 돌려준다.
+    // 학생 제출 경로와 같은 기준으로 채점 자체를 거부한다.
+    if (!maxScore || maxScore <= 0) {
+      return res.status(400).json({ message: '시험 총점이 0 이라 채점할 수 없습니다.' });
+    }
+
     const percentage = (score / maxScore) * 100;
     const grade = calculateGrade(percentage);
 
-    // Update attempt
+    // 위 사전 체크와 이 UPDATE 사이에 학생이 온라인 제출을 끝낼 수 있다(read-then-write 경합).
+    // 제출 라우트와 같은 패턴으로 WHERE 에 submitted_at IS NULL 을 걸어 원자적으로 막는다.
     const now = new Date();
     const [updatedAttempt] = await db
       .update(examAttempts)
@@ -926,8 +968,14 @@ router.put('/exam-attempts/:id/branch-grade', requireBranchManager, async (req, 
         submittedAt: now,
         gradedAt: now,
       })
-      .where(eq(examAttempts.id, id))
+      .where(and(eq(examAttempts.id, id), isNull(examAttempts.submittedAt)))
       .returning();
+
+    if (!updatedAttempt) {
+      return res
+        .status(409)
+        .json({ message: '이미 제출된 응시입니다. 재채점은 별도 절차가 필요합니다.' });
+    }
 
     res.json({
       success: true,
