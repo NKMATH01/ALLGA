@@ -702,8 +702,9 @@ export default function AdminDashboard({ user }: { user: User }) {
             <CardContent className="p-6">
               <form onSubmit={handleBranchSubmit} className="space-y-4">
                 <div>
-                  <label className="block text-sm font-semibold text-ink">지점명 *</label>
+                  <label htmlFor="branch-form-name" className="block text-sm font-semibold text-ink">지점명 *</label>
                   <Input
+                    id="branch-form-name"
                     name="name"
                     defaultValue={editingBranch?.name}
                     required
@@ -711,24 +712,27 @@ export default function AdminDashboard({ user }: { user: User }) {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold text-ink">주소</label>
+                  <label htmlFor="branch-form-address" className="block text-sm font-semibold text-ink">주소</label>
                   <Input
+                    id="branch-form-address"
                     name="address"
                     defaultValue={editingBranch?.address}
                     className="mt-1"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold text-ink">전화번호</label>
+                  <label htmlFor="branch-form-phone" className="block text-sm font-semibold text-ink">전화번호</label>
                   <Input
+                    id="branch-form-phone"
                     name="phone"
                     defaultValue={editingBranch?.phone}
                     className="mt-1"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold text-ink">관리자명 *</label>
+                  <label htmlFor="branch-form-manager-name" className="block text-sm font-semibold text-ink">관리자명 *</label>
                   <Input
+                    id="branch-form-manager-name"
                     name="managerName"
                     defaultValue={editingBranch?.managerName}
                     required
@@ -738,16 +742,18 @@ export default function AdminDashboard({ user }: { user: User }) {
                 {!editingBranch && (
                   <>
                     <div>
-                      <label className="block text-sm font-semibold text-ink">관리자 아이디 *</label>
+                      <label htmlFor="branch-form-username" className="block text-sm font-semibold text-ink">관리자 아이디 *</label>
                       <Input
+                        id="branch-form-username"
                         name="username"
                         required
                         className="mt-1"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-semibold text-ink">관리자 비밀번호 *</label>
+                      <label htmlFor="branch-form-password" className="block text-sm font-semibold text-ink">관리자 비밀번호 *</label>
                       <Input
+                        id="branch-form-password"
                         name="password"
                         type="password"
                         required
@@ -916,27 +922,28 @@ export default function AdminDashboard({ user }: { user: User }) {
               <form onSubmit={handleExamSubmit} className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-semibold text-ink">시험명 *</label>
-                    <Input name="title" required className="mt-1" />
+                    <label htmlFor="exam-form-title" className="block text-sm font-semibold text-ink">시험명 *</label>
+                    <Input id="exam-form-title" name="title" required className="mt-1" />
                   </div>
                   <div>
-                    <label className="block text-sm font-semibold text-ink">과목</label>
-                    <Input name="subject" className="mt-1" placeholder="예: 수학" />
+                    <label htmlFor="exam-form-subject" className="block text-sm font-semibold text-ink">과목</label>
+                    <Input id="exam-form-subject" name="subject" className="mt-1" placeholder="예: 수학" />
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-semibold text-ink">학년</label>
-                    <Input name="grade" className="mt-1" placeholder="예: 중3" />
+                    <label htmlFor="exam-form-grade" className="block text-sm font-semibold text-ink">학년</label>
+                    <Input id="exam-form-grade" name="grade" className="mt-1" placeholder="예: 중3" />
                   </div>
                   <div>
-                    <label className="block text-sm font-semibold text-ink">총 문제 수 *</label>
-                    <Input name="totalQuestions" type="number" required defaultValue="20" className="mt-1" />
+                    <label htmlFor="exam-form-total-questions" className="block text-sm font-semibold text-ink">총 문제 수 *</label>
+                    <Input id="exam-form-total-questions" name="totalQuestions" type="number" required defaultValue="20" className="mt-1" />
                   </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold text-ink">정답 입력 *</label>
+                  <label htmlFor="exam-form-answer-key" className="block text-sm font-semibold text-ink">정답 입력 *</label>
                   <textarea
+                    id="exam-form-answer-key"
                     name="answerKey"
                     required
                     className="mt-1 w-full rounded-md border border-line p-2 text-sm font-mono"
@@ -949,8 +956,9 @@ export default function AdminDashboard({ user }: { user: User }) {
                   </p>
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold text-ink">설명</label>
+                  <label htmlFor="exam-form-description" className="block text-sm font-semibold text-ink">설명</label>
                   <textarea
+                    id="exam-form-description"
                     name="description"
                     className="mt-1 w-full rounded-md border border-line p-2 text-sm"
                     rows={2}
@@ -1400,8 +1408,9 @@ export default function AdminDashboard({ user }: { user: User }) {
             <CardContent className="p-6">
               <form onSubmit={handleDistributionSubmit} className="space-y-4">
                 <div>
-                  <label className="block text-sm font-semibold text-ink">시험 선택 *</label>
+                  <label htmlFor="distribution-form-exam" className="block text-sm font-semibold text-ink">시험 선택 *</label>
                   <select
+                    id="distribution-form-exam"
                     name="examId"
                     required
                     className="mt-1 w-full rounded-md border border-line p-2 text-sm"
@@ -1416,13 +1425,19 @@ export default function AdminDashboard({ user }: { user: User }) {
                 </div>
 
                 <div>
-                  <label className="text-sm font-semibold text-ink mb-2 block">
+                  {/* 여러 컨트롤을 묶는 이름표라 label 이 아니라 group 의 aria-labelledby 로 연결한다 */}
+                  <span id="distribution-form-branches-label" className="text-sm font-semibold text-ink mb-2 block">
                     배포 지점 선택 * ({selectedBranches.length}개 선택됨)
-                  </label>
-                  <div className="max-h-40 overflow-y-auto border border-line rounded-md p-3 space-y-2">
+                  </span>
+                  <div
+                    role="group"
+                    aria-labelledby="distribution-form-branches-label"
+                    className="max-h-40 overflow-y-auto border border-line rounded-md p-3 space-y-2"
+                  >
                     {branches?.map((branch: any) => (
-                      <label key={branch.id} className="flex cursor-pointer items-center gap-2 rounded-sm p-1.5 transition-colors duration-150 ease-out hover:bg-surface-subtle">
+                      <label key={branch.id} htmlFor={`distribution-form-branch-${branch.id}`} className="flex cursor-pointer items-center gap-2 rounded-sm p-1.5 transition-colors duration-150 ease-out hover:bg-surface-subtle">
                         <input
+                          id={`distribution-form-branch-${branch.id}`}
                           type="checkbox"
                           className="h-4 w-4 rounded border-line accent-action"
                           checked={selectedBranches.includes(branch.id)}
@@ -1442,8 +1457,9 @@ export default function AdminDashboard({ user }: { user: User }) {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-semibold text-ink">시작일 *</label>
+                    <label htmlFor="distribution-form-start-date" className="block text-sm font-semibold text-ink">시작일 *</label>
                     <Input
+                      id="distribution-form-start-date"
                       name="startDate"
                       type="date"
                       required
@@ -1451,8 +1467,9 @@ export default function AdminDashboard({ user }: { user: User }) {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-semibold text-ink">종료일 *</label>
+                    <label htmlFor="distribution-form-end-date" className="block text-sm font-semibold text-ink">종료일 *</label>
                     <Input
+                      id="distribution-form-end-date"
                       name="endDate"
                       type="date"
                       required

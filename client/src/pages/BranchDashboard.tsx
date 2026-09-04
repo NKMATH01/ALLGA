@@ -2417,12 +2417,13 @@ export default function BranchDashboard({ user }: { user: User }) {
                 </p>
                 <div className="grid grid-cols-2 gap-x-4 gap-y-3 px-6 py-4">
                   <div>
-                    <label className="text-xs font-semibold text-ink">이름</label>
-                    <Input name="name" defaultValue={editingStudent?.user?.name} required className="mt-1 h-9" />
+                    <label htmlFor="student-form-name" className="text-xs font-semibold text-ink">이름</label>
+                    <Input id="student-form-name" name="name" defaultValue={editingStudent?.user?.name} required className="mt-1 h-9" />
                   </div>
                   <div>
-                    <label className="text-xs font-semibold text-ink">학생 연락처 (로그인 아이디)</label>
+                    <label htmlFor="student-form-phone" className="text-xs font-semibold text-ink">학생 연락처 (로그인 아이디)</label>
                     <Input
+                      id="student-form-phone"
                       name="phone"
                       defaultValue={editingStudent?.user?.phone}
                       required
@@ -2441,16 +2442,17 @@ export default function BranchDashboard({ user }: { user: User }) {
                 </p>
                 <div className="grid grid-cols-2 gap-x-4 gap-y-3 px-6 py-4">
                   <div>
-                    <label className="text-xs font-semibold text-ink">학년</label>
-                    <Input name="grade" defaultValue={editingStudent?.grade} className="mt-1 h-9" placeholder="예: 중3" />
+                    <label htmlFor="student-form-grade" className="text-xs font-semibold text-ink">학년</label>
+                    <Input id="student-form-grade" name="grade" defaultValue={editingStudent?.grade} className="mt-1 h-9" placeholder="예: 중3" />
                   </div>
                   <div>
-                    <label className="text-xs font-semibold text-ink">학교</label>
-                    <Input name="school" defaultValue={editingStudent?.school} className="mt-1 h-9" />
+                    <label htmlFor="student-form-school" className="text-xs font-semibold text-ink">학교</label>
+                    <Input id="student-form-school" name="school" defaultValue={editingStudent?.school} className="mt-1 h-9" />
                   </div>
                   <div className="col-span-2">
-                    <label className="text-xs font-semibold text-ink">학부모 연락처 (로그인 아이디)</label>
+                    <label htmlFor="student-form-parent-phone" className="text-xs font-semibold text-ink">학부모 연락처 (로그인 아이디)</label>
                     <Input
+                      id="student-form-parent-phone"
                       name="parentPhone"
                       defaultValue={editingStudent?.parentPhone}
                       className="mt-1 h-9"
@@ -2459,8 +2461,9 @@ export default function BranchDashboard({ user }: { user: User }) {
                   </div>
                   {editingStudent && (
                     <div className="col-span-2">
-                      <label className="text-xs font-semibold text-ink">새 비밀번호</label>
+                      <label htmlFor="student-form-password" className="text-xs font-semibold text-ink">새 비밀번호</label>
                       <Input
+                        id="student-form-password"
                         type="password"
                         name="password"
                         className="mt-1 h-9"
@@ -2716,16 +2719,17 @@ export default function BranchDashboard({ user }: { user: User }) {
             <CardContent className="p-6">
               <form onSubmit={handleClassSubmit} className="space-y-4">
                 <div>
-                  <label className="text-sm font-semibold text-ink">반 이름 *</label>
-                  <Input name="name" defaultValue={editingClass?.name} required className="mt-1" />
+                  <label htmlFor="class-form-name" className="text-sm font-semibold text-ink">반 이름 *</label>
+                  <Input id="class-form-name" name="name" defaultValue={editingClass?.name} required className="mt-1" />
                 </div>
                 <div>
-                  <label className="text-sm font-semibold text-ink">학년</label>
-                  <Input name="grade" defaultValue={editingClass?.grade} className="mt-1" placeholder="예: 중3" />
+                  <label htmlFor="class-form-grade" className="text-sm font-semibold text-ink">학년</label>
+                  <Input id="class-form-grade" name="grade" defaultValue={editingClass?.grade} className="mt-1" placeholder="예: 중3" />
                 </div>
                 <div>
-                  <label className="text-sm font-semibold text-ink">설명</label>
+                  <label htmlFor="class-form-description" className="text-sm font-semibold text-ink">설명</label>
                   <textarea
+                    id="class-form-description"
                     name="description"
                     defaultValue={editingClass?.description}
                     className="mt-1 w-full rounded-md border border-line p-2 text-sm"
@@ -2736,7 +2740,8 @@ export default function BranchDashboard({ user }: { user: User }) {
                 {/* 학생 선택 섹션 */}
                 <div className="border-t pt-4">
                   <div className="flex justify-between items-center mb-3">
-                    <label className="text-sm font-semibold text-ink">학생 선택</label>
+                    {/* 여러 컨트롤을 묶는 이름표라 label 이 아니라 group 의 aria-labelledby 로 연결한다 */}
+                    <span id="class-form-students-label" className="text-sm font-semibold text-ink">학생 선택</span>
                   {editingClass && classRosterLoading && (
                     <p className="mt-1 text-xs text-ink-secondary">배정 학생을 불러오는 중입니다.</p>
                   )}
@@ -2746,6 +2751,7 @@ export default function BranchDashboard({ user }: { user: User }) {
                     </p>
                   )}
                     <select
+                      aria-label="학년 필터"
                       value={gradeFilter}
                       onChange={(e) => setGradeFilter(e.target.value)}
                       className="text-sm border border-line rounded-md px-3 py-1"
@@ -2759,13 +2765,18 @@ export default function BranchDashboard({ user }: { user: User }) {
                       <option value="고3">고3</option>
                     </select>
                   </div>
-                  <div className="border border-line rounded-md p-3 max-h-60 overflow-y-auto bg-surface-sunken">
+                  <div
+                    role="group"
+                    aria-labelledby="class-form-students-label"
+                    className="border border-line rounded-md p-3 max-h-60 overflow-y-auto bg-surface-sunken"
+                  >
                     {students && students.length > 0 ? (
                       students
                         .filter((student: any) => !gradeFilter || student.grade === gradeFilter)
                         .map((student: any) => (
-                          <label key={student.id} className="flex items-center gap-2 p-2 hover:bg-surface cursor-pointer rounded transition-colors">
+                          <label key={student.id} htmlFor={`class-form-student-${student.id}`} className="flex items-center gap-2 p-2 hover:bg-surface cursor-pointer rounded transition-colors">
                             <input
+                              id={`class-form-student-${student.id}`}
                               type="checkbox"
                               checked={selectedClassStudents.includes(student.id)}
                               onChange={(e) => {
@@ -2938,10 +2949,12 @@ export default function BranchDashboard({ user }: { user: User }) {
               <form onSubmit={handleRedistributeSubmit} className="space-y-4">
                 {/* 배포 유형 선택 */}
                 <div>
-                  <label className="text-sm font-semibold text-ink">배포 유형 *</label>
-                  <div className="flex gap-4 mt-2">
-                    <label className="flex items-center gap-2 cursor-pointer">
+                  {/* 여러 컨트롤을 묶는 이름표라 label 이 아니라 radiogroup 의 aria-labelledby 로 연결한다 */}
+                  <span id="redistribute-form-type-label" className="text-sm font-semibold text-ink">배포 유형 *</span>
+                  <div role="radiogroup" aria-labelledby="redistribute-form-type-label" className="flex gap-4 mt-2">
+                    <label htmlFor="redistribute-form-type-class" className="flex items-center gap-2 cursor-pointer">
                       <input
+                        id="redistribute-form-type-class"
                         type="radio"
                         name="redistributeType"
                         value="class"
@@ -2951,8 +2964,9 @@ export default function BranchDashboard({ user }: { user: User }) {
                       />
                       <span>반별 배포</span>
                     </label>
-                    <label className="flex items-center gap-2 cursor-pointer">
+                    <label htmlFor="redistribute-form-type-student" className="flex items-center gap-2 cursor-pointer">
                       <input
+                        id="redistribute-form-type-student"
                         type="radio"
                         name="redistributeType"
                         value="student"
@@ -2968,8 +2982,9 @@ export default function BranchDashboard({ user }: { user: User }) {
                 {/* 반 선택 */}
                 {redistributeType === 'class' && (
                   <div>
-                    <label className="text-sm font-semibold text-ink">반 선택 *</label>
+                    <label htmlFor="redistribute-form-class" className="text-sm font-semibold text-ink">반 선택 *</label>
                     <select
+                      id="redistribute-form-class"
                       value={selectedClassId}
                       onChange={(e) => setSelectedClassId(e.target.value)}
                       className="mt-1 w-full rounded-md border border-line p-2 text-sm"
@@ -2988,12 +3003,18 @@ export default function BranchDashboard({ user }: { user: User }) {
                 {/* 학생 선택 */}
                 {redistributeType === 'student' && (
                   <div>
-                    <label className="text-sm font-semibold text-ink">학생 선택 * (복수 선택 가능)</label>
-                    <div className="mt-2 border border-line rounded-md p-3 max-h-60 overflow-y-auto">
+                    {/* 여러 컨트롤을 묶는 이름표라 label 이 아니라 group 의 aria-labelledby 로 연결한다 */}
+                    <span id="redistribute-form-students-label" className="text-sm font-semibold text-ink">학생 선택 * (복수 선택 가능)</span>
+                    <div
+                      role="group"
+                      aria-labelledby="redistribute-form-students-label"
+                      className="mt-2 border border-line rounded-md p-3 max-h-60 overflow-y-auto"
+                    >
                       {students && students.length > 0 ? (
                         students.map((student: any) => (
-                          <label key={student.id} className="flex items-center gap-2 p-2 hover:bg-surface-sunken cursor-pointer rounded">
+                          <label key={student.id} htmlFor={`redistribute-form-student-${student.id}`} className="flex items-center gap-2 p-2 hover:bg-surface-sunken cursor-pointer rounded">
                             <input
+                              id={`redistribute-form-student-${student.id}`}
                               type="checkbox"
                               checked={selectedStudentIds.includes(student.id)}
                               onChange={(e) => {
@@ -3018,8 +3039,9 @@ export default function BranchDashboard({ user }: { user: User }) {
                 {/* 시험 기간 */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="text-sm font-semibold text-ink">시작일 *</label>
+                    <label htmlFor="redistribute-form-start-date" className="text-sm font-semibold text-ink">시작일 *</label>
                     <Input
+                      id="redistribute-form-start-date"
                       type="datetime-local"
                       name="startDate"
                       required
@@ -3028,8 +3050,9 @@ export default function BranchDashboard({ user }: { user: User }) {
                     />
                   </div>
                   <div>
-                    <label className="text-sm font-semibold text-ink">종료일 *</label>
+                    <label htmlFor="redistribute-form-end-date" className="text-sm font-semibold text-ink">종료일 *</label>
                     <Input
+                      id="redistribute-form-end-date"
                       type="datetime-local"
                       name="endDate"
                       required
@@ -3887,6 +3910,7 @@ export default function BranchDashboard({ user }: { user: User }) {
                                   className="flex items-center justify-center w-20 h-20 border-l border-line cursor-pointer text-ink-tertiary transition-colors duration-150 ease-out hover:text-fn-success peer-checked:text-fn-success peer-checked:bg-fn-success-surface"
                                 >
                                   <CheckCircle className="w-9 h-9" strokeWidth={1.5} />
+                                  <span className="sr-only">정답</span>
                                 </label>
                               </div>
                               {/* X (오답) 버튼 */}
@@ -3905,6 +3929,7 @@ export default function BranchDashboard({ user }: { user: User }) {
                                   className="flex items-center justify-center w-20 h-20 border-l border-line cursor-pointer text-ink-tertiary transition-colors duration-150 ease-out hover:text-fn-error peer-checked:text-fn-error peer-checked:bg-fn-error-surface"
                                 >
                                   <XCircle className="w-9 h-9" strokeWidth={1.5} />
+                                  <span className="sr-only">오답</span>
                                 </label>
                               </div>
                             </div>
