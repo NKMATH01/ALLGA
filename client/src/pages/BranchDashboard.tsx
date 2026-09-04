@@ -16,7 +16,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Pagination, paginate } from '../components/ui/pagination';
 import { ListLoading, ErrorState } from '../components/ui/list-state';
-import { Users, GraduationCap, FileText, BarChart3, LogOut, LayoutDashboard, Menu, Home, Plus, Trash2, CheckCircle, XCircle, Edit, Sparkles, ArrowLeft, Search } from 'lucide-react';
+import { Users, GraduationCap, FileText, BarChart3, LogOut, LayoutDashboard, Menu, Home, Plus, Trash2, CheckCircle, XCircle, X, Edit, Sparkles, ArrowLeft, Search } from 'lucide-react';
 
 interface User {
   id: string;
@@ -2408,8 +2408,15 @@ export default function BranchDashboard({ user }: { user: User }) {
         >
           <Card className="w-full max-w-2xl mx-4 rounded-lg border-0 bg-surface-raised shadow-lg">
             <CardHeader className="border-b border-line bg-surface-subtle">
-              <CardTitle>{editingStudent ? '학생 수정' : '학생 추가'}
-              </CardTitle>
+              {/* 5.6 헤더는 제목(h2) + 우상단 닫기 버튼 */}
+              <div className="flex items-start justify-between gap-2">
+                <h2 className="text-xl font-semibold leading-tight tracking-[-0.01em] text-ink">
+                  {editingStudent ? '학생 수정' : '학생 추가'}
+                </h2>
+                <Button type="button" variant="outline" size="sm" aria-label="닫기" onClick={closeStudentModal}>
+                  <X className="w-4 h-4" />
+                </Button>
+              </div>
             </CardHeader>
             <CardContent className="p-0">
               {/* 섹션 라벨 + 2열 그리드로 밀도를 올린다 (DESIGN.md 11.4) */}
@@ -2715,8 +2722,15 @@ export default function BranchDashboard({ user }: { user: User }) {
         >
           <Card className="w-full max-w-2xl mx-4 max-h-[90dvh] overflow-y-auto rounded-lg border-0 bg-surface-raised shadow-lg">
             <CardHeader className="border-b border-line bg-surface-subtle">
-              <CardTitle>{editingClass ? '반 수정' : '반 추가'}
-              </CardTitle>
+              {/* 5.6 헤더는 제목(h2) + 우상단 닫기 버튼 */}
+              <div className="flex items-start justify-between gap-2">
+                <h2 className="text-xl font-semibold leading-tight tracking-[-0.01em] text-ink">
+                  {editingClass ? '반 수정' : '반 추가'}
+                </h2>
+                <Button type="button" variant="outline" size="sm" aria-label="닫기" onClick={closeClassModal}>
+                  <X className="w-4 h-4" />
+                </Button>
+              </div>
             </CardHeader>
             <CardContent className="p-6">
               <form onSubmit={handleClassSubmit} className="space-y-4">
@@ -2805,10 +2819,8 @@ export default function BranchDashboard({ user }: { user: User }) {
                   </p>
                 </div>
 
+                {/* 5.6 동작 버튼 순서는 보조 → 주 */}
                 <div className="flex gap-2 pt-4">
-                  <Button type="submit" className="flex-1 bg-action hover:bg-action-hover">
-                    {editingClass ? '수정' : '추가'}
-                  </Button>
                   <Button
                     type="button"
                     variant="outline"
@@ -2816,6 +2828,9 @@ export default function BranchDashboard({ user }: { user: User }) {
                     className="flex-1"
                   >
                     취소
+                  </Button>
+                  <Button type="submit" className="flex-1 bg-action hover:bg-action-hover">
+                    {editingClass ? '수정' : '추가'}
                   </Button>
                 </div>
               </form>
@@ -2944,8 +2959,15 @@ export default function BranchDashboard({ user }: { user: User }) {
         >
           <Card className="w-full max-w-2xl mx-4 max-h-[90dvh] overflow-y-auto rounded-lg border-0 bg-surface-raised shadow-lg">
             <CardHeader className="border-b border-line bg-surface-subtle">
-              <CardTitle>지점내 배포: {selectedDistribution.exam?.title}
-              </CardTitle>
+              {/* 5.6 헤더는 제목(h2) + 우상단 닫기 버튼 */}
+              <div className="flex items-start justify-between gap-2">
+                <h2 className="text-xl font-semibold leading-tight tracking-[-0.01em] text-ink">
+                  지점내 배포: {selectedDistribution.exam?.title}
+                </h2>
+                <Button type="button" variant="outline" size="sm" aria-label="닫기" onClick={closeRedistributeModal}>
+                  <X className="w-4 h-4" />
+                </Button>
+              </div>
             </CardHeader>
             <CardContent className="p-6">
               <form onSubmit={handleRedistributeSubmit} className="space-y-4">
@@ -3064,14 +3086,8 @@ export default function BranchDashboard({ user }: { user: User }) {
                   </div>
                 </div>
 
+                {/* 5.6 동작 버튼 순서는 보조 → 주 */}
                 <div className="flex gap-2 pt-4">
-                  <Button
-                    type="submit"
-                    className="flex-1 bg-action hover:bg-action-hover"
-                    disabled={redistributeMutation.isPending}
-                  >
-                    {redistributeMutation.isPending ? '배포 중...' : '지점내 배포'}
-                  </Button>
                   <Button
                     type="button"
                     variant="outline"
@@ -3079,6 +3095,13 @@ export default function BranchDashboard({ user }: { user: User }) {
                     className="flex-1"
                   >
                     취소
+                  </Button>
+                  <Button
+                    type="submit"
+                    className="flex-1 bg-action hover:bg-action-hover"
+                    disabled={redistributeMutation.isPending}
+                  >
+                    {redistributeMutation.isPending ? '배포 중...' : '지점내 배포'}
                   </Button>
                 </div>
               </form>
@@ -3394,30 +3417,26 @@ export default function BranchDashboard({ user }: { user: User }) {
     // Show student list for selected distribution
     return (
       <>
-        <Card className="border-0 shadow-xl bg-surface">
-          <CardHeader className="border-b border-line-subtle bg-surface-subtle">
-            <div className="flex items-center gap-4">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setSelectedReportDistribution(null)}
-                className="border-line text-ink-secondary hover:bg-surface-subtle"
-              >
-                <ArrowLeft className="w-4 h-4 mr-1" />
-                뒤로
-              </Button>
-              <div className="flex-1">
-                <CardTitle className="text-xl font-bold text-ink flex items-center gap-2">
-                  <FileText className="w-5 h-5 text-ink-secondary" />
-                  {selectedReportDistribution.exam?.title}
-                </CardTitle>
-                <p className="text-sm text-ink-secondary mt-1">
-                  {selectedReportDistribution.exam?.subject} • 총 {selectedReportDistribution.exam?.totalQuestions}문항 • {selectedReportDistribution.exam?.totalScore}점
-                </p>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="p-6">
+        {/* 관리 테이블은 카드로 감싸지 않는다 (DESIGN.md 11.2). 제목은 한 줄 툴바로 (4.4) */}
+        <section>
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <h2 className="text-sm font-semibold text-ink-secondary">
+              {selectedReportDistribution.exam?.title}
+              <span className="ml-2 font-normal text-ink-tertiary">
+                {selectedReportDistribution.exam?.subject} • 총 {selectedReportDistribution.exam?.totalQuestions}문항 • {selectedReportDistribution.exam?.totalScore}점
+              </span>
+            </h2>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setSelectedReportDistribution(null)}
+              className="border-line text-ink-secondary hover:bg-surface-subtle"
+            >
+              <ArrowLeft className="w-4 h-4 mr-1" />
+              뒤로
+            </Button>
+          </div>
+          <div>
             {distributionStudents && distributionStudents.students && distributionStudents.students.length > 0 ? (
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[640px] text-sm [&_td]:whitespace-nowrap [&_thead_th:first-child]:sticky [&_thead_th:first-child]:left-0 [&_thead_th:first-child]:z-10 [&_thead_th:first-child]:bg-surface [&_tbody_td:first-child]:sticky [&_tbody_td:first-child]:left-0 [&_tbody_td:first-child]:bg-surface [&_tbody_tr:hover_td:first-child]:bg-surface-subtle">
@@ -3579,8 +3598,8 @@ export default function BranchDashboard({ user }: { user: User }) {
                 <p className="text-ink-secondary">배포된 학생이 없습니다.</p>
               </div>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </section>
       </>
     );
   };
@@ -3755,21 +3774,26 @@ export default function BranchDashboard({ user }: { user: User }) {
             className="fixed inset-0 bg-[var(--overlay)] flex items-center justify-center z-50 p-4"
           >
             <div className="w-full max-w-2xl bg-surface-raised rounded-lg shadow-lg overflow-hidden max-h-[90dvh] flex flex-col">
-              {/* 상단 헤더: 학생 정보 및 점수 */}
-              <div className="p-6 border-b border-line flex justify-between items-center flex-shrink-0">
+              {/* 상단 헤더: 학생 정보 및 점수. 5.6 제목(h2) + 우상단 닫기 버튼 */}
+              <div className="p-6 border-b border-line flex justify-between items-center gap-2 flex-shrink-0">
                 <div>
-                  <h3 className="text-xl font-bold text-ink">{selectedAttempt.studentName}</h3>
+                  <h2 className="text-xl font-bold text-ink">{selectedAttempt.studentName}</h2>
                   <p className="text-sm text-ink-secondary mt-1">
                     {selectedAttempt.isSubmitted && selectedAttempt.submittedAt
                       ? `${new Date(selectedAttempt.submittedAt).toLocaleString('ko-KR')} 제출`
                       : '답안 입력 중'}
                   </p>
                 </div>
-                {selectedAttempt.score !== undefined && selectedAttempt.score !== null && (
-                  <div className="bg-surface-subtle rounded-lg px-4 py-2">
-                    <span className="text-2xl font-bold text-ink">{selectedAttempt.score}점</span>
-                  </div>
-                )}
+                <div className="flex items-center gap-2">
+                  {selectedAttempt.score !== undefined && selectedAttempt.score !== null && (
+                    <div className="bg-surface-subtle rounded-lg px-4 py-2">
+                      <span className="text-2xl font-bold text-ink">{selectedAttempt.score}점</span>
+                    </div>
+                  )}
+                  <Button type="button" variant="outline" size="sm" aria-label="닫기" onClick={closeAnswerModal}>
+                    <X className="w-4 h-4" />
+                  </Button>
+                </div>
               </div>
 
               {/* 중단: 필터 버튼 */}
@@ -3941,8 +3965,16 @@ export default function BranchDashboard({ user }: { user: User }) {
                     })()}
                   </div>
 
-                  {/* 하단: 제출 버튼 */}
+                  {/* 하단: 제출 버튼. 5.6 동작 버튼 순서는 보조 → 주 */}
                   <div className="p-4 bg-surface-sunken border-t border-line flex gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={closeAnswerModal}
+                      className="flex-1"
+                    >
+                      취소
+                    </Button>
                     <Button
                       type="submit"
                       className="flex-1 bg-action hover:bg-action-hover"
@@ -3953,14 +3985,6 @@ export default function BranchDashboard({ user }: { user: User }) {
                         : selectedAttempt.attemptId
                         ? '저장 및 채점'
                         : '답안 입력 및 채점'}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={closeAnswerModal}
-                      className="flex-1"
-                    >
-                      취소
                     </Button>
                   </div>
                 </form>

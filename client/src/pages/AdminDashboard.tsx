@@ -9,7 +9,7 @@ import { useModalA11y, isMobileViewport } from '../lib/useModalA11y';
 import { ListLoading, LoadingRows, ErrorState, ErrorRow } from '../components/ui/list-state';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
-import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
+import { Card, CardHeader, CardContent } from '../components/ui/card';
 import { Pagination, paginate } from '../components/ui/pagination';
 import { Users, Building2, FileText, TrendingUp, LogOut, GraduationCap, Plus, Send, LayoutDashboard, Menu, X, ArrowUp, ArrowDown } from 'lucide-react';
 
@@ -502,16 +502,12 @@ export default function AdminDashboard({ user }: { user: User }) {
         </StatStrip>
       </div>
 
-      {/* Branch Statistics Table */}
-      <Card className="border-0 shadow-xl bg-surface">
-        <CardHeader className="border-b border-line-subtle bg-surface-subtle">
-          <CardTitle className="text-xl font-bold text-ink flex items-center gap-2">
-            <Building2 className="w-5 h-5 text-ink-secondary" strokeWidth={1.5} />
-            지점별 통계
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-6">
-          <div className="overflow-x-auto">
+      {/* 관리 테이블은 카드로 감싸지 않는다 (DESIGN.md 11.2). 제목은 한 줄 툴바로 (4.4) */}
+      <section>
+        <div className="flex items-center justify-between gap-3 mb-3">
+          <h2 className="text-sm font-semibold text-ink-secondary">지점별 통계</h2>
+        </div>
+        <div className="overflow-x-auto">
             <table className="w-full min-w-[640px] [&_td]:whitespace-nowrap [&_thead_th:first-child]:sticky [&_thead_th:first-child]:left-0 [&_thead_th:first-child]:z-10 [&_tbody_td:first-child]:sticky [&_tbody_td:first-child]:left-0 [&_tbody_td:first-child]:bg-surface">
               <thead>
                 <tr className="border-b border-line-strong">
@@ -557,40 +553,34 @@ export default function AdminDashboard({ user }: { user: User }) {
               </tbody>
             </table>
           </div>
-          {/* 페이저 (11.2). 가로 스크롤 상자 밖에 둬야 표를 옆으로 밀어도 따라가지 않는다 */}
-          <Pagination
-            page={pagedBranchStats.page}
-            totalItems={stats?.branchStats?.length || 0}
-            onPageChange={setBranchStatPage}
-          />
-        </CardContent>
-      </Card>
+        {/* 페이저 (11.2). 가로 스크롤 상자 밖에 둬야 표를 옆으로 밀어도 따라가지 않는다 */}
+        <Pagination
+          page={pagedBranchStats.page}
+          totalItems={stats?.branchStats?.length || 0}
+          onPageChange={setBranchStatPage}
+        />
+      </section>
     </>
   );
 
   const renderBranches = () => (
     <>
-      <Card className="border-0 shadow-xl bg-surface">
-        <CardHeader className="border-b border-line-subtle bg-surface-subtle">
-          <div className="flex justify-between items-center">
-            <CardTitle className="text-xl font-bold text-ink flex items-center gap-2">
-              <Building2 className="w-5 h-5 text-ink-secondary" />
-              지점 관리
-            </CardTitle>
-            <Button
-              onClick={() => {
-                setEditingBranch(null);
-                setShowBranchModal(true);
-              }}
-              className="bg-action hover:bg-action-hover"
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              지점 추가
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent className="p-6">
-          <div className="overflow-x-auto">
+      {/* 관리 테이블은 카드로 감싸지 않는다 (DESIGN.md 11.2). 제목은 한 줄 툴바로 (4.4) */}
+      <section>
+        <div className="flex items-center justify-between gap-3 mb-3">
+          <h2 className="text-sm font-semibold text-ink-secondary">지점 관리</h2>
+          <Button
+            onClick={() => {
+              setEditingBranch(null);
+              setShowBranchModal(true);
+            }}
+            className="bg-action hover:bg-action-hover"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            지점 추가
+          </Button>
+        </div>
+        <div className="overflow-x-auto">
             <table className="w-full min-w-[640px] [&_td]:whitespace-nowrap [&_thead_th:first-child]:sticky [&_thead_th:first-child]:left-0 [&_thead_th:first-child]:z-10 [&_tbody_td:first-child]:sticky [&_tbody_td:first-child]:left-0 [&_tbody_td:first-child]:bg-surface">
               <thead>
                 <tr className="border-b border-line-strong">
@@ -679,9 +669,8 @@ export default function AdminDashboard({ user }: { user: User }) {
                 ))}
               </tbody>
             </table>
-          </div>
-        </CardContent>
-      </Card>
+        </div>
+      </section>
 
       {/* Branch Modal */}
       {showBranchModal && (
@@ -694,10 +683,16 @@ export default function AdminDashboard({ user }: { user: User }) {
         >
           <Card className="w-full max-w-lg mx-4 rounded-lg border-0 bg-surface-raised shadow-lg">
             <CardHeader className="border-b border-line bg-surface-subtle">
-              <CardTitle className="flex items-center gap-2">
-                <Building2 className="w-5 h-5 text-ink-secondary" />
-                {editingBranch ? '지점 수정' : '지점 추가'}
-              </CardTitle>
+              {/* 5.6 헤더는 제목(h2) + 우상단 닫기 버튼 */}
+              <div className="flex items-start justify-between gap-2">
+                <h2 className="flex items-center gap-2 text-xl font-semibold leading-tight tracking-[-0.01em] text-ink">
+                  <Building2 className="w-5 h-5 text-ink-secondary" />
+                  {editingBranch ? '지점 수정' : '지점 추가'}
+                </h2>
+                <Button type="button" variant="outline" size="sm" aria-label="닫기" onClick={closeBranchModal}>
+                  <X className="w-4 h-4" />
+                </Button>
+              </div>
             </CardHeader>
             <CardContent className="p-6">
               <form onSubmit={handleBranchSubmit} className="space-y-4">
@@ -762,13 +757,8 @@ export default function AdminDashboard({ user }: { user: User }) {
                     </div>
                   </>
                 )}
+                {/* 5.6 동작 버튼 순서는 보조 → 주 */}
                 <div className="flex gap-2 pt-4">
-                  <Button
-                    type="submit"
-                    className="flex-1 bg-action hover:bg-action-hover"
-                  >
-                    {editingBranch ? '수정' : '추가'}
-                  </Button>
                   <Button
                     type="button"
                     variant="outline"
@@ -776,6 +766,12 @@ export default function AdminDashboard({ user }: { user: User }) {
                     className="flex-1"
                   >
                     취소
+                  </Button>
+                  <Button
+                    type="submit"
+                    className="flex-1 bg-action hover:bg-action-hover"
+                  >
+                    {editingBranch ? '수정' : '추가'}
                   </Button>
                 </div>
               </form>
@@ -788,44 +784,40 @@ export default function AdminDashboard({ user }: { user: User }) {
 
   const renderExams = () => (
     <>
-      <Card className="border-0 shadow-xl bg-surface">
-        <CardHeader className="border-b border-line-subtle bg-surface-subtle">
-          <div className="flex justify-between items-center">
-            <CardTitle className="text-xl font-bold text-ink flex items-center gap-2">
-              <Plus className="w-5 h-5 text-ink-secondary" />
-              시험 생성
-            </CardTitle>
-            <div className="flex gap-2">
-              <Button
-                onClick={() => setShowExamModal(true)}
-                className="bg-action hover:bg-action-hover"
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                직접 생성
-              </Button>
-              <label
-                htmlFor="exam-file-upload"
-                className={`inline-flex h-10 items-center gap-2 rounded-md px-4 text-sm font-semibold text-action-text transition-colors duration-150 ease-out ${
-                  uploadingFile
-                    ? 'cursor-not-allowed bg-ink-tertiary'
-                    : 'cursor-pointer bg-action hover:bg-action-hover active:scale-[0.98]'
-                }`}
-              >
-                <FileText className="w-4 h-4" />
-                {uploadingFile ? '업로드 중...' : 'Excel 업로드'}
-              </label>
-              <input
-                id="exam-file-upload"
-                type="file"
-                accept=".xlsx"
-                onChange={handleFileUpload}
-                disabled={uploadingFile}
-                className="hidden"
-              />
-            </div>
+      {/* 관리 테이블은 카드로 감싸지 않는다 (DESIGN.md 11.2). 제목은 한 줄 툴바로 (4.4) */}
+      <section>
+        <div className="flex items-center justify-between gap-3 mb-3">
+          <h2 className="text-sm font-semibold text-ink-secondary">시험 생성</h2>
+          <div className="flex gap-2">
+            <Button
+              onClick={() => setShowExamModal(true)}
+              className="bg-action hover:bg-action-hover"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              직접 생성
+            </Button>
+            <label
+              htmlFor="exam-file-upload"
+              className={`inline-flex h-10 items-center gap-2 rounded-md px-4 text-sm font-semibold text-action-text transition-colors duration-150 ease-out ${
+                uploadingFile
+                  ? 'cursor-not-allowed bg-ink-tertiary'
+                  : 'cursor-pointer bg-action hover:bg-action-hover active:scale-[0.98]'
+              }`}
+            >
+              <FileText className="w-4 h-4" />
+              {uploadingFile ? '업로드 중...' : 'Excel 업로드'}
+            </label>
+            <input
+              id="exam-file-upload"
+              type="file"
+              accept=".xlsx"
+              onChange={handleFileUpload}
+              disabled={uploadingFile}
+              className="hidden"
+            />
           </div>
-        </CardHeader>
-        <CardContent className="p-6">
+        </div>
+        <div>
           {/* 못 받아온 것과 0건은 다르다 (11.7) */}
           {examsLoading ? (
             <ListLoading />
@@ -899,8 +891,8 @@ export default function AdminDashboard({ user }: { user: User }) {
             totalItems={exams?.length || 0}
             onPageChange={setExamPage}
           />
-        </CardContent>
-      </Card>
+        </div>
+      </section>
 
       {/* 시험 직접 생성 간단 모달 */}
       {showExamModal && (
@@ -913,10 +905,16 @@ export default function AdminDashboard({ user }: { user: User }) {
         >
           <Card className="w-full max-w-2xl mx-4 my-8 rounded-lg border-0 bg-surface-raised shadow-lg">
             <CardHeader className="border-b border-line bg-surface-subtle">
-              <CardTitle className="flex items-center gap-2">
-                <Plus className="w-5 h-5 text-ink-secondary" />
-                시험 직접 생성 (간단 버전)
-              </CardTitle>
+              {/* 5.6 헤더는 제목(h2) + 우상단 닫기 버튼 */}
+              <div className="flex items-start justify-between gap-2">
+                <h2 className="flex items-center gap-2 text-xl font-semibold leading-tight tracking-[-0.01em] text-ink">
+                  <Plus className="w-5 h-5 text-ink-secondary" />
+                  시험 직접 생성 (간단 버전)
+                </h2>
+                <Button type="button" variant="outline" size="sm" aria-label="닫기" onClick={closeExamModal}>
+                  <X className="w-4 h-4" />
+                </Button>
+              </div>
             </CardHeader>
             <CardContent className="p-6">
               <form onSubmit={handleExamSubmit} className="space-y-4">
@@ -970,12 +968,13 @@ export default function AdminDashboard({ user }: { user: User }) {
                     정답은 위에 입력한 값이 그대로 사용됩니다. 난이도·영역별 상세 정보가 필요하면 Excel 업로드를 이용하세요.
                   </p>
                 </div>
+                {/* 5.6 동작 버튼 순서는 보조 → 주 */}
                 <div className="flex gap-2 pt-4">
-                  <Button type="submit" className="flex-1 bg-action hover:bg-action-hover">
-                    생성
-                  </Button>
                   <Button type="button" variant="outline" onClick={closeExamModal} className="flex-1">
                     취소
+                  </Button>
+                  <Button type="submit" className="flex-1 bg-action hover:bg-action-hover">
+                    생성
                   </Button>
                 </div>
               </form>
@@ -995,14 +994,16 @@ export default function AdminDashboard({ user }: { user: User }) {
         >
           <Card className="w-full max-w-4xl mx-4 my-8 rounded-lg border-0 bg-surface-raised shadow-lg">
             <CardHeader className="border-b border-line bg-surface-subtle">
-              <div className="flex justify-between items-start">
-                <CardTitle className="flex items-center gap-2">
+              {/* 5.6 헤더는 제목(h2) + 우상단 닫기 버튼 */}
+              <div className="flex justify-between items-start gap-2">
+                <h2 className="flex items-center gap-2 text-xl font-semibold leading-tight tracking-[-0.01em] text-ink">
                   <FileText className="w-5 h-5 text-ink-secondary" />
                   {editingExam ? '시험 수정' : '시험 상세 정보'}
-                </CardTitle>
+                </h2>
                 <div className="flex gap-2">
                   {!editingExam && (
                     <Button
+                      type="button"
                       variant="outline"
                       size="sm"
                       onClick={() => setEditingExam(true)}
@@ -1011,7 +1012,7 @@ export default function AdminDashboard({ user }: { user: User }) {
                       수정
                     </Button>
                   )}
-                  <Button variant="outline" size="sm" onClick={closeViewExamModal}>
+                  <Button type="button" variant="outline" size="sm" aria-label="닫기" onClick={closeViewExamModal}>
                     <X className="w-4 h-4" />
                   </Button>
                 </div>
@@ -1204,12 +1205,13 @@ export default function AdminDashboard({ user }: { user: User }) {
                     />
                   </div>
 
+                  {/* 5.6 동작 버튼 순서는 보조 → 주 */}
                   <div className="flex gap-2 pt-4">
-                    <Button type="submit" className="flex-1 bg-action hover:bg-action-hover">
-                      저장
-                    </Button>
                     <Button type="button" variant="outline" onClick={() => setEditingExam(false)} className="flex-1">
                       취소
+                    </Button>
+                    <Button type="submit" className="flex-1 bg-action hover:bg-action-hover">
+                      저장
                     </Button>
                   </div>
                 </form>
@@ -1303,23 +1305,19 @@ export default function AdminDashboard({ user }: { user: User }) {
 
   const renderDistributions = () => (
     <>
-      <Card className="border-0 shadow-xl bg-surface">
-        <CardHeader className="border-b border-line-subtle bg-surface-subtle">
-          <div className="flex justify-between items-center">
-            <CardTitle className="text-xl font-bold text-ink flex items-center gap-2">
-              <Send className="w-5 h-5 text-ink-secondary" strokeWidth={1.5} />
-              시험 배포
-            </CardTitle>
-            <Button
-              onClick={() => setShowDistributionModal(true)}
-              className="bg-action hover:bg-action-hover"
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              시험 배포
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent className="p-6">
+      {/* 관리 테이블은 카드로 감싸지 않는다 (DESIGN.md 11.2). 제목은 한 줄 툴바로 (4.4) */}
+      <section>
+        <div className="flex items-center justify-between gap-3 mb-3">
+          <h2 className="text-sm font-semibold text-ink-secondary">시험 배포</h2>
+          <Button
+            onClick={() => setShowDistributionModal(true)}
+            className="bg-action hover:bg-action-hover"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            시험 배포
+          </Button>
+        </div>
+        <div>
           {/* 못 받아온 것과 0건은 다르다 (11.7) */}
           {distributionsLoading ? (
             <ListLoading />
@@ -1386,8 +1384,8 @@ export default function AdminDashboard({ user }: { user: User }) {
             totalItems={distributions?.length || 0}
             onPageChange={setDistPage}
           />
-        </CardContent>
-      </Card>
+        </div>
+      </section>
 
       {/* 배포 모달 */}
       {showDistributionModal && (
@@ -1400,10 +1398,16 @@ export default function AdminDashboard({ user }: { user: User }) {
         >
           <Card className="w-full max-w-lg mx-4 rounded-lg border-0 bg-surface-raised shadow-lg">
             <CardHeader className="border-b border-line bg-surface-subtle">
-              <CardTitle className="flex items-center gap-2">
-                <Send className="w-5 h-5 text-ink-secondary" strokeWidth={1.5} />
-                시험 배포
-              </CardTitle>
+              {/* 5.6 헤더는 제목(h2) + 우상단 닫기 버튼 */}
+              <div className="flex items-start justify-between gap-2">
+                <h2 className="flex items-center gap-2 text-xl font-semibold leading-tight tracking-[-0.01em] text-ink">
+                  <Send className="w-5 h-5 text-ink-secondary" strokeWidth={1.5} />
+                  시험 배포
+                </h2>
+                <Button type="button" variant="outline" size="sm" aria-label="닫기" onClick={closeDistributionModal}>
+                  <X className="w-4 h-4" />
+                </Button>
+              </div>
             </CardHeader>
             <CardContent className="p-6">
               <form onSubmit={handleDistributionSubmit} className="space-y-4">
@@ -1478,14 +1482,8 @@ export default function AdminDashboard({ user }: { user: User }) {
                   </div>
                 </div>
 
+                {/* 5.6 동작 버튼 순서는 보조 → 주 */}
                 <div className="flex gap-2 pt-4">
-                  <Button
-                    type="submit"
-                    disabled={selectedBranches.length === 0}
-                    className="flex-1 bg-action hover:bg-action-hover"
-                  >
-                    배포 ({selectedBranches.length}개 지점)
-                  </Button>
                   <Button
                     type="button"
                     variant="outline"
@@ -1493,6 +1491,13 @@ export default function AdminDashboard({ user }: { user: User }) {
                     className="flex-1"
                   >
                     취소
+                  </Button>
+                  <Button
+                    type="submit"
+                    disabled={selectedBranches.length === 0}
+                    className="flex-1 bg-action hover:bg-action-hover"
+                  >
+                    배포 ({selectedBranches.length}개 지점)
                   </Button>
                 </div>
               </form>
