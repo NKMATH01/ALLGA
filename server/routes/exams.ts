@@ -4,7 +4,7 @@ import xlsx from 'xlsx';
 import { db } from '../db/index';
 import { exams, examAttempts, examDistributions } from '../db/schema';
 import { eq } from 'drizzle-orm';
-import { requireAuth, requireAdmin } from '../middleware/auth';
+import { requireAuth, requireAdmin, requireAdminOrBranch } from '../middleware/auth';
 import { log, errorFields } from '../utils/logger';
 
 const router = express.Router();
@@ -54,7 +54,10 @@ const upload = multer({
 });
 
 // GET /api/exams - 시험 목록 조회
-router.get('/', requireAuth, async (_req, res) => {
+// 응답의 questionsData 에는 정답·해설이 들어 있다. 관리 목적으로만 쓰이므로
+// 관리자·지점장에게만 연다. 학생·학부모의 오답 리뷰는
+// GET /api/exam-attempts/:id/review (제출 완료된 본인 attempt 한정)를 쓴다.
+router.get('/', requireAdminOrBranch, async (_req, res) => {
   try {
     const examList = await db.select().from(exams).orderBy(exams.createdAt);
 
@@ -92,8 +95,8 @@ router.get('/available', requireAuth, async (_req, res) => {
   }
 });
 
-// GET /api/exams/:id - 시험 상세 조회
-router.get('/:id', requireAuth, async (req, res) => {
+// GET /api/exams/:id - 시험 상세 조회 (정답·해설 포함 → 관리자·지점장 전용)
+router.get('/:id', requireAdminOrBranch, async (req, res) => {
   try {
     const { id } = req.params;
 

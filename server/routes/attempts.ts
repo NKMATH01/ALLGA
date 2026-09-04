@@ -13,7 +13,7 @@ import {
   studentParents,
 } from '../db/schema';
 import { eq, and, isNotNull, isNull, inArray } from 'drizzle-orm';
-import { requireStudent, requireBranchManager } from '../middleware/auth';
+import { requireStudent, requireBranchManager, type SessionUser } from '../middleware/auth';
 import {
   calculateGrade,
   endOfLocalDay,
@@ -252,95 +252,168 @@ router.get('/my-exams/:distributionId', requireStudent, async (req, res) => {
   }
 });
 
+/**
+ * attempt 1건을 조회하고 4역할(admin/student/branch/parent) 접근 규칙을 적용한다.
+ *
+ * `GET /exam-attempts/:id` 와 `GET /exam-attempts/:id/review` 가 **같은 규칙**을 써야 한다.
+ * 인라인으로 복붙하면 한쪽만 고쳐져 두 경로의 경계가 조용히 갈라지므로 함수로 모은다.
+ * 규칙 자체는 분리 전과 동일하다 — 기본은 차단이고 허용되는 역할만 명시적으로 통과시킨다.
+ *
+ * 성공하면 `{ attempt, student }`, 막히면 `{ status, message }` 를 돌려준다.
+ */
+type AttemptAccessResult =
+  | { ok: true; attempt: typeof examAttempts.$inferSelect; student: typeof students.$inferSelect }
+  | { ok: false; status: number; message: string };
+
+async function loadAttemptForViewer(
+  attemptId: string,
+  user: SessionUser | undefined
+): Promise<AttemptAccessResult> {
+  if (!user) {
+    return { ok: false, status: 401, message: '인증이 필요합니다.' };
+  }
+
+  const [attempt] = await db
+    .select()
+    .from(examAttempts)
+    .where(eq(examAttempts.id, attemptId))
+    .limit(1);
+
+  if (!attempt) {
+    return { ok: false, status: 404, message: '시험 응시를 찾을 수 없습니다.' };
+  }
+
+  const [student] = await db
+    .select()
+    .from(students)
+    .where(eq(students.id, attempt.studentId))
+    .limit(1);
+
+  if (!student) {
+    return { ok: false, status: 404, message: '학생 정보를 찾을 수 없습니다.' };
+  }
+
+  const denied = { ok: false, status: 403, message: '권한이 없습니다.' } as const;
+
+  if (user.role === 'admin') {
+    // 전체 열람 허용
+  } else if (user.role === 'student') {
+    // Students can only view their own attempts
+    const [myStudent] = await db
+      .select()
+      .from(students)
+      .where(eq(students.userId, user.id))
+      .limit(1);
+
+    if (!myStudent || myStudent.id !== attempt.studentId) {
+      return denied;
+    }
+  } else if (user.role === 'branch') {
+    // Branch managers can view attempts from their branch
+    if (student.branchId !== user.branchId) {
+      return denied;
+    }
+  } else if (user.role === 'parent') {
+    // 자기 자녀의 응시만 열람 가능
+    const [parent] = await db
+      .select()
+      .from(parents)
+      .where(eq(parents.userId, user.id))
+      .limit(1);
+
+    if (!parent) {
+      return denied;
+    }
+
+    const [link] = await db
+      .select()
+      .from(studentParents)
+      .where(
+        and(eq(studentParents.parentId, parent.id), eq(studentParents.studentId, attempt.studentId))
+      )
+      .limit(1);
+
+    if (!link) {
+      return denied;
+    }
+  } else {
+    return denied;
+  }
+
+  return { ok: true, attempt, student };
+}
+
 // GET /api/exam-attempts/:id - 시험 응시 상세 조회
 router.get('/exam-attempts/:id', async (req, res) => {
   try {
-    const { id } = req.params;
-    const user = req.session.user;
-
-    if (!user) {
-      return res.status(401).json({ message: '인증이 필요합니다.' });
-    }
-
-    // Get attempt
-    const [attempt] = await db
-      .select()
-      .from(examAttempts)
-      .where(eq(examAttempts.id, id))
-      .limit(1);
-
-    if (!attempt) {
-      return res.status(404).json({ message: '시험 응시를 찾을 수 없습니다.' });
-    }
-
-    // Get student
-    const [student] = await db
-      .select()
-      .from(students)
-      .where(eq(students.id, attempt.studentId))
-      .limit(1);
-
-    if (!student) {
-      return res.status(404).json({ message: '학생 정보를 찾을 수 없습니다.' });
-    }
-
-    // 권한 검사: 기본은 차단이고, 허용되는 역할만 명시적으로 통과시킨다.
-    // (기존에는 어느 분기에도 걸리지 않는 역할이 그대로 통과했다)
-    if (user.role === 'admin') {
-      // 전체 열람 허용
-    } else if (user.role === 'student') {
-      // Students can only view their own attempts
-      const [myStudent] = await db
-        .select()
-        .from(students)
-        .where(eq(students.userId, user.id))
-        .limit(1);
-
-      if (!myStudent || myStudent.id !== attempt.studentId) {
-        return res.status(403).json({ message: '권한이 없습니다.' });
-      }
-    } else if (user.role === 'branch') {
-      // Branch managers can view attempts from their branch
-      if (student.branchId !== user.branchId) {
-        return res.status(403).json({ message: '권한이 없습니다.' });
-      }
-    } else if (user.role === 'parent') {
-      // 자기 자녀의 응시만 열람 가능
-      const [parent] = await db
-        .select()
-        .from(parents)
-        .where(eq(parents.userId, user.id))
-        .limit(1);
-
-      if (!parent) {
-        return res.status(403).json({ message: '권한이 없습니다.' });
-      }
-
-      const [link] = await db
-        .select()
-        .from(studentParents)
-        .where(
-          and(
-            eq(studentParents.parentId, parent.id),
-            eq(studentParents.studentId, attempt.studentId)
-          )
-        )
-        .limit(1);
-
-      if (!link) {
-        return res.status(403).json({ message: '권한이 없습니다.' });
-      }
-    } else {
-      return res.status(403).json({ message: '권한이 없습니다.' });
+    const access = await loadAttemptForViewer(req.params.id, req.session.user);
+    if (!access.ok) {
+      return res.status(access.status).json({ message: access.message });
     }
 
     res.json({
       success: true,
-      data: attempt,
+      data: access.attempt,
     });
   } catch (error) {
     log.error('attempt.get_attempt_failed', errorFields(error));
     res.status(500).json({ message: '시험 응시 조회 중 오류가 발생했습니다.' });
+  }
+});
+
+// GET /api/exam-attempts/:id/review - 제출 완료된 응시의 오답 리뷰(문항·정답·해설 포함)
+//
+// P-1: `GET /api/exams/:id` 는 정답키를 그대로 노출해서 응시 전·중에도 정답을 볼 수 있었다.
+// 그 라우트를 관리자·지점장 전용으로 좁히고, 학생·학부모의 오답 리뷰는 여기로 옮긴다.
+// 정답·해설을 주는 근거는 "제출이 끝난 본인(또는 자녀) attempt" 라는 두 조건이다.
+//
+// 라우트 등록 위치: `/exam-attempts/:id` 바로 아래. 세그먼트 수가 달라(`:id` 뒤에 `/review`)
+// 위 라우트가 이 요청을 먼저 삼키지 않으므로 순서에 의존하지 않지만, 두 라우트가 같은
+// 접근 규칙(`loadAttemptForViewer`)을 공유한다는 사실이 눈에 보이도록 붙여 둔다.
+router.get('/exam-attempts/:id/review', async (req, res) => {
+  try {
+    const access = await loadAttemptForViewer(req.params.id, req.session.user);
+    if (!access.ok) {
+      return res.status(access.status).json({ message: access.message });
+    }
+
+    const { attempt } = access;
+
+    // 제출 전에는 정답을 줄 수 없다. 리뷰는 채점이 끝난 뒤의 화면이다.
+    if (!attempt.submittedAt) {
+      return res.status(403).json({ message: '제출 후에 확인할 수 있습니다.' });
+    }
+
+    const [exam] = await db.select().from(exams).where(eq(exams.id, attempt.examId)).limit(1);
+
+    if (!exam) {
+      return res.status(404).json({ message: '시험을 찾을 수 없습니다.' });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        attempt: {
+          id: attempt.id,
+          answers: attempt.answers,
+          score: attempt.score,
+          maxScore: attempt.maxScore,
+          grade: attempt.grade,
+          submittedAt: attempt.submittedAt,
+        },
+        exam: {
+          id: exam.id,
+          title: exam.title,
+          subject: exam.subject,
+          totalQuestions: exam.totalQuestions,
+          totalScore: exam.totalScore,
+          questionsData: exam.questionsData,
+        },
+      },
+    });
+  } catch (error) {
+    log.error('attempt.get_attempt_review_failed', errorFields(error));
+    res.status(500).json({ message: '오답 리뷰 조회 중 오류가 발생했습니다.' });
   }
 });
 

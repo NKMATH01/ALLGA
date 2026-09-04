@@ -184,11 +184,10 @@ function WrongQuestionsModal({ attemptId, examTitle }: { attemptId: string; exam
   const fetchWrongQuestions = async () => {
     setLoading(true);
     try {
-      const attemptRes = await api.get(`/exam-attempts/${attemptId}`);
-      const attempt = attemptRes.data.data;
-
-      const examRes = await api.get(`/exams/${attempt.examId}`);
-      const exam = examRes.data.data;
+      // 오답 리뷰 전용 엔드포인트. 제출 완료된 본인 attempt 에 한해 문항·정답·해설을 준다.
+      // (`/exams/:id` 는 응시 전에도 정답키를 노출해서 관리자·지점장 전용으로 좁혔다)
+      const reviewRes = await api.get(`/exam-attempts/${attemptId}/review`);
+      const { attempt, exam } = reviewRes.data.data;
 
       const answers = attempt.answers || {};
       const questionsData = exam.questionsData || [];
