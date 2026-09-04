@@ -316,6 +316,8 @@ export default function BranchDashboard({ user }: { user: User }) {
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['distributions', user.branchId] });
+      // 응시 기간이 바뀌면 배포 목록과 학생 목록 양쪽에 반영돼야 한다.
+      queryClient.invalidateQueries({ queryKey: ['all-distribution-students'] });
       setShowRedistributeModal(false);
       setSelectedDistribution(null);
       setSelectedClassId('');
@@ -458,12 +460,27 @@ export default function BranchDashboard({ user }: { user: User }) {
     }
   };
 
+  /** datetime-local 입력용 'YYYY-MM-DDTHH:mm' 로컬 시각 문자열. toISOString 은 UTC 라 쓰면 안 된다. */
+  const toDateTimeLocal = (value: Date | string): string => {
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return '';
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  };
+
   const handleRedistributeSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
     if (!selectedDistribution) return;
 
+    const formData = new FormData(e.currentTarget);
     const data: any = {};
+
+    // 응시 기간은 선택 필드다. 비어 있지 않을 때만 보낸다(서버가 기존 값과 비교해 검증).
+    const startDate = formData.get('startDate');
+    const endDate = formData.get('endDate');
+    if (typeof startDate === 'string' && startDate !== '') data.startDate = startDate;
+    if (typeof endDate === 'string' && endDate !== '') data.endDate = endDate;
 
     if (redistributeType === 'class') {
       if (!selectedClassId) {
@@ -2929,7 +2946,7 @@ export default function BranchDashboard({ user }: { user: User }) {
                       name="startDate"
                       required
                       className="mt-1"
-                      defaultValue={new Date().toISOString().slice(0, 16)}
+                      defaultValue={toDateTimeLocal(selectedDistribution.startDate)}
                     />
                   </div>
                   <div>
@@ -2939,7 +2956,7 @@ export default function BranchDashboard({ user }: { user: User }) {
                       name="endDate"
                       required
                       className="mt-1"
-                      defaultValue={new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 16)}
+                      defaultValue={toDateTimeLocal(selectedDistribution.endDate)}
                     />
                   </div>
                 </div>

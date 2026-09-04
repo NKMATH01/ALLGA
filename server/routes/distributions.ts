@@ -423,7 +423,7 @@ router.put('/:id', requireAdminOrBranch, async (req, res) => {
   try {
     const { id } = req.params;
     const user = req.session.user!;
-    const { classId, studentIds } = req.body;
+    const { classId, studentIds, startDate, endDate } = req.body;
 
     // Get distribution
     const [distribution] = await db
@@ -463,10 +463,45 @@ router.put('/:id', requireAdminOrBranch, async (req, res) => {
       }
     }
 
+    // 응시 기간은 선택 필드다. 온 쪽만 갱신하고, 오지 않은 쪽은 기존 값을 기준으로 순서를 본다.
+    // 파싱/순서 규칙은 POST 와 동일(KST 로컬 자정 ~ 당일 23:59:59.999).
+    const hasValue = (v: unknown) => v !== undefined && v !== null && v !== '';
+    let nextStart: Date | null = null;
+    let nextEnd: Date | null = null;
+
+    if (hasValue(startDate) || hasValue(endDate)) {
+      if (hasValue(startDate)) {
+        nextStart = parseLocalDateStart(startDate);
+        if (!nextStart) {
+          return res.status(400).json({ message: '날짜 형식이 올바르지 않습니다. (예: 2026-08-20)' });
+        }
+      }
+
+      if (hasValue(endDate)) {
+        nextEnd = parseLocalDateEnd(endDate);
+        if (!nextEnd) {
+          return res.status(400).json({ message: '날짜 형식이 올바르지 않습니다. (예: 2026-08-20)' });
+        }
+      }
+
+      const effectiveStart = nextStart ?? new Date(distribution.startDate);
+      const effectiveEnd = nextEnd ?? new Date(distribution.endDate);
+
+      if (effectiveStart >= effectiveEnd) {
+        return res.status(400).json({ message: '시작일은 종료일보다 이전이어야 합니다.' });
+      }
+    }
+
     // Update distribution with classId
+    const updates: { classId: string | null; startDate?: Date; endDate?: Date } = {
+      classId: classId || null,
+    };
+    if (nextStart) updates.startDate = nextStart;
+    if (nextEnd) updates.endDate = nextEnd;
+
     await db
       .update(examDistributions)
-      .set({ classId: classId || null })
+      .set(updates)
       .where(eq(examDistributions.id, id));
 
     // Delete existing student assignments
