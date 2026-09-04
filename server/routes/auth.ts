@@ -24,6 +24,10 @@ const loginLimiter = rateLimit({
 
 /**
  * impersonation 감사 로그. 원 신원과 대상 신원을 한 줄 구조화 로그로 남긴다.
+ *
+ * username 은 남기지 않는다 — 학생·학부모 계정의 username 은 전화번호라(students.ts 신규 등록)
+ * 로그 수집기로 PII 가 흘러간다(utils/logger.ts 정책: PII 는 id 만). 사후 추적은 id 로
+ * users 테이블을 조회하면 충분하므로 감사 목적에 손실이 없다.
  */
 function logImpersonation(action: string, actor: SessionUser | undefined, target: Record<string, unknown>) {
   console.log(
@@ -31,7 +35,7 @@ function logImpersonation(action: string, actor: SessionUser | undefined, target
     JSON.stringify({
       action,
       at: new Date().toISOString(),
-      actor: actor ? { id: actor.id, username: actor.username, role: actor.role } : null,
+      actor: actor ? { id: actor.id, role: actor.role } : null,
       target,
     })
   );
@@ -180,7 +184,6 @@ router.post('/impersonate/:branchId', requireAdmin, async (req, res) => {
       branchId,
       branchName: branch.name,
       userId: manager.id,
-      username: manager.username,
     });
 
     res.json({
@@ -234,7 +237,6 @@ router.post('/impersonate/student/:studentId', requireBranchManager, async (req,
     logImpersonation('impersonate_student', req.session.originalUser, {
       studentId,
       userId: student.user.id,
-      username: student.user.username,
     });
 
     res.json({
@@ -288,7 +290,6 @@ router.post('/impersonate/parent/:parentId', requireBranchManager, async (req, r
     logImpersonation('impersonate_parent', req.session.originalUser, {
       parentId,
       userId: parent.user.id,
-      username: parent.user.username,
     });
 
     res.json({
