@@ -925,14 +925,12 @@ export default function BranchDashboard({ user }: { user: User }) {
                                           size="sm"
                                           onClick={async (e) => {
                                             e.stopPropagation();
-                                            console.log('수정 버튼 클릭됨!', student);
 
                                             try {
                                               // Fetch attempt details to get answers
                                               const attemptRes = await api.get(`/exam-attempts/${student.attemptId}`);
                                               const attemptData = attemptRes.data.data || attemptRes.data;
 
-                                              console.log('답안 데이터:', attemptData);
 
                                               setSelectedAttempt({
                                                 ...student,
@@ -1011,8 +1009,6 @@ export default function BranchDashboard({ user }: { user: User }) {
                                           onClick={(e) => {
                                             e.stopPropagation();
                                             toast.info(`${student.studentName} 학생의 답안 입력을 시작합니다.`);
-                                            console.log('답안 입력 버튼 클릭!', student);
-                                            console.log('distData:', distData);
 
                                             const attemptData = {
                                               studentId: student.studentId,
@@ -1021,12 +1017,10 @@ export default function BranchDashboard({ user }: { user: User }) {
                                               examId: distData.exam.id,
                                               answers: {},
                                             };
-                                            console.log('설정할 attemptData:', attemptData);
 
                                             setSelectedAttempt(attemptData);
                                             setShowAnswerModal(true);
 
-                                            console.log('모달 열림 상태 설정 완료');
                                           }}
                                           className="border-line-strong text-ink hover:bg-surface-subtle"
                                         >
@@ -1146,14 +1140,12 @@ export default function BranchDashboard({ user }: { user: User }) {
                                       size="sm"
                                       onClick={async (e) => {
                                         e.stopPropagation();
-                                        console.log('수정 버튼 클릭됨!', student);
 
                                         try {
                                           // Fetch attempt details to get answers
                                           const attemptRes = await api.get(`/exam-attempts/${student.attemptId}`);
                                           const attemptData = attemptRes.data.data || attemptRes.data;
 
-                                          console.log('답안 데이터:', attemptData);
 
                                           setSelectedAttempt({
                                             ...student,
@@ -3312,10 +3304,23 @@ export default function BranchDashboard({ user }: { user: User }) {
             ) : distributions && distributions.length > 0 ? (
               <div className="grid gap-4">
                 {distributions.map((dist: any) => (
+                  /*
+                    Card 는 div 라 클릭만 붙이면 키보드·스크린리더가 닿지 않는다.
+                    button 시맨틱을 얹고 Enter·Space 를 클릭과 같은 동작으로 잇는다.
+                  */
                   <Card
                     key={dist.id}
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`${dist.exam?.title ?? '배포'} 보고서 열기`}
                     className="border-2 border-line hover:border-line transition-all cursor-pointer hover:shadow-lg"
                     onClick={() => setSelectedReportDistribution(dist)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        setSelectedReportDistribution(dist);
+                      }
+                    }}
                   >
                     <CardHeader className="border-b border-line bg-surface-subtle">
                       <div className="flex justify-between items-start">
@@ -3334,6 +3339,7 @@ export default function BranchDashboard({ user }: { user: User }) {
                         <Button
                           variant="outline"
                           size="sm"
+                          aria-label={`${dist.exam?.title ?? '배포'} 삭제`}
                           onClick={(e) => {
                             e.stopPropagation();
                             if (confirm(`"${dist.exam?.title}" 배포를 삭제하시겠습니까?`)) {
@@ -3445,20 +3451,16 @@ export default function BranchDashboard({ user }: { user: User }) {
                               size="sm"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                console.log('수정 버튼 클릭됨!', student);
                                 if (!student.hasAttempt) {
-                                  console.log('답안 없음 - 생성 중...');
                                   // Create attempt first
                                   createAttemptMutation.mutate(
                                     { studentId: student.studentId, distributionId: selectedReportDistribution.id },
                                     {
                                       onSuccess: async (data) => {
-                                        console.log('답안 생성 완료:', data);
                                         // Refetch to get updated data
                                         await refetchDistributionStudents();
                                         await refetchAllDistributionStudents();
 
-                                        console.log('데이터 다시 조회 완료, 모달 열기');
                                         // Open modal with created attempt data
                                         setSelectedAttempt({
                                           ...student,
@@ -3472,10 +3474,6 @@ export default function BranchDashboard({ user }: { user: User }) {
                                     }
                                   );
                                 } else {
-                                  console.log('답안 있음 - 바로 모달 열기', {
-                                    ...student,
-                                    distributionId: selectedReportDistribution.id,
-                                  });
                                   setSelectedAttempt({
                                     ...student,
                                     distributionId: selectedReportDistribution.id,
@@ -3720,12 +3718,9 @@ export default function BranchDashboard({ user }: { user: User }) {
 
       {/* 답안 입력/수정 모달 - 전역으로 이동 */}
       {(() => {
-        console.log('모달 체크:', { showAnswerModal, selectedAttempt });
         if (!showAnswerModal || !selectedAttempt) {
-          console.log('모달 렌더링 안됨 - showAnswerModal:', showAnswerModal, 'selectedAttempt:', selectedAttempt);
           return null;
         }
-        console.log('모달 렌더링 중!');
         return (
           <div
             ref={answerModalRef}

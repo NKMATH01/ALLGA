@@ -251,9 +251,10 @@ export default function ParentDashboard({ user }: { user: User }) {
                 )}
               </Button>
               <div className="min-w-0">
-                <h2 className="truncate text-xl font-semibold tracking-[-0.015em] text-ink">
+                {/* 이 화면의 유일한 h1. 상단 바 제목이 곧 페이지 제목이다. */}
+                <h1 className="truncate text-xl font-semibold tracking-[-0.015em] text-ink">
                   {activeSection === 'dashboard' ? '대시보드' : '자녀 성적'}
-                </h2>
+                </h1>
                 <p className="truncate text-xs text-ink-tertiary">{user.name}님 환영합니다</p>
               </div>
             </div>

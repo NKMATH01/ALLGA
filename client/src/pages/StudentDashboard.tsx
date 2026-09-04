@@ -1117,7 +1117,8 @@ export default function StudentDashboard({ user }: { user: User }) {
               <GraduationCap className="w-5 h-5 text-action-text" strokeWidth={1.5} />
             </div>
             <div>
-              <h1 className="text-base font-semibold tracking-[-0.01em]">ALLGA</h1>
+              {/* 사이드바 브랜드는 문서 제목이 아니다. 페이지의 h1 은 본문 제목 한 곳뿐. */}
+              <p className="text-base font-semibold tracking-[-0.01em]">ALLGA</p>
               <p className="text-xs text-ink-secondary">학습 관리 시스템</p>
             </div>
           </div>
