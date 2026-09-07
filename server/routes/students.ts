@@ -309,11 +309,14 @@ router.put('/:id', requireBranchManager, async (req, res) => {
   }
 });
 
-// GET /api/branch-students 는 2026-09-07 제거.
-// 대체: GET /api/students (지점 학생 목록).
+// GET /api/students/branch-students (구 이중 마운트 /api/branch-students/branch-students)
+// 는 2026-09-07 제거.
+// 대체: 지점 학생 목록은 GET /api/students, 통계·최근 시험 필드는 배치 API
+// GET /api/distributions/students.
 
-// GET /api/branch-students/stats 는 2026-09-07 제거.
-// 대체: GET /api/admin/stats (총괄), 지점 화면은 목록 응답으로 집계한다.
+// GET /api/students/stats (구 /api/branch-students/stats) 는 2026-09-07 제거.
+// 대체: 지점 학생 목록은 GET /api/students, 통계·최근 시험 필드는 배치 API
+// GET /api/distributions/students.
 
 /*
   POST /:id/login-as 는 제거했다(P-4).
