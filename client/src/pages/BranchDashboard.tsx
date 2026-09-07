@@ -2407,7 +2407,7 @@ export default function BranchDashboard({ user }: { user: User }) {
           className="fixed inset-0 bg-[var(--overlay)] flex items-center justify-center z-50"
         >
           <Card className="w-full max-w-2xl mx-4 rounded-lg border-0 bg-surface-raised shadow-lg">
-            <CardHeader className="border-b border-line bg-surface-subtle">
+            <CardHeader className="border-b border-line">
               {/* 5.6 헤더는 제목(h2) + 우상단 닫기 버튼 */}
               <div className="flex items-start justify-between gap-2">
                 <h2 className="text-xl font-semibold leading-tight tracking-[-0.01em] text-ink">
@@ -2721,7 +2721,7 @@ export default function BranchDashboard({ user }: { user: User }) {
           className="fixed inset-0 bg-[var(--overlay)] flex items-center justify-center z-50 p-4"
         >
           <Card className="w-full max-w-2xl mx-4 max-h-[90dvh] overflow-y-auto rounded-lg border-0 bg-surface-raised shadow-lg">
-            <CardHeader className="border-b border-line bg-surface-subtle">
+            <CardHeader className="border-b border-line">
               {/* 5.6 헤더는 제목(h2) + 우상단 닫기 버튼 */}
               <div className="flex items-start justify-between gap-2">
                 <h2 className="text-xl font-semibold leading-tight tracking-[-0.01em] text-ink">
@@ -2958,7 +2958,7 @@ export default function BranchDashboard({ user }: { user: User }) {
           className="fixed inset-0 bg-[var(--overlay)] flex items-center justify-center z-50"
         >
           <Card className="w-full max-w-2xl mx-4 max-h-[90dvh] overflow-y-auto rounded-lg border-0 bg-surface-raised shadow-lg">
-            <CardHeader className="border-b border-line bg-surface-subtle">
+            <CardHeader className="border-b border-line">
               {/* 5.6 헤더는 제목(h2) + 우상단 닫기 버튼 */}
               <div className="flex items-start justify-between gap-2">
                 <h2 className="text-xl font-semibold leading-tight tracking-[-0.01em] text-ink">

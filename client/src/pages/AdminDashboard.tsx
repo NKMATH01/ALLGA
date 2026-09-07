@@ -508,7 +508,7 @@ export default function AdminDashboard({ user }: { user: User }) {
           <h2 className="text-sm font-semibold text-ink-secondary">지점별 통계</h2>
         </div>
         <div className="overflow-x-auto">
-            <table className="w-full min-w-[640px] [&_td]:whitespace-nowrap [&_thead_th:first-child]:sticky [&_thead_th:first-child]:left-0 [&_thead_th:first-child]:z-10 [&_tbody_td:first-child]:sticky [&_tbody_td:first-child]:left-0 [&_tbody_td:first-child]:bg-surface">
+            <table className="w-full min-w-[640px] [&_td]:whitespace-nowrap [&_thead_th:first-child]:sticky [&_thead_th:first-child]:left-0 [&_thead_th:first-child]:z-10 [&_tbody_td:first-child]:sticky [&_tbody_td:first-child]:left-0 [&_tbody_td:first-child]:bg-surface [&_tbody_tr:hover_td:first-child]:bg-surface-subtle">
               <thead>
                 <tr className="border-b border-line-strong">
                   <th className="text-left px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">지점명</th>
@@ -581,7 +581,7 @@ export default function AdminDashboard({ user }: { user: User }) {
           </Button>
         </div>
         <div className="overflow-x-auto">
-            <table className="w-full min-w-[640px] [&_td]:whitespace-nowrap [&_thead_th:first-child]:sticky [&_thead_th:first-child]:left-0 [&_thead_th:first-child]:z-10 [&_tbody_td:first-child]:sticky [&_tbody_td:first-child]:left-0 [&_tbody_td:first-child]:bg-surface">
+            <table className="w-full min-w-[640px] [&_td]:whitespace-nowrap [&_thead_th:first-child]:sticky [&_thead_th:first-child]:left-0 [&_thead_th:first-child]:z-10 [&_tbody_td:first-child]:sticky [&_tbody_td:first-child]:left-0 [&_tbody_td:first-child]:bg-surface [&_tbody_tr:hover_td:first-child]:bg-surface-subtle">
               <thead>
                 <tr className="border-b border-line-strong">
                   <th className="text-center px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">순서</th>
@@ -682,7 +682,7 @@ export default function AdminDashboard({ user }: { user: User }) {
           className="fixed inset-0 bg-[var(--overlay)] flex items-center justify-center z-50"
         >
           <Card className="w-full max-w-lg mx-4 rounded-lg border-0 bg-surface-raised shadow-lg">
-            <CardHeader className="border-b border-line bg-surface-subtle">
+            <CardHeader className="border-b border-line">
               {/* 5.6 헤더는 제목(h2) + 우상단 닫기 버튼 */}
               <div className="flex items-start justify-between gap-2">
                 <h2 className="flex items-center gap-2 text-xl font-semibold leading-tight tracking-[-0.01em] text-ink">
@@ -825,7 +825,7 @@ export default function AdminDashboard({ user }: { user: User }) {
             <ErrorState detail="시험 목록 조회가 실패했습니다." onRetry={() => refetchExams()} />
           ) : exams && exams.length > 0 ? (
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[640px] [&_td]:whitespace-nowrap [&_thead_th:first-child]:sticky [&_thead_th:first-child]:left-0 [&_thead_th:first-child]:z-10 [&_tbody_td:first-child]:sticky [&_tbody_td:first-child]:left-0 [&_tbody_td:first-child]:bg-surface">
+              <table className="w-full min-w-[640px] [&_td]:whitespace-nowrap [&_thead_th:first-child]:sticky [&_thead_th:first-child]:left-0 [&_thead_th:first-child]:z-10 [&_tbody_td:first-child]:sticky [&_tbody_td:first-child]:left-0 [&_tbody_td:first-child]:bg-surface [&_tbody_tr:hover_td:first-child]:bg-surface-subtle">
                 <thead>
                   <tr className="border-b border-line-strong">
                     <th className="text-left px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">시험명</th>
@@ -904,7 +904,7 @@ export default function AdminDashboard({ user }: { user: User }) {
           className="fixed inset-0 bg-[var(--overlay)] flex items-center justify-center z-50 overflow-y-auto"
         >
           <Card className="w-full max-w-2xl mx-4 my-8 rounded-lg border-0 bg-surface-raised shadow-lg">
-            <CardHeader className="border-b border-line bg-surface-subtle">
+            <CardHeader className="border-b border-line">
               {/* 5.6 헤더는 제목(h2) + 우상단 닫기 버튼 */}
               <div className="flex items-start justify-between gap-2">
                 <h2 className="flex items-center gap-2 text-xl font-semibold leading-tight tracking-[-0.01em] text-ink">
@@ -993,7 +993,7 @@ export default function AdminDashboard({ user }: { user: User }) {
           className="fixed inset-0 bg-[var(--overlay)] flex items-center justify-center z-50 overflow-y-auto p-4"
         >
           <Card className="w-full max-w-4xl mx-4 my-8 rounded-lg border-0 bg-surface-raised shadow-lg">
-            <CardHeader className="border-b border-line bg-surface-subtle">
+            <CardHeader className="border-b border-line">
               {/* 5.6 헤더는 제목(h2) + 우상단 닫기 버튼 */}
               <div className="flex justify-between items-start gap-2">
                 <h2 className="flex items-center gap-2 text-xl font-semibold leading-tight tracking-[-0.01em] text-ink">
@@ -1107,7 +1107,7 @@ export default function AdminDashboard({ user }: { user: User }) {
                     <div>
                       <h3 className="font-bold text-ink mb-3">문제 목록</h3>
                       <div className="overflow-x-auto">
-                        <table className="w-full text-sm min-w-[640px] [&_td]:whitespace-nowrap [&_thead_th:first-child]:sticky [&_thead_th:first-child]:left-0 [&_thead_th:first-child]:z-10 [&_tbody_td:first-child]:sticky [&_tbody_td:first-child]:left-0 [&_tbody_td:first-child]:bg-surface">
+                        <table className="w-full text-sm min-w-[640px] [&_td]:whitespace-nowrap [&_thead_th:first-child]:sticky [&_thead_th:first-child]:left-0 [&_thead_th:first-child]:z-10 [&_tbody_td:first-child]:sticky [&_tbody_td:first-child]:left-0 [&_tbody_td:first-child]:bg-surface [&_tbody_tr:hover_td:first-child]:bg-surface-subtle">
                           <thead>
                             <tr className="border-b border-line-strong bg-surface-subtle">
                               <th className="text-left px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">번호</th>
@@ -1240,7 +1240,7 @@ export default function AdminDashboard({ user }: { user: User }) {
                     <div>
                       <h3 className="font-bold text-ink mb-3">문제 목록</h3>
                       <div className="overflow-x-auto">
-                        <table className="w-full text-sm min-w-[640px] [&_td]:whitespace-nowrap [&_thead_th:first-child]:sticky [&_thead_th:first-child]:left-0 [&_thead_th:first-child]:z-10 [&_tbody_td:first-child]:sticky [&_tbody_td:first-child]:left-0 [&_tbody_td:first-child]:bg-surface">
+                        <table className="w-full text-sm min-w-[640px] [&_td]:whitespace-nowrap [&_thead_th:first-child]:sticky [&_thead_th:first-child]:left-0 [&_thead_th:first-child]:z-10 [&_tbody_td:first-child]:sticky [&_tbody_td:first-child]:left-0 [&_tbody_td:first-child]:bg-surface [&_tbody_tr:hover_td:first-child]:bg-surface-subtle">
                           <thead>
                             <tr className="border-b border-line-strong bg-surface-subtle">
                               <th className="text-left px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">번호</th>
@@ -1325,7 +1325,7 @@ export default function AdminDashboard({ user }: { user: User }) {
             <ErrorState detail="배포 목록 조회가 실패했습니다." onRetry={() => refetchDistributions()} />
           ) : distributions && distributions.length > 0 ? (
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[640px] [&_td]:whitespace-nowrap [&_thead_th:first-child]:sticky [&_thead_th:first-child]:left-0 [&_thead_th:first-child]:z-10 [&_tbody_td:first-child]:sticky [&_tbody_td:first-child]:left-0 [&_tbody_td:first-child]:bg-surface">
+              <table className="w-full min-w-[640px] [&_td]:whitespace-nowrap [&_thead_th:first-child]:sticky [&_thead_th:first-child]:left-0 [&_thead_th:first-child]:z-10 [&_tbody_td:first-child]:sticky [&_tbody_td:first-child]:left-0 [&_tbody_td:first-child]:bg-surface [&_tbody_tr:hover_td:first-child]:bg-surface-subtle">
                 <thead>
                   <tr className="border-b border-line-strong">
                     <th className="text-left px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">시험명</th>
@@ -1397,7 +1397,7 @@ export default function AdminDashboard({ user }: { user: User }) {
           className="fixed inset-0 bg-[var(--overlay)] flex items-center justify-center z-50"
         >
           <Card className="w-full max-w-lg mx-4 rounded-lg border-0 bg-surface-raised shadow-lg">
-            <CardHeader className="border-b border-line bg-surface-subtle">
+            <CardHeader className="border-b border-line">
               {/* 5.6 헤더는 제목(h2) + 우상단 닫기 버튼 */}
               <div className="flex items-start justify-between gap-2">
                 <h2 className="flex items-center gap-2 text-xl font-semibold leading-tight tracking-[-0.01em] text-ink">
