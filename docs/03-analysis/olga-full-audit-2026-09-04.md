@@ -71,7 +71,7 @@
 | 채점 단일 경로 | 부분 | 라우트는 `gradeAnswers` 2곳만 ✅ / 판정식 복제 3벌(S-5) |
 | 보고서 큐 | 통과(설계 한계) | `finally`에서 슬롯·잠금 해제(`reports.ts:314-318`) → 고착 없음. 메모리 큐·상태 컬럼 없음·90초 폴링은 한계로 기록(R-2) |
 | 라우트 순서 | 통과 | 실운영 충돌 없음. `reports.ts` `/attempt/:id`가 `/:reportId/summary` 아래(UUID라 무해, 낮음) |
-| 죽은 엔드포인트 | 12개 | §7 참조. `/api/branch/completed`(주석은 `/api/exam-attempts/…`로 오기; 후자는 404) |
+| 죽은 엔드포인트 | 12개 | §7 참조. `/api/branch/completed`(주석은 `/api/exam-attempts/…`로 오기; 후자는 404). 2026-09-07 A 7개 제거(§10.3), B 학부모 3개·C 조회 2개는 의도적 유지 |
 | 헬스·빌드·테스트 | 통과 | `{"ok":true,"db":"up"}`, BUILD_EXIT=0, 37/37 |
 
 ### C. 클라이언트 결과물
@@ -237,7 +237,7 @@
 | 스펙 외 | `GET /distributions/students`, `POST /students/:id/login-as`, `GET /students/branch-students`, `GET /students/stats`, `/api/branch-students/*` 이중 마운트 | |
 | data-model §5.1 지점 삭제 CASCADE → users | FK 없음 | D-1 |
 | data-model 195·214 중간 테이블 UNIQUE | 없음 | D-2 |
-| 죽은 엔드포인트 12 | `/exams/available`, `/branch/completed`, `/students/branch-students`, `/admin/recent-activity`, `GET/POST /parents`, `GET /distributions/:id`, `POST/DELETE /classes/:cid/students/:sid`, `auth/impersonate/restore|student|parent` | 클라이언트 호출 경로 전수 대조 |
+| 죽은 엔드포인트 12 | `/exams/available`, `/branch/completed`, `/students/branch-students`, `/admin/recent-activity`, `GET/POST /parents`, `GET /distributions/:id`, `POST/DELETE /classes/:cid/students/:sid`, `auth/impersonate/restore|student|parent` | 클라이언트 호출 경로 전수 대조. 2026-09-07 A 7개 제거(§10.3), B 학부모 3개·C 조회 2개는 의도적 유지 |
 
 ---
 
@@ -352,6 +352,7 @@ UI login-as(강하준): /auth/me role=student originalUser=null · restore → 4
 | U-21 | `dev` 스크립트 POSIX `&` → `concurrently -k` | `a8939b3` | package.json·lock 확인 |
 | D-4 | 응시 기록이 없는 중복 배포 31건(재등록본 16 · "미수등" 15) 삭제, 시험 기록 3개와 응시 3건은 보존 | `6151479`, `5d04c88` | **운영 DB 삭제 + 읽기 전용 전후 대조**: `exam_distributions` 52→21, 응시·보고서·배정 불변, 백업 31행 |
 | D-4 후속 | 같은 제목 시험 2개·"미수등" 시험 기록 정리: 원본 8문항 해설 이식 후 재등록본·미수등 삭제(연쇄 배포 3·테스트 응시 3·보고서 1) | `86aab2b` | **운영 DB 갱신·삭제 + 읽기 전용 전후 대조**: exams 3→1, dists 21→18, attempts 20→17, reports 10→9, 원본 18/17/9·채점 지문 불변, 백업 349 KB(미추적) |
+| 죽은 엔드포인트 | 화면 미호출 12개 중 대체 경로 있는 7개 + `/api/branch-students` 이중 마운트 제거, 명세 3절 표기 | `19443c0` | **런타임**: 제거 8주소 404(available 은 `/:id` 폴스루 401), 이웃 주소 정상; 게이트 0/0/87/0 |
 
 정적 확정만 된 항목(S-2·P-3·U-1·U-5·S-3)의 런타임 확인은 다음 기회에 한다. P-2·P-4·P-5·P-6, U-7·U-2·U-8~U-13·U-19, D-1·D-2·D-4·D-5·D-6·D-7, U-14~U-18·U-20·U-21·R-1~R-3 을 제외한 중간·낮음 결함은 §4 를 그대로 둔다.
 
@@ -491,6 +492,36 @@ R-2 수정으로 생긴 세 번째 쓰기다. 사용자 승인 후 2026-09-07 �
 중간 4건 수정 뒤에도 남은 항목 2건을 기록한다. `server/routes/attempts.ts:733` 의 `GET /api/branch/completed`(클라이언트 호출 0건인 죽은 엔드포인트)는 인라인 검사라 미인증 요청에 여전히 403 을 낸다. P-5 의 미들웨어 범위 밖이다. `PUT /distributions/:id` 는 타 지점 배포에 404 가 아닌 403 을 내므로 존재 열거 오라클이 남아 있다(쓰기 전에 끊기므로 부작용은 없다). 묶음 F 뒤 새로 관찰된 접근성 항목 1건: `BranchDashboard` O/X 수동 채점 컨트롤이 시각적으로 숨긴 radio + 아이콘만 든 label 이라 접근 가능한 이름이 없다(U-13 범위 밖, 미수정).
 
 묶음 H 뒤 잔여 소항목: 모달 최대 폭 560px 미준수(`max-w-2xl`·`max-w-4xl`), `server/index.ts:125` 기동 로그 이모지, `markReportFailed` 가 UPDATE 영향 행 수를 확인하지 않음(행이 이미 지워진 경우 실패 기록 유실), `overflow-x-auto` 래퍼 없는 Branch 표 5곳(전부 `hidden md:table` 데스크톱 표라 실사용 영향 없음). 지점장 입장 점검 소감: 모달 버튼 순서가 보조→주로 바뀌어 손에 익은 위치와 달라졌다. 5.6 규칙에 따른 의도된 변경이나 초기 실수 위험이 있다.
+
+### 10.3 죽은 엔드포인트 정리 (2026-09-07)
+
+§3.B·§7 이 "12개"로만 적어 둔 죽은 엔드포인트를 실제로 세고 정리했다.
+
+**대조 방법.** `server/index.ts` 의 마운트 8줄을 기준으로 `server/routes/*.ts` 의 `router.<method>(` 선언을 전부 펼쳐 실제 경로 61개(+`/health`)를 만들고, `client/src` 의 호출 경로(`apiRequest`·`fetch`·`useQuery` 키)를 전수로 뽑아 맞췄다. 화면이 한 번도 부르지 않는 주소가 12개였다. 점검 당시 목록(§7)과 구성이 조금 다르다. P-4 수정으로 `auth/impersonate/restore`·`/student` 는 클라이언트가 실제로 부르게 됐고, 대신 이중 마운트 때문에 가려져 있던 `GET /students/stats` 가 드러났다.
+
+**12개 분류.**
+
+| 구분 | 주소 | 처분 | 사유 |
+|---|---|---|---|
+| A | `GET /api/branch/completed` | 제거 | 대체: `GET /api/distributions/students` (배치 조회) |
+| A | `GET /api/exams/available` | 제거 | 대체: `GET /api/my-exams`(학생), `GET /api/exams`(관리자·지점장) |
+| A | `GET /api/admin/recent-activity` | 제거 | 대체 없음. 부르는 화면이 처음부터 없었다 |
+| A | `GET /api/students/branch-students` | 제거 | 대체: 목록은 `GET /api/students`, 통계·최근 시험 필드는 `GET /api/distributions/students` |
+| A | `GET /api/students/stats` | 제거 | 위와 같음. U-10 에서 클라이언트 호출을 지운 뒤 남아 있던 서버 쪽 |
+| A | `POST /api/classes/:classId/students/:studentId` | 제거 | 대체: `PUT /api/classes/:id` (반 수정이 `studentIds` 를 통째로 갱신) |
+| A | `DELETE /api/classes/:classId/students/:studentId` | 제거 | 위와 같음 |
+| A | `/api/branch-students/*` 이중 마운트 | 제거 | `students.ts` 를 두 URL 에 얹어 모든 학생 라우트가 두 벌로 노출돼 있었다(P-7) |
+| B | `POST /api/parents` | **유지** | 학부모 계정 생성 UI 가 아직 없다. 계정을 만들 수 있는 유일한 경로다 |
+| B | `GET /api/parents` | **유지** | 위와 같은 이유(생성 결과 확인 경로) |
+| B | `POST /api/auth/impersonate/parent/:id` | **유지** | 위와 같은 이유(만든 계정으로 들어가 보는 유일한 경로) |
+| C | `GET /api/exams/:id` | **유지** | P-1 이 권한을 좁혀 놓은 표준 단건 조회다. 지우면 리소스 모델에 구멍이 생긴다 |
+| C | `GET /api/distributions/:id` | **유지** | P-2 가 지점 스코프(타 지점 404)를 넣어 놓은 표준 단건 조회다 |
+
+A 는 라우트 7개 + 이중 마운트 1건이다. 사용자 결정은 "A 만 지운다"였다. 커밋 `19443c0` 에서 7파일 +25/-341, 라우트 61 → 54 가 됐고, 쓰이지 않게 된 import(`examAttempts`·`exams`·`desc`·`isNotNull` 등)를 함께 정리했다. 명세는 `docs/02-design/api-spec.md` §4.3·§8.7·§10.2 제목에 "(2026-09-07 제거)"와 대체 경로를 적었다.
+
+**검증.** 게이트는 서버 tsc 0 · 클라이언트 tsc 0 · `vitest run` 87건 통과 · 하드코딩 hex 0 이다. 런타임은 서버를 띄우고 지점장 1회 로그인으로 확인했다. 지운 8주소는 404, 다만 `/api/exams/available` 만은 `GET /exams/:id` 로 폴스루해 401 이 난다(라우트가 사라진 것은 맞다). 이웃 주소(`/api/students`·`/api/classes`·`/api/distributions`)는 미인증 401, 로그인 후 200 으로 정상이었다. 감사 A(Opus, 읽기 전용)는 98% 통과에 🟡1 — `server/db/schema.ts:59` 주석이 옛 경로를 언급하나 "스키마 무변경" 지시라 손대지 않았다. 기술 점검(Sonnet)은 통과에 🟡3 — 학생이 옛 `/api/exams/available` 을 치면 404 가 아니라 403 을 본다, `students.ts:312` 제거 주석의 경로 표기가 부정확하다, "대체: `GET /api/students`" 는 `latestExam` 필드가 없어 완전 대체가 아니다. 뒤의 두 건은 `cd7775a` 에서 주석 문구를 고쳐 해소했다. 되돌림은 0회다.
+
+**잔여.** `server/db/schema.ts:59` 주석의 옛 경로 언급(스키마 파일 무변경 지시). 학생 세션이 옛 `/api/exams/available` 을 부르면 `/:id` 폴스루로 403 이 나는 점(경로가 사라진 사실 자체는 바뀌지 않으므로 방치).
 
 ---
 
