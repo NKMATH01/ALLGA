@@ -108,7 +108,7 @@ npx vitest run                             → 2 files / 37 tests passed
 
 ### 3.4 전체 점검(2026-09-04) 결함 수정 현황
 
-`docs/03-analysis/olga-full-audit-2026-09-04.md` 가 확정한 높음 11건, 중간 4건(권한·감사), 중간 9건(화면·요청 마감)을 수정해 커밋했다. 높음 11건과 중간 4건은 push 했고(`origin/main` = `d45d54d`), 화면·요청 9건은 push 했고(`origin/main` = `1fe177b`), 데이터 구조 5건(D-1·D-2·D-5·D-6·D-7)은 아직 push 하지 않았다.
+`docs/03-analysis/olga-full-audit-2026-09-04.md` 가 확정한 높음 11건, 중간 4건(권한·감사), 중간 9건(화면·요청), 데이터 5건, 헌법·지면 10건을 수정해 커밋했다. 데이터 5건까지는 push 했고(`origin/main` = `b594003`), 헌법·지면 묶음은 push 직전이다.
 
 | ID | 결함 | 커밋 | 검증 수준 |
 |---|---|---|---|
@@ -141,10 +141,22 @@ npx vitest run                             → 2 files / 37 tests passed
 | D-1 | `users.branch_id` FK 없음 → `REFERENCES branches(id) ON DELETE SET NULL`(스펙의 CASCADE 대신, 지점 삭제 시 계정을 비활성으로 남기는 설계와 일치) | `bee869f` | **운영 DB 0008 적용**: `pg_constraint` 에 FK 실존, 고아 0 |
 | D-2 | 중간 테이블 UNIQUE 없음 → `student_classes(student_id,class_id)`·`student_parents(student_id,parent_id)` UNIQUE, 반 생성 시 studentIds 중복 제거 | `bee869f` | **운영 DB 0008 적용**: UNIQUE 2개 실존, 중복 0 |
 | D-5 | `updated_at` 미갱신 → users·branches `$onUpdate(() => new Date())` | `bee869f` | 코드(SQL 변화 없음) |
+| U-14 | 폼 라벨 `htmlFor` 미연결 → Admin 23/23·Branch 18/18 연결, 묶음 라벨 4곳은 `role="group"`+`aria-labelledby`, O/X 라디오 `sr-only` 이름 | `8bca13c` | grep(label 수 = htmlFor 수), 감사 A 가 참조 id 실재 전수 확인 |
+| U-15 | 표 첫 열 `position: static` → Branch 10·Parent 1 표에 sticky 레시피(+hover 첫 칸 보정), Admin 6표는 `919b7a5` 에서 hover 보정 | `ec973fd`, `919b7a5` | grep: 표 17개 전부 sticky |
+| U-20 | 미사용 `table.tsx` 131줄 | `ec973fd` | importer 0 확인 후 삭제 |
+| U-16 | 관리 표가 `shadow-xl` 카드 안·모달 닫기 없음·버튼 주→보조·h3 → `<section>`+툴바, 모달 8개 h2·닫기·보조→주, 헤더 배경 제거 | `3ccb1d5`, `919b7a5` | grep `shadow-xl` 0. 모달 560px 폭은 미적용(잔여) |
+| U-18 | 다크 FOUC → `index.html` `<head>` 인라인 선세팅(`olga-theme`, `data-theme`+`.dark`) | `88e96f6` | 코드(`useTheme.ts` 규칙과 일치 확인) |
+| U-17 | 지면 `\|\| 0` → `?? null`, 표준점수 임의식·관리 목표 곡선(+5/10/15) 제거, 등급 없으면 판정도 비움 | `29281b6`, `6aa56e1` | **런타임**: 실보고서 지면 '0등급' 0·NaN 0(undefined 2건은 `<script>` 안 정상 JS). 신설 `newReportTemplate.test.ts` |
+| R-1 | (U-17 과 동일 뿌리) | `29281b6`, `6aa56e1` | 위 참조 |
+| R-2 | 보고서 실패가 클라이언트에 미전달 → `ai_reports.status`/`failure_reason`, 선삽입 잠금, `completed` 만 노출, 클라이언트 즉시 실패 표시 | `0098698` | **운영 DB 0009 적용 + 런타임**: `GET /reports/attempt/:id` → `status=completed`, `/my-exams` hasReport 2/3(completed 만) |
+| R-3 | 이모지 console 로그 11곳 → `log.*('report.<event>')`, API 키는 boolean 만 | `a8939b3` | grep `console.` 0 |
+| U-21 | `dev` 스크립트 POSIX `&` → `concurrently -k` | `a8939b3` | package.json·lock 확인 |
 
 정적 확정만 된 항목(S-2·P-3·U-1·U-5·S-3)의 런타임 확인은 다음 기회에 한다.
 
-미수정으로 남은 중간·낮음 결함(D-4, D-8, U-14~U-18, U-20, U-21, R-1~R-3)은 보고서 §4 를 참조한다. D-4(16지점 × 2건 동일 배포)는 데이터 삭제라 별도 결정으로 남겼다.
+미수정으로 남은 중간·낮음 결함(D-4, D-8)은 보고서 §4 를 참조한다. D-4(16지점 × 2건 동일 배포)는 데이터 삭제라 별도 결정으로 남겼다.
+
+묶음 H 뒤 잔여 소항목: 모달 최대 폭 560px 미준수(`max-w-2xl`·`max-w-4xl`), `server/index.ts:125` 기동 로그 이모지, `markReportFailed` 가 UPDATE 영향 행 수를 확인하지 않음(행이 이미 지워진 경우 실패 기록 유실), `overflow-x-auto` 래퍼 없는 Branch 표 5곳(전부 `hidden md:table` 데스크톱 표라 실사용 영향 없음). 지점장 입장 점검 소감: 모달 버튼 순서가 보조→주로 바뀌어 손에 익은 위치와 달라졌다. 5.6 규칙에 따른 의도된 변경이나 초기 실수 위험이 있다.
 
 중간 4건 수정 뒤에도 남은 항목 2건을 기록한다. `server/routes/attempts.ts:733` 의 `GET /api/branch/completed`(클라이언트 호출 0건인 죽은 엔드포인트)는 인라인 검사라 미인증 요청에 여전히 403 을 낸다. P-5 의 미들웨어 범위 밖이다. `PUT /distributions/:id` 는 타 지점 배포에 404 가 아닌 403 을 내므로 존재 열거 오라클이 남아 있다(쓰기 전에 끊기므로 부작용은 없다). 묶음 F 뒤 새로 관찰된 접근성 항목 1건: `BranchDashboard` O/X 수동 채점 컨트롤이 시각적으로 숨긴 radio + 아이콘만 든 label 이라 접근 가능한 이름이 없다(U-13 범위 밖, 미수정).
 

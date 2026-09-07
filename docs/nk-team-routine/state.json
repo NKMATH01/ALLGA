@@ -1,0 +1,24 @@
+{
+  "run": "2026-09-07-olga-hardening-bundle-h",
+  "save_point": "a8939b3",
+  "cost_usd": 4,
+  "next": "gate-final",
+  "nodes": [
+    { "id": "approval", "label": "사용자 승인", "status": "통과" },
+    { "id": "save-point", "label": "저장 지점 확보 (a8939b3)", "status": "통과" },
+    { "id": "migration-0009", "label": "운영 DB 마이그레이션 0009 적용", "status": "통과" },
+    { "id": "db-diff", "label": "적용 전후 DB 대조", "status": "통과" },
+    { "id": "runtime-qa", "label": "런타임 QA", "status": "통과" },
+    { "id": "audit-a", "label": "감사 A (10건 중 통과 8·부분 2, 90%)", "status": "통과" },
+    { "id": "tech-review", "label": "기술 점검 (심각 0·보통 2)", "status": "통과" },
+    { "id": "role-student", "label": "입장 점검: 학생", "status": "통과" },
+    { "id": "role-branch", "label": "입장 점검: 지점장", "status": "통과" },
+    { "id": "role-admin", "label": "입장 점검: 총괄 관리자", "status": "통과" },
+    { "id": "verdict", "label": "종합 판정 (되돌림 1회 후 통과)", "status": "통과" },
+    { "id": "rework", "label": "보완 구현 (판정 null·모달 헤더·Admin hover)", "status": "통과" },
+    { "id": "docs", "label": "문서 반영 (계획서 3.4·분석서 10·팀 루틴 신설)", "status": "통과" },
+    { "id": "gate-final", "label": "최종 게이트 4종", "status": "진행" },
+    { "id": "push", "label": "push", "status": "대기" },
+    { "id": "wrapup", "label": "마무리 보고", "status": "대기" }
+  ]
+}
