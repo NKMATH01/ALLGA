@@ -35,3 +35,6 @@ coverage/
 # Misc
 .cache/
 uploads/
+
+# 팀 루틴 백업 중 학생 답안·보고서 HTML 을 담은 것은 저장소에 올리지 않는다 (E-3 선례)
+docs/nk-team-routine/evidence/e3-*.json
