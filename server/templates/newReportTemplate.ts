@@ -173,9 +173,11 @@ export function generateReportHTML(data: any): string {
       meaning: '기본기부터 다시 쌓아야 하는 구간입니다. 정해진 주기로 재검사하며 변화를 추적할 것을 권합니다.',
     },
   ];
-  const verdictOf = (g: any) => {
+  type Verdict = (typeof VERDICTS)[number];
+  // 등급이 없으면 판정도 없다 (DESIGN.md 10.3). 예전에는 C '보완 필요' 를 지어냈다.
+  const verdictOf = (g: any): Verdict | null => {
     const n = Number(g);
-    if (!n || Number.isNaN(n)) return VERDICTS[2];
+    if (!n || Number.isNaN(n)) return null;
     return n <= 2 ? VERDICTS[0] : n <= 4 ? VERDICTS[1] : n <= 6 ? VERDICTS[2] : VERDICTS[3];
   };
   const verdict = verdictOf(reportData.scoreSummary.grade);
@@ -334,7 +336,7 @@ export function generateReportHTML(data: any): string {
   const gradeGaugeHTML =
     '<div class="ggauge">' +
     '<div class="ggauge-head">' + VERDICTS.map((v, i) =>
-      '<div class="gg-band ' + v.tone + (v.code === verdict.code ? ' is-current' : '') + '"' +
+      '<div class="gg-band ' + v.tone + (verdict && v.code === verdict.code ? ' is-current' : '') + '"' +
       ' style="grid-column: span ' + [2, 2, 2, 3][i] + '">' +
       '<span class="gg-code">' + v.code + '</span>' +
       '<span class="gg-name">' + v.name + '</span>' +
@@ -984,17 +986,17 @@ export function generateReportHTML(data: any): string {
 
             <section class="fsection">
                 <h2 class="fsection-title">종합 판정</h2>
-                <div class="verdict ${verdict.tone}">
+                <div class="verdict ${verdict ? verdict.tone : 'vd-na'}">
                     <div class="verdict-code">
-                        <span class="vc-letter">${verdict.code}</span>
-                        <span class="vc-name">${verdict.name}</span>
+                        <span class="vc-letter">${verdict ? verdict.code : '-'}</span>
+                        <span class="vc-name">${verdict ? verdict.name : '판정 없음'}</span>
                     </div>
                     <div class="verdict-body">
                         <p class="verdict-line">
                             <span class="verdict-grade">${numText(reportData.scoreSummary.grade)}</span>${reportData.scoreSummary.grade === null ? '' : '<span class="verdict-gradeunit">등급</span>'}
-                            <span class="verdict-band">판정 기준 ${verdict.band}</span>
+                            <span class="verdict-band">${verdict ? '판정 기준 ' + verdict.band : '등급 기준 축적 중'}</span>
                         </p>
-                        <p class="verdict-mean">${verdict.meaning}</p>
+                        <p class="verdict-mean">${verdict ? verdict.meaning : '등급이 산출되지 않아 종합 판정을 내지 않았습니다.'}</p>
                     </div>
                 </div>
                 ${gradeGaugeHTML}
@@ -1167,9 +1169,9 @@ export function generateReportHTML(data: any): string {
 
   // ---------- 6쪽: 종합소견 (항목별 소견 흡수) ----------
   addPage('OPINION', '종합 진단 소견', `
-            <div class="opinion-head ${verdict.tone}">
-                <span class="opinion-code">${verdict.code}</span>
-                <p class="opinion-line"><b>${verdict.name}</b> · ${gradeText(reportData.scoreSummary.grade)} · 전체 정답률 ${rateText(overallRate)}${overallRef && overallRef.available ? ' (참고치 ' + refText(overallRef) + ')' : ''}</p>
+            <div class="opinion-head ${verdict ? verdict.tone : 'vd-na'}">
+                <span class="opinion-code">${verdict ? verdict.code : '-'}</span>
+                <p class="opinion-line">${verdict ? '<b>' + verdict.name + '</b> · ' : ''}${gradeText(reportData.scoreSummary.grade)} · 전체 정답률 ${rateText(overallRate)}${overallRef && overallRef.available ? ' (참고치 ' + refText(overallRef) + ')' : ''}</p>
             </div>
             <div class="opinion-body">${escapeHtml(reportData.analysis.olgaSummary)}</div>
 
@@ -1487,6 +1489,8 @@ export function generateReportHTML(data: any): string {
         .vd-b .verdict-code { background: var(--fn-info-surface); color: var(--fn-info); }
         .vd-c .verdict-code { background: var(--surface-subtle); color: var(--text-secondary); }
         .vd-r .verdict-code { background: var(--fn-warning-surface); color: var(--fn-warning); }
+        /* 판정 없음. fl-na 와 같은 무채색 계열을 쓴다 (새 색값을 만들지 않는다). */
+        .vd-na .verdict-code { background: var(--surface-subtle); color: var(--text-tertiary); }
 
         /* 등급 척도 (판정 구간을 머리에 통합) */
         .ggauge { margin-top: 10px; }
@@ -1834,6 +1838,8 @@ export function generateReportHTML(data: any): string {
         .vd-c.opinion-head .opinion-code { color: var(--text-secondary); }
         .vd-r.opinion-head { background: var(--fn-warning-surface); }
         .vd-r.opinion-head .opinion-code { color: var(--fn-warning); }
+        .vd-na.opinion-head { background: var(--surface-subtle); }
+        .vd-na.opinion-head .opinion-code { color: var(--text-tertiary); }
         .opinion-line { margin: 0; font-size: 11px; color: var(--text-secondary); }
         .opinion-line b { font-size: 12.5px; font-weight: 800; color: var(--text-primary); }
         .opinion-body {

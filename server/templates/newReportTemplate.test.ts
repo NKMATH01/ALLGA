@@ -48,6 +48,23 @@ function printedPage(html: string) {
   return html.replace(/<script[\s\S]*?<\/script>/g, '');
 }
 
+/**
+ * 종합 판정 카드만 잘라낸다. 카드 바로 뒤의 등급 게이지는 A~R 네 구간을
+ * 이름·구간과 함께 늘 그리는 '범례'라서, 판정 문구 검사에서는 빼야 한다.
+ */
+function verdictCard(html: string) {
+  const start = html.indexOf('<div class="verdict ');
+  const end = html.indexOf('<div class="ggauge"', start);
+  return html.slice(start, end);
+}
+
+/** 소견 지면의 판정 머리만 잘라낸다. */
+function opinionHead(html: string) {
+  const start = html.indexOf('<div class="opinion-head ');
+  const end = html.indexOf('<div class="opinion-body"', start);
+  return html.slice(start, end);
+}
+
 describe('generateReportHTML — 없는 수치를 지면에 만들지 않는다', () => {
   it('등급·표준점수·백분위·예측 곡선이 모두 없으면 0등급/NaN/undefined 를 인쇄하지 않는다', () => {
     const page = printedPage(generateReportHTML(baseData()));
@@ -56,6 +73,22 @@ describe('generateReportHTML — 없는 수치를 지면에 만들지 않는다'
     expect(page).not.toContain('NaN');
     expect(page).not.toContain('undefined');
     expect(page).toContain('기준 축적 중');
+  });
+
+  it('등급이 없으면 종합 판정도 비운다 (C 보완 필요 를 지어내지 않는다)', () => {
+    const page = printedPage(generateReportHTML(baseData()));
+
+    expect(page).toContain('판정 없음');
+
+    const card = verdictCard(page);
+    expect(card).not.toContain('보완 필요');
+    expect(card).not.toContain('5 ~ 6등급');
+    expect(card).toContain('판정 없음');
+    expect(card).toContain('등급 기준 축적 중');
+
+    const head = opinionHead(page);
+    expect(head).not.toContain('보완 필요');
+    expect(head).toContain('<span class="opinion-code">-</span>');
   });
 
   it('등급이 있으면 그 등급을 그대로 인쇄한다', () => {
@@ -73,6 +106,11 @@ describe('generateReportHTML — 없는 수치를 지면에 만들지 않는다'
 
     expect(html).toContain('3등급');
     expect(html).not.toContain('0등급');
+
+    const card = verdictCard(printedPage(html));
+    expect(card).toContain('양호');
+    expect(card).toContain('판정 기준 3 ~ 4등급');
+    expect(card).not.toContain('판정 없음');
   });
 
   it('학생 이름에 스크립트가 들어와도 태그로 살아나지 않는다', () => {
