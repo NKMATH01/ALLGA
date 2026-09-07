@@ -519,7 +519,7 @@ R-2 수정으로 생긴 세 번째 쓰기다. 사용자 승인 후 2026-09-07 �
 
 A 는 라우트 7개 + 이중 마운트 1건이다. 사용자 결정은 "A 만 지운다"였다. 커밋 `19443c0` 에서 7파일 +25/-341, 라우트 61 → 54 가 됐고, 쓰이지 않게 된 import(`examAttempts`·`exams`·`desc`·`isNotNull` 등)를 함께 정리했다. 명세는 `docs/02-design/api-spec.md` §4.3·§8.7·§10.2 제목에 "(2026-09-07 제거)"와 대체 경로를 적었다.
 
-**검증.** 게이트는 서버 tsc 0 · 클라이언트 tsc 0 · `vitest run` 87건 통과 · 하드코딩 hex 0 이다. 런타임은 서버를 띄우고 지점장 1회 로그인으로 확인했다. 지운 8주소는 404, 다만 `/api/exams/available` 만은 `GET /exams/:id` 로 폴스루해 401 이 난다(라우트가 사라진 것은 맞다). 이웃 주소(`/api/students`·`/api/classes`·`/api/distributions`)는 미인증 401, 로그인 후 200 으로 정상이었다. 감사 A(Opus, 읽기 전용)는 98% 통과에 🟡1 — `server/db/schema.ts:59` 주석이 옛 경로를 언급하나 "스키마 무변경" 지시라 손대지 않았다. 기술 점검(Sonnet)은 통과에 🟡3 — 학생이 옛 `/api/exams/available` 을 치면 404 가 아니라 403 을 본다, `students.ts:312` 제거 주석의 경로 표기가 부정확하다, "대체: `GET /api/students`" 는 `latestExam` 필드가 없어 완전 대체가 아니다. 뒤의 두 건은 `cd7775a` 에서 주석 문구를 고쳐 해소했다. 되돌림은 0회다.
+**검증.** 게이트는 서버 tsc 0 · 클라이언트 tsc 0 · `vitest run` 87건 통과 · 하드코딩 hex 0 이다. 런타임은 서버를 띄우고 지점장 1회 로그인으로 확인했다. 지운 8주소는 404, 다만 `/api/exams/available` 만은 `GET /exams/:id` 로 폴스루해 401 이 난다(라우트가 사라진 것은 맞다). 이웃 주소(`/api/students`·`/api/classes`·`/api/distributions`)는 미인증 401, 로그인 후 200 으로 정상이었다. 감사 A(Opus, 읽기 전용)는 98% 통과에 🟡1 (`server/db/schema.ts:59` 주석이 옛 경로를 언급하나 "스키마 무변경" 지시라 손대지 않았다). 기술 점검(Sonnet)은 통과에 🟡3 (학생이 옛 `/api/exams/available` 을 치면 404 가 아니라 403 을 본다, `students.ts:312` 제거 주석의 경로 표기가 부정확하다, "대체: `GET /api/students`" 는 `latestExam` 필드가 없어 완전 대체가 아니다). 뒤의 두 건은 `cd7775a` 에서 주석 문구를 고쳐 해소했다. 되돌림은 0회다.
 
 **잔여.** `server/db/schema.ts:59` 주석의 옛 경로 언급(스키마 파일 무변경 지시). 학생 세션이 옛 `/api/exams/available` 을 부르면 `/:id` 폴스루로 403 이 나는 점(경로가 사라진 사실 자체는 바뀌지 않으므로 방치).
 
