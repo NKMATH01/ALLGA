@@ -14,10 +14,13 @@
  *     즉 응시가 달린 배포를 지우면 학생 기록이 함께 사라진다. 그래서 선택 조건에서
  *     응시·배정·자식 배포가 하나라도 있는 배포를 반드시 제외한다.
  *   - `--apply` 경로의 선택 쿼리는 `for update` 로 대상 행을 잠근다. 행 잠금은 FK 검사가
- *     쓰는 KEY SHARE 와 충돌하므로, 그 사이 들어오는 응시 INSERT 는 커밋까지 대기했다가
- *     FK 위반으로 실패한다. 즉 "선택 → 삭제" 사이에 새 응시가 끼어들어 CASCADE 로
- *     사라지는 경쟁 조건이 닫힌다. (읽기 전용 트랜잭션에서는 `for update` 를 쓸 수 없으므로
- *     연습 실행은 잠그지 않는다.)
+ *     쓰는 KEY SHARE 와 충돌하므로, 잠금이 걸린 **뒤에** 시작하는 응시 INSERT 는 이
+ *     트랜잭션이 끝날 때까지 대기했다가 (삭제가 커밋되면) FK 위반으로 실패한다.
+ *     잠금만으로는 부족하다. 잠금보다 먼저 시작해 나중에 커밋되는 응시는 대기하지 않기
+ *     때문이다. 그런 응시는 아래 DELETE 문의 `not exists` 재검사가 걸러 내고, 그러면
+ *     영향 행수가 31 과 달라져 트랜잭션 전체가 롤백된다. 두 장치가 함께 있어야
+ *     "선택 → 삭제" 사이에 새 응시가 CASCADE 로 사라지는 경쟁 조건이 닫힌다.
+ *     (읽기 전용 트랜잭션에서는 `for update` 를 쓸 수 없으므로 연습 실행은 잠그지 않는다.)
  *   - DELETE 문 자체에도 선택 조건을 그대로 다시 넣어 원자적으로 재확인한다.
  *   - 삭제 후 총계가 예상과 조금이라도 다르면 커밋하지 않고 롤백한다.
  *
@@ -89,7 +92,7 @@ function printConnectionTarget(databaseUrl: string): void {
     return;
   }
   console.log(`접속 대상: host=${host} db=${database}`);
-  if (!host.includes('neon.tech')) {
+  if (host !== 'neon.tech' && !host.endsWith('.neon.tech')) {
     console.log(`경고: 호스트가 neon.tech 가 아닙니다 (${host}). 의도한 DB 가 맞는지 확인하세요.`);
   }
 }
@@ -196,8 +199,9 @@ async function apply(
       printTotals('삭제 전 총계', before);
 
       // (a) 같은 조건으로 다시 선택하되, 이번에는 for update 로 후보 행을 잠근다.
-      //     잠금이 걸린 뒤에는 이 행들을 참조하는 새 응시 INSERT 가 커밋까지 대기하다가
-      //     (삭제가 커밋되면) FK 위반으로 실패하므로, 선택과 삭제 사이의 틈이 닫힌다.
+      //     잠금이 걸린 뒤에 시작하는 응시 INSERT 는 이 트랜잭션이 끝날 때까지 대기하다가
+      //     (삭제가 커밋되면) FK 위반으로 실패한다. 잠금보다 먼저 시작해 나중에 커밋되는
+      //     응시는 이 잠금이 막지 못하므로, 나머지 절반은 (d) 의 재검사가 맡는다.
       const rows = await selectDeletable(tx as Tx, { lock: true });
       printRows(rows);
       console.log(`선택 ${rows.length}건 (기대 ${EXPECTED_COUNT}, for update 로 잠금)`);
