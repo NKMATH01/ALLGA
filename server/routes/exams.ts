@@ -4,7 +4,7 @@ import xlsx from 'xlsx';
 import { db } from '../db/index';
 import { exams, examAttempts, examDistributions } from '../db/schema';
 import { eq } from 'drizzle-orm';
-import { requireAuth, requireAdmin, requireAdminOrBranch } from '../middleware/auth';
+import { requireAdmin, requireAdminOrBranch } from '../middleware/auth';
 import { log, errorFields } from '../utils/logger';
 
 const router = express.Router();
@@ -71,29 +71,8 @@ router.get('/', requireAdminOrBranch, async (_req, res) => {
   }
 });
 
-// GET /api/exams/available - 배포 가능한 시험 목록 (간소화)
-router.get('/available', requireAuth, async (_req, res) => {
-  try {
-    const examList = await db
-      .select({
-        id: exams.id,
-        title: exams.title,
-        subject: exams.subject,
-        totalQuestions: exams.totalQuestions,
-        totalScore: exams.totalScore,
-      })
-      .from(exams)
-      .orderBy(exams.createdAt);
-
-    res.json({
-      success: true,
-      data: examList,
-    });
-  } catch (error) {
-    log.error('exam.get_available_exams_failed', errorFields(error));
-    res.status(500).json({ message: '시험 목록 조회 중 오류가 발생했습니다.' });
-  }
-});
+// GET /api/exams/available 는 2026-09-07 제거.
+// 대체: GET /api/my-exams (학생), GET /api/exams (관리자·지점장).
 
 // GET /api/exams/:id - 시험 상세 조회 (정답·해설 포함 → 관리자·지점장 전용)
 router.get('/:id', requireAdminOrBranch, async (req, res) => {

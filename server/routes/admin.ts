@@ -113,31 +113,7 @@ router.get('/stats', requireAdmin, async (req, res) => {
   }
 });
 
-// GET /api/admin/recent-activity - 최근 활동 조회
-router.get('/recent-activity', requireAdmin, async (_req, res) => {
-  try {
-    // Get recent exams
-    const recentExams = await db
-      .select({
-        id: exams.id,
-        title: exams.title,
-        subject: exams.subject,
-        createdAt: exams.createdAt,
-      })
-      .from(exams)
-      .orderBy(sql`${exams.createdAt} DESC`)
-      .limit(5);
-
-    res.json({
-      success: true,
-      data: {
-        recentExams,
-      },
-    });
-  } catch (error) {
-    log.error('admin.get_recent_activity_failed', errorFields(error));
-    res.status(500).json({ message: '최근 활동 조회 중 오류가 발생했습니다.' });
-  }
-});
+// GET /api/admin/recent-activity 는 2026-09-07 제거.
+// 대체: 없음 (부르는 화면이 없었다).
 
 export default router;

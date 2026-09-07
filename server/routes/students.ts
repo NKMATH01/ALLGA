@@ -1,8 +1,8 @@
 import express from 'express';
 import crypto from 'crypto';
 import { db } from '../db/index';
-import { students, users, parents, studentParents, examAttempts, exams } from '../db/schema';
-import { eq, and, desc, inArray, isNotNull } from 'drizzle-orm';
+import { students, users, parents, studentParents } from '../db/schema';
+import { eq, and, inArray } from 'drizzle-orm';
 import { requireBranchManager } from '../middleware/auth';
 import { hashPassword } from '../utils/helpers';
 import { log, errorFields } from '../utils/logger';
@@ -309,126 +309,11 @@ router.put('/:id', requireBranchManager, async (req, res) => {
   }
 });
 
-// GET /api/branch-students - 지점 학생 목록 (성적 포함)
-router.get('/branch-students', requireBranchManager, async (req, res) => {
-  try {
-    const branchId = req.session.user!.branchId!;
+// GET /api/branch-students 는 2026-09-07 제거.
+// 대체: GET /api/students (지점 학생 목록).
 
-    const studentList = await db
-      .select({
-        student: students,
-        user: users,
-      })
-      .from(students)
-      .innerJoin(users, eq(students.userId, users.id))
-      .where(eq(students.branchId, branchId));
-
-    // 학생마다 쿼리를 돌리면 N+1 이 되므로 지점 전체 응시 기록을 한 번에 가져온다.
-    // 미제출(submittedAt IS NULL) 은 "최신 응시"가 아니므로 제외한다.
-    // (DESC 정렬은 NULL 을 먼저 놓기 때문에 필터 없이는 미제출이 최신으로 잡힌다)
-    const studentIds = studentList.map((row) => row.student.id);
-
-    const attemptRows = studentIds.length
-      ? await db
-          .select({
-            attempt: examAttempts,
-            exam: exams,
-          })
-          .from(examAttempts)
-          .innerJoin(exams, eq(examAttempts.examId, exams.id))
-          .where(
-            and(
-              inArray(examAttempts.studentId, studentIds),
-              isNotNull(examAttempts.submittedAt)
-            )
-          )
-          .orderBy(desc(examAttempts.submittedAt))
-      : [];
-
-    // 정렬이 최신순이므로 학생별 첫 항목이 최신 응시
-    const latestByStudent = new Map<string, (typeof attemptRows)[number]>();
-    for (const row of attemptRows) {
-      if (!latestByStudent.has(row.attempt.studentId)) {
-        latestByStudent.set(row.attempt.studentId, row);
-      }
-    }
-
-    const result = [];
-    for (const row of studentList) {
-      const latestAttempt = latestByStudent.get(row.student.id);
-
-      result.push({
-        id: row.student.id,
-        name: row.user.name,
-        grade: row.student.grade,
-        latestExam: latestAttempt
-          ? {
-              title: latestAttempt.exam.title,
-              score: latestAttempt.attempt.score,
-              maxScore: latestAttempt.attempt.maxScore,
-              grade: latestAttempt.attempt.grade,
-              percentage:
-                latestAttempt.attempt.maxScore
-                  ? Math.round(
-                      (latestAttempt.attempt.score! / latestAttempt.attempt.maxScore) * 100
-                    )
-                  : 0,
-              submittedAt: latestAttempt.attempt.submittedAt,
-            }
-          : null,
-      });
-    }
-
-    res.json({
-      success: true,
-      data: result,
-    });
-  } catch (error) {
-    log.error('student.get_branch_students_failed', errorFields(error));
-    res.status(500).json({ message: '학생 목록 조회 중 오류가 발생했습니다.' });
-  }
-});
-
-// GET /api/branch-students/stats - 지점 통계
-router.get('/stats', requireBranchManager, async (req, res) => {
-  try {
-    const branchId = req.session.user!.branchId!;
-
-    // Get total students
-    const totalStudents = await db
-      .select()
-      .from(students)
-      .where(eq(students.branchId, branchId));
-
-    // Get total exams attempted
-    const totalAttempts = await db
-      .select()
-      .from(examAttempts)
-      .innerJoin(students, eq(examAttempts.studentId, students.id))
-      .where(eq(students.branchId, branchId));
-
-    // Get completed attempts
-    const completedAttempts = totalAttempts.filter(a => a.exam_attempts.submittedAt !== null);
-
-    // Calculate average score
-    const avgScore = completedAttempts.length > 0
-      ? completedAttempts.reduce((sum, a) => sum + (a.exam_attempts.score || 0), 0) / completedAttempts.length
-      : 0;
-
-    res.json({
-      success: true,
-      data: {
-        totalStudents: totalStudents.length,
-        totalAttempts: totalAttempts.length,
-        completedAttempts: completedAttempts.length,
-        avgScore: Math.round(avgScore * 10) / 10,
-      },
-    });
-  } catch (error) {
-    log.error('student.get_branch_stats_failed', errorFields(error));
-    res.status(500).json({ message: '통계 조회 중 오류가 발생했습니다.' });
-  }
-});
+// GET /api/branch-students/stats 는 2026-09-07 제거.
+// 대체: GET /api/admin/stats (총괄), 지점 화면은 목록 응답으로 집계한다.
 
 /*
   POST /:id/login-as 는 제거했다(P-4).

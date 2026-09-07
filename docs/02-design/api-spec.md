@@ -301,7 +301,9 @@
 
 ---
 
-### 4.3 GET /api/exams/available
+### 4.3 GET /api/exams/available (2026-09-07 제거)
+클라이언트 호출이 없어 제거했다. 대체: GET /api/my-exams (학생), GET /api/exams (관리자·지점장).
+
 **설명**: 배포 가능한 시험 목록
 
 **권한**: admin
@@ -728,7 +730,9 @@
 
 ---
 
-### 8.7 GET /api/branch/completed
+### 8.7 GET /api/branch/completed (2026-09-07 제거)
+클라이언트 호출이 없어 제거했다. 대체: GET /api/distributions/students (배치 조회).
+
 **설명**: 지점의 완료된 응시 목록
 
 **권한**: branch
@@ -833,7 +837,9 @@
 
 ---
 
-### 10.2 GET /api/admin/recent-activity
+### 10.2 GET /api/admin/recent-activity (2026-09-07 제거)
+클라이언트 호출이 없어 제거했다. 대체: 없음 (부르는 화면이 없었다).
+
 **설명**: 최근 활동 조회
 
 **권한**: admin

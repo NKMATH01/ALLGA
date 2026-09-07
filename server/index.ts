@@ -105,7 +105,6 @@ app.use('/api/parents', parentRoutes);
 app.use('/api', attemptRoutes); // Mount at /api so /my-exams and /exam-attempts both work
 app.use('/api/reports', reportRoutes);
 app.use('/api/admin', adminRoutes);
-app.use('/api/branch-students', studentRoutes); // Branch manager stats
 
 // Serve static files in production
 if (process.env.NODE_ENV === 'production') {

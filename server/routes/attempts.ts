@@ -8,11 +8,10 @@ import {
   studentClasses,
   aiReports,
   distributionStudents,
-  users,
   parents,
   studentParents,
 } from '../db/schema';
-import { eq, and, isNotNull, isNull, inArray } from 'drizzle-orm';
+import { eq, and, isNull, inArray } from 'drizzle-orm';
 import { requireStudent, requireBranchManager, type SessionUser } from '../middleware/auth';
 import {
   calculateGrade,
@@ -730,92 +729,8 @@ router.post('/exam-attempts/:id/submit', requireStudent, async (req, res) => {
   }
 });
 
-// GET /api/exam-attempts/branch/completed - 지점의 채점 완료된 시험 목록
-router.get('/branch/completed', async (req, res) => {
-  try {
-    const user = req.session.user;
-
-    if (!user || (user.role !== 'branch' && user.role !== 'admin')) {
-      return res.status(403).json({ message: '지점 관리자 또는 총괄 관리자만 접근 가능합니다.' });
-    }
-
-    const branchId = user.branchId;
-
-    if (!branchId && user.role === 'branch') {
-      return res.status(400).json({ message: '지점 정보가 없습니다.' });
-    }
-
-    // Get completed attempts for the branch
-    const completedAttempts = await db
-      .select({
-        attempt: examAttempts,
-        exam: exams,
-        student: students,
-        user: users,
-      })
-      .from(examAttempts)
-      .innerJoin(exams, eq(examAttempts.examId, exams.id))
-      .innerJoin(students, eq(examAttempts.studentId, students.id))
-      .innerJoin(users, eq(students.userId, users.id))
-      // admin 은 전체 지점을 본다. branchId 로 무조건 필터하면
-      // admin 의 branchId 가 undefined 라 결과가 비어버린다.
-      .where(
-        user.role === 'admin'
-          ? isNotNull(examAttempts.submittedAt)
-          : and(eq(students.branchId, branchId!), isNotNull(examAttempts.submittedAt))
-      );
-
-    // 응시 건마다 aiReports 를 직렬 조회하면 목록 길이만큼 왕복이 생기므로 한 번에 배치 조회한다.
-    const submittedRows = completedAttempts.filter((row) => row.attempt.submittedAt);
-    // 존재 여부와 id 만 필요하다. select() 로 전체 행을 가져오면
-    // htmlContent(수십~수백 KB)가 매 행마다 네트워크로 실려 온다.
-    const submittedAttemptIds = submittedRows.map((row) => row.attempt.id);
-    // 생성 중이거나 실패한 행은 열어 볼 지면이 없으므로 완료된 것만 센다 (R-2).
-    const reportRows = submittedAttemptIds.length
-      ? await db
-          .select({ id: aiReports.id, attemptId: aiReports.attemptId })
-          .from(aiReports)
-          .where(
-            and(inArray(aiReports.attemptId, submittedAttemptIds), eq(aiReports.status, 'completed'))
-          )
-      : [];
-    // 기존 .limit(1) 과 동일하게 attempt 당 한 건만 남긴다(먼저 들어온 것 유지).
-    const reportIdByAttemptId = new Map<string, string>();
-    for (const report of reportRows) {
-      if (!reportIdByAttemptId.has(report.attemptId)) {
-        reportIdByAttemptId.set(report.attemptId, report.id);
-      }
-    }
-
-    const result = [];
-    for (const row of submittedRows) {
-      const reportId = reportIdByAttemptId.get(row.attempt.id);
-
-      result.push({
-        attemptId: row.attempt.id,
-        studentId: row.student.id,
-        studentName: row.user.name,
-        examId: row.exam.id,
-        examTitle: row.exam.title,
-        examSubject: row.exam.subject,
-        score: row.attempt.score,
-        maxScore: row.attempt.maxScore,
-        grade: row.attempt.grade,
-        submittedAt: row.attempt.submittedAt,
-        hasReport: !!reportId,
-        reportId: reportId || null,
-      });
-    }
-
-    res.json({
-      success: true,
-      data: result,
-    });
-  } catch (error) {
-    log.error('attempt.get_branch_completed_attempts_failed', errorFields(error));
-    res.status(500).json({ message: '시험 목록 조회 중 오류가 발생했습니다.' });
-  }
-});
+// GET /api/exam-attempts/branch/completed 는 2026-09-07 제거.
+// 대체: GET /api/distributions/students (배치 조회).
 
 // POST /api/exam-attempts/branch-create - 지점 관리자가 학생 답안 생성 (응시하지 않은 학생용)
 router.post('/exam-attempts/branch-create', requireBranchManager, async (req, res) => {
