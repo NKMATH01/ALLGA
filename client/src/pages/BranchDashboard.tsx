@@ -1,4 +1,7 @@
-import { Fragment, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
+import { StudentNavigator, rosterKey, fetchRoster } from '../components/branch/StudentNavigator';
+import { GroupResults } from '../components/branch/GroupResults';
+import { filterGroupStudents, readSelection, saveSelection, selectionKey, validateSelection, retainCurrentDistributions, type BranchSelection } from '../lib/branchSelection';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import { toast } from '../components/ui/toast';
@@ -107,12 +110,13 @@ export default function BranchDashboard({ user }: { user: User }) {
   // 상단 GNB 3탭 + 좌측 학생 패널 + 학생 컨텍스트 탭.
   // 데이터 호출은 늘리지 않고 기존 쿼리 결과를 학생 기준으로 다시 묶기만 한다.
   const [topTab, setTopTab] = useState<TopTab>('grades');
-  const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
+  const storageKey = selectionKey(user.id, user.branchId);
+  const [selection, setSelection] = useState<BranchSelection>(() => readSelection(storageKey));
+  const loadedSelectionKey = useRef(storageKey);
+  const selectedStudentId = selection.studentId;
+  const setSelectedStudentId = (studentId: string | null) => setSelection((previous) => ({ ...previous, studentId, ...(studentId ? {} : { groupId: null, distributionId: null }) }));
   const [studentTab, setStudentTab] = useState<StudentTab>('history');
-  const [panelSearch, setPanelSearch] = useState('');
-  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
   const [panelOpen, setPanelOpen] = useState(false);
-  const [panelSort, setPanelSort] = useState<'name' | 'unattempted'>('name');
 
   // 관리 목록 툴바 상태 (DESIGN.md 11.2). 전부 클라이언트 필터라 서버 호출이 늘지 않는다.
   const [classSearch, setClassSearch] = useState('');
@@ -226,12 +230,12 @@ export default function BranchDashboard({ user }: { user: User }) {
 
   // 대시보드용: 모든 배포의 학생 정보 가져오기
   const {
-    data: allDistributionStudents,
+    data: rawAllDistributionStudents,
     refetch: refetchAllDistributionStudents,
     isLoading: allDistLoading,
     isError: allDistError,
   } = useQuery({
-    queryKey: ['all-distribution-students', user.branchId],
+    queryKey: ['all-distribution-students', user.branchId, (distributions || []).map((d: any) => d.id).sort().join('|')],
     queryFn: async () => {
       if (!distributions || distributions.length === 0) return [];
 
@@ -243,6 +247,12 @@ export default function BranchDashboard({ user }: { user: User }) {
     },
     enabled: !!distributions && distributions.length > 0,
   });
+  const allDistributionStudents = retainCurrentDistributions<any>(Array.isArray(rawAllDistributionStudents) ? rawAllDistributionStudents : [], Array.isArray(distributions) ? distributions : []);
+  const invalidateRosterAndResults = () => {
+    queryClient.invalidateQueries({ queryKey: ['class-roster', user.branchId] });
+    queryClient.invalidateQueries({ queryKey: ['all-distribution-students', user.branchId] });
+    queryClient.invalidateQueries({ queryKey: ['distribution-students'] });
+  };
 
   const logoutMutation = useMutation({
     mutationFn: async () => {
@@ -260,6 +270,7 @@ export default function BranchDashboard({ user }: { user: User }) {
     },
     onSuccess: () => {
       refetchStudents();
+      invalidateRosterAndResults();
       setShowStudentModal(false);
       toast.success('학생이 등록되었습니다.');
     },
@@ -275,6 +286,7 @@ export default function BranchDashboard({ user }: { user: User }) {
     },
     onSuccess: () => {
       refetchStudents();
+      invalidateRosterAndResults();
       setShowStudentModal(false);
       setEditingStudent(null);
       toast.success('학생 정보가 수정되었습니다.');
@@ -291,6 +303,7 @@ export default function BranchDashboard({ user }: { user: User }) {
     },
     onSuccess: () => {
       refetchClasses();
+      invalidateRosterAndResults();
       setShowClassModal(false);
       toast.success('반이 생성되었습니다.');
     },
@@ -306,6 +319,7 @@ export default function BranchDashboard({ user }: { user: User }) {
     },
     onSuccess: () => {
       refetchClasses();
+      invalidateRosterAndResults();
       setShowClassModal(false);
       setEditingClass(null);
       toast.success('반이 수정되었습니다.');
@@ -322,6 +336,7 @@ export default function BranchDashboard({ user }: { user: User }) {
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['distributions', user.branchId] });
+      invalidateRosterAndResults();
       // 응시 기간이 바뀌면 배포 목록과 학생 목록 양쪽에 반영돼야 한다.
       queryClient.invalidateQueries({ queryKey: ['all-distribution-students'] });
       setShowRedistributeModal(false);
@@ -418,6 +433,7 @@ export default function BranchDashboard({ user }: { user: User }) {
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['distributions', user.branchId] });
+      invalidateRosterAndResults();
       setSelectedReportDistribution(null);
       toast.success(data.message || '배포가 삭제되었습니다.');
     },
@@ -1343,56 +1359,38 @@ export default function BranchDashboard({ user }: { user: User }) {
   const selectedStudent = studentList.find((s: any) => s.id === selectedStudentId) || null;
   const selectedStudentExams = selectedStudentId ? examsByStudent.get(selectedStudentId) || [] : [];
 
-  // 패널용 학년 그룹. 반 정보는 학생 목록 API 가 주지 않으므로 이번에는 학년만 쓴다.
-  const panelFiltered = studentList.filter((s: any) => {
-    const q = panelSearch.trim().toLowerCase();
-    if (!q) return true;
-    return String(s.user?.name || '').toLowerCase().includes(q);
+  const activeRoster = useQuery({
+    queryKey: rosterKey(user.branchId, selection.mode === 'class' ? selection.groupId : null),
+    queryFn: () => fetchRoster(selection.groupId!),
+    enabled: selection.mode === 'class' && !!selection.groupId && !!classes?.some((c: any) => c.id === selection.groupId),
+    staleTime: 60_000,
   });
-  const panelGroups = Array.from(
-    panelFiltered.reduce((m: Map<string, any[]>, s: any) => {
-      const key = String(s.grade || '').trim() || '학년 미지정';
-      if (!m.has(key)) m.set(key, []);
-      m.get(key)!.push(s);
-      return m;
-    }, new Map<string, any[]>())
-  ).sort((a, b) => a[0].localeCompare(b[0], 'ko'));
-
-  const pickStudent = (id: string) => {
-    setSelectedStudentId(id);
+  const groupStudents = filterGroupStudents(studentList, selection.mode, selection.groupId, activeRoster.data);
+  const groupTitle = selection.mode === 'class' ? classes?.find((c: any) => c.id === selection.groupId)?.name || '반' : selection.groupId;
+  useEffect(() => {
+    if (loadedSelectionKey.current !== storageKey) {
+      loadedSelectionKey.current = storageKey;
+      setSelection(readSelection(storageKey));
+      return;
+    }
+    saveSelection(storageKey, selection);
+  }, [storageKey, selection]);
+  useEffect(() => {
+    if (studentsLoading || studentsError || classesLoading || classesError) return;
+    setSelection((previous) => {
+      let valid = validateSelection(previous, studentList, Array.isArray(classes) ? classes : [], activeRoster.data);
+      if (!distributionsLoading && !distributionsError && valid.distributionId && !distributions?.some((d: any) => d.id === valid.distributionId)) valid = { ...valid, distributionId: null };
+      return JSON.stringify(valid) === JSON.stringify(previous) ? previous : valid;
+    });
+  }, [students, classes, activeRoster.data, studentsLoading, studentsError, classesLoading, classesError, distributions, distributionsLoading, distributionsError, selection.groupId, selection.mode]);
+  const selectContext = (next: BranchSelection) => {
+    setSelection(next);
     setStudentTab('history');
-    setPanelOpen(false);
+    if (next.groupId !== null) setPanelOpen(false);
     setOpenAttemptId(null);
   };
-
-  /** 패널 정렬: 이름순 또는 미응시 우선 (미응시가 많은 학생을 위로) */
-  const unattemptedCount = (studentId: string) =>
-    (examsByStudent.get(studentId) || []).filter((r) => !r.isSubmitted).length;
-
-  const allGroupsCollapsed =
-    panelGroups.length > 0 && panelGroups.every(([name]) => collapsedGroups[name]);
-
-  const toggleAllGroups = () => {
-    if (allGroupsCollapsed) {
-      setCollapsedGroups({});
-    } else {
-      const next: Record<string, boolean> = {};
-      panelGroups.forEach(([name]) => {
-        next[name] = true;
-      });
-      setCollapsedGroups(next);
-    }
-  };
-
-  const sortPanelStudents = (rows: any[]) =>
-    rows.slice().sort((a: any, b: any) => {
-      if (panelSort === 'unattempted') {
-        const d = unattemptedCount(b.id) - unattemptedCount(a.id);
-        if (d !== 0) return d;
-      }
-      return String(a.user?.name || '').localeCompare(String(b.user?.name || ''), 'ko');
-    });
-
+  const pickStudent = (id: string) => selectContext({ ...selection, studentId: id });
+  const unattemptedCount = (studentId: string) => (examsByStudent.get(studentId) || []).filter((r) => !r.isSubmitted).length;
   /** 학생 헤더 요약 지표. 제출 완료 건만 집계한다. */
   const studentSummary = (() => {
     if (!selectedStudentId) return null;
@@ -1434,87 +1432,11 @@ export default function BranchDashboard({ user }: { user: User }) {
   };
 
   const renderStudentPanel = () => (
-    <div className="flex h-full flex-col bg-surface">
-      <div className="border-b border-line px-4 py-3">
-        <h2 className="text-base font-semibold text-ink">학생 목록</h2>
-        <p className="mt-1 text-xs leading-relaxed text-ink-secondary">학생을 선택해 성적과 보고서를 확인하세요.</p>
-      </div>
-      <div className="border-b border-line px-4 py-2.5">
-        <div className="relative">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-tertiary" strokeWidth={1.5} />
-          <Input
-            value={panelSearch}
-            onChange={(e) => setPanelSearch(e.target.value)}
-            placeholder="학생 이름 검색"
-            aria-label="학생 이름 검색"
-            className="h-9 pl-9"
-          />
-        </div>
-      </div>
-      {/* 패널 보조 컨트롤 (DESIGN.md 11.6.2) */}
-      <div className="flex items-center gap-1 border-b border-line px-3 py-1.5">
-        <button
-          type="button"
-          onClick={toggleAllGroups}
-          className="h-7 rounded-sm border border-line px-2 text-xs text-ink-secondary transition-colors duration-150 ease-out hover:bg-surface-subtle hover:text-ink"
-        >
-          {allGroupsCollapsed ? '전체 펴기' : '전체 접기'}
-        </button>
-        <button
-          type="button"
-          onClick={() => setPanelSort((p) => (p === 'name' ? 'unattempted' : 'name'))}
-          title="눌러서 정렬 기준을 바꿉니다"
-          className="ml-auto h-7 rounded-sm border border-line px-2 text-xs text-ink-secondary transition-colors duration-150 ease-out hover:bg-surface-subtle hover:text-ink"
-        >
-          정렬 · {panelSort === 'name' ? '이름순' : '미응시 우선'}
-        </button>
-      </div>
-      <nav className="flex-1 overflow-y-auto py-1" aria-label="학생 목록">
-        {panelGroups.length === 0 && (
-          <p className="px-4 py-6 text-center text-xs text-ink-tertiary">일치하는 학생이 없습니다.</p>
-        )}
-        {panelGroups.map(([groupName, groupStudents]) => {
-          const collapsed = !!collapsedGroups[groupName];
-          return (
-            <div key={groupName}>
-              <button
-                type="button"
-                onClick={() => setCollapsedGroups((p) => ({ ...p, [groupName]: !p[groupName] }))}
-                aria-expanded={!collapsed}
-                className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-ink-secondary transition-colors duration-150 ease-out hover:bg-surface-subtle"
-              >
-                <span className="w-3 flex-shrink-0 text-xs text-ink-tertiary">{collapsed ? '▸' : '▾'}</span>
-                <span className="font-semibold text-ink">{groupName}</span>
-                <span className="ml-auto tabular-nums text-xs text-ink-tertiary">{groupStudents.length}명</span>
-              </button>
-              {!collapsed &&
-                sortPanelStudents(groupStudents)
-                  .map((s: any) => {
-                    const active = s.id === selectedStudentId;
-                    return (
-                      <button
-                        key={s.id}
-                        type="button"
-                        onClick={() => pickStudent(s.id)}
-                        aria-current={active ? 'true' : undefined}
-                        className={`flex w-full items-center py-1.5 pl-9 pr-3 text-left text-sm transition-colors duration-150 ease-out ${
-                          active
-                            ? 'bg-surface-subtle font-semibold text-ink'
-                            : 'text-ink-secondary hover:bg-surface-subtle'
-                        }`}
-                      >
-                        {/* 사이드는 이름만. 성적은 본문에서 본다 (DESIGN.md 11.6.2) */}
-                        <span className="truncate">{s.user?.name}</span>
-                      </button>
-                    );
-                  })}
-            </div>
-          );
-        })}
-      </nav>
-    </div>
+    <StudentNavigator students={studentList} classes={Array.isArray(classes) ? classes : []} branchId={user.branchId}
+      selection={selection} onSelect={selectContext} loading={studentsLoading || classesLoading}
+      error={studentsError || classesError} onRetry={() => { refetchStudents(); refetchClasses(); }}
+      unattemptedCount={unattemptedCount} />
   );
-
   /**
    * 보고서 확보 후 실제로 연다. ensureReport 는 참조만 돌려주므로
    * 그것만 부르면 사용자에게는 아무 일도 일어나지 않는다 (학생·학부모 화면과 같은 흐름).
@@ -1921,6 +1843,12 @@ export default function BranchDashboard({ user }: { user: User }) {
   };
 
   const renderStudentContext = () => {
+    if (!selectedStudent && selection.groupId) return <GroupResults title={groupTitle || '학생'} mode={selection.mode}
+      students={groupStudents} distributions={Array.isArray(allDistributionStudents) ? allDistributionStudents : []}
+      distributionId={selection.distributionId} onDistribution={(distributionId) => setSelection((previous) => ({ ...previous, distributionId }))}
+      onStudent={pickStudent} loading={studentsLoading || allDistLoading || distributionsLoading || (selection.mode === 'class' && activeRoster.isLoading)}
+      error={studentsError || allDistError || distributionsError || (selection.mode === 'class' && activeRoster.isError)}
+      onRetry={() => { refetchStudents(); refetchDistributions(); refetchAllDistributionStudents(); if (selection.mode === 'class') activeRoster.refetch(); }} />;
     if (!selectedStudent) return renderDashboard();
     const submitted = selectedStudentExams.filter((r) => r.isSubmitted);
     const tabs: { id: StudentTab; label: string }[] = [
@@ -1930,6 +1858,10 @@ export default function BranchDashboard({ user }: { user: User }) {
     ];
     return (
       <>
+        <div className="mb-4 flex flex-wrap items-center gap-2 text-sm text-ink-secondary">
+          <button type="button" onClick={() => selectContext({ ...selection, studentId: null })} className="inline-flex items-center gap-1 rounded-md px-2 py-2 hover:bg-surface-subtle"><ArrowLeft className="h-4 w-4" />{selection.groupId ? `${groupTitle} 전체` : '지점 전체'}로 돌아가기</button>
+          <span>/ {selectedStudent.user?.name}</span>
+        </div>
         <div className="mb-6 rounded-2xl border border-line bg-surface p-5 md:p-7">
         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
           <h1 className="page-heading text-2xl font-semibold tracking-[-0.03em] text-ink md:text-3xl">{selectedStudent.user?.name}</h1>
@@ -2534,6 +2466,7 @@ export default function BranchDashboard({ user }: { user: User }) {
       await api.delete(`/classes/${cls.id}`);
       toast.success('반이 삭제되었습니다.');
       refetchClasses();
+      invalidateRosterAndResults();
     } catch (error: any) {
       if (error.response?.status === 409) {
         const msg = error.response.data?.message || '배정된 학생이 있습니다.';
@@ -2542,6 +2475,7 @@ export default function BranchDashboard({ user }: { user: User }) {
             await api.delete(`/classes/${cls.id}?force=true`);
             toast.success('반이 삭제되었습니다.');
             refetchClasses();
+      invalidateRosterAndResults();
           } catch (e: any) {
             toast.error(e.response?.data?.message || '반 삭제에 실패했습니다.');
           }

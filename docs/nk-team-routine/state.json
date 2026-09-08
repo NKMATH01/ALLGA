@@ -1,50 +1,37 @@
 {
-  "run": "2026-09-08-premium-ui-redesign",
-  "save_point": "7369457",
-  "approval": "사용자 진행해줘",
-  "started_at": "2026-09-08T10:38:44Z",
-  "next": "visual-qa-private-roles",
+  "run": "2026-09-08-branch-class-grade-navigation",
+  "save_point": "5c5f57d",
+  "approval": "사용자 확인한다 진행해라",
+  "next": "실제 지점 화면 QA 승인 대기",
   "nodes": [
     {
-      "status": "통과",
-      "id": "direction"
+      "id": "reference",
+      "evidence": "Mathflat 학년/반 전환, 전체/학생 선택, 학습지 점수목록, 반 학습내역 관찰",
+      "status": "통과"
     },
     {
-      "status": "통과: 모바일 로그인 보완 포함",
-      "id": "foundation"
+      "status": "구현 완료",
+      "id": "branch-ui"
     },
     {
-      "status": "통과",
-      "id": "management"
+      "status": "통과: 실패2→통과4, 독립감사 통과",
+      "id": "zero-score"
     },
     {
-      "status": "통과",
-      "id": "family"
-    },
-    {
-      "status": "통과",
+      "status": "캐시 문제 2건 재작업 후 재감사 통과",
       "id": "independent-review"
     },
     {
-      "status": "부분 확인: 로그인·관리자·지점. 학생/학부모 열람 승인 대기",
+      "status": "실제 지점 대리 로그인 명시승인 요청 대기",
       "id": "visual-qa"
     },
     {
-      "status": "통과",
+      "status": "104/104 tests, client tsc, production build, diff check 통과",
       "id": "gates"
     },
     {
-      "status": "구현 저장, 실제 계정 QA 승인 대기",
+      "status": "코드·기록 저장; 실제 화면 QA 대기",
       "id": "wrapup"
     }
-  ],
-  "checks": {
-    "client_tsc": "0",
-    "review": "요구 충족 90%, 심각 회귀 없음",
-    "server_tsc": "0",
-    "build": "0 Node22",
-    "qa": "390px 로그인/관리자/지점, 관리자 생성 모달 열기/닫기. 학생 전환 자동승인 차단",
-    "tests": "87/87",
-    "rework": "관리 toolbar/패널 1회, 모바일 login 1회"
-  }
+  ]
 }
