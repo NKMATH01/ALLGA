@@ -79,6 +79,9 @@ export const studentParents = pgTable('student_parents', {
     table.studentId,
     table.parentId
   ),
+  // parents.ts·reports.ts·attempts.ts : WHERE parent_id = ? (학부모의 자녀 조회·권한 확인)
+  // 위 UNIQUE 는 student_id 로 시작하므로 parent_id 단독 조회를 커버하지 못한다.
+  parentIdx: index('student_parents_parent_id_idx').on(table.parentId),
 }));
 
 // Student-Classes relationship table
@@ -106,7 +109,6 @@ export const exams = pgTable('exams', {
   description: text('description'),
   totalQuestions: integer('total_questions').notNull(),
   totalScore: integer('total_score').notNull(),
-  examFileUrl: text('exam_file_url'),
   questionsData: json('questions_data').notNull(), // Array of question metadata
   examTrends: json('exam_trends'), // Array of exam trends
   overallReview: text('overall_review'),
@@ -189,6 +191,9 @@ export const examAttempts = pgTable('exam_attempts', {
   // exams.ts DELETE /:id : WHERE exam_id = ? (삭제 영향 조회)
   // (student_id 로 시작하는 조회는 위 UNIQUE 인덱스가 이미 커버한다)
   examIdx: index('exam_attempts_exam_id_idx').on(table.examId),
+  // attempts.ts·distributions.ts : WHERE distribution_id IN (...) / = ? (배포별 응시 조회)
+  // 위 UNIQUE 는 student_id 로 시작하므로 distribution_id 단독 조회를 커버하지 못한다.
+  distributionIdx: index('exam_attempts_distribution_id_idx').on(table.distributionId),
 }));
 
 // AI Reports table
@@ -198,9 +203,6 @@ export const aiReports = pgTable('ai_reports', {
   studentId: varchar('student_id', { length: 255 }).notNull().references(() => students.id, { onDelete: 'cascade' }),
   examId: varchar('exam_id', { length: 255 }).notNull().references(() => exams.id, { onDelete: 'cascade' }),
   analysis: json('analysis'), // AI analysis data
-  weakAreas: json('weak_areas'), // Array of weak areas
-  recommendations: json('recommendations'), // Array of recommendations
-  expectedGrade: integer('expected_grade'),
   summary: text('summary'),
   htmlContent: text('html_content'), // Full HTML report
   // 생성 진행 상태. 행이 곧 잠금이라 큐 적재 전에 processing 으로 먼저 넣는다.
