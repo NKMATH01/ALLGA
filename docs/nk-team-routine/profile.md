@@ -15,6 +15,7 @@
 | 테스트 | `npm test` (= `vitest run`, `vitest.config.ts` 의 `include: server/**/*.test.ts`) |
 | 하드코딩 hex | `grep -rnE "#[0-9a-fA-F]{3,8}\b" client/src --include=*.tsx --include=*.ts` |
 | 빌드 | `npm run build` (client → server) |
+| 스냅샷 정합 | `npx drizzle-kit check` |
 
 주의 둘. `tsconfig.json` 은 client 전용 include 라서 서버 타입체크는 반드시
 `tsconfig.server.json` 을 써야 한다. 빌드는 Node 22 LTS 에서 한다

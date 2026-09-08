@@ -151,10 +151,11 @@ npx vitest run                             → 2 files / 37 tests passed
 | R-2 | 보고서 실패가 클라이언트에 미전달 → `ai_reports.status`/`failure_reason`, 선삽입 잠금, `completed` 만 노출, 클라이언트 즉시 실패 표시 | `0098698` | **운영 DB 0009 적용 + 런타임**: `GET /reports/attempt/:id` → `status=completed`, `/my-exams` hasReport 2/3(completed 만) |
 | R-3 | 이모지 console 로그 11곳 → `log.*('report.<event>')`, API 키는 boolean 만 | `a8939b3` | grep `console.` 0 |
 | U-21 | `dev` 스크립트 POSIX `&` → `concurrently -k` | `a8939b3` | package.json·lock 확인 |
+| D-8 | 미사용 컬럼 4개 삭제 + 조회 인덱스 2개(`student_parents(parent_id)`·`exam_attempts(distribution_id)`), DROP 전 비-NULL 가드. `classes.is_active` 는 사용 중이라 유지, `branches.is_active` 유지 | `c4d04b6` | **운영 DB 0010 적용**: 삭제 4열 부재·인덱스 2개 실존·행수 불변(분석서 §10.1.5) |
 
 정적 확정만 된 항목(S-2·P-3·U-1·U-5·S-3)의 런타임 확인은 다음 기회에 한다.
 
-미수정으로 남은 중간·낮음 결함(D-8)은 보고서 §4 를 참조한다.
+D-8(미사용 컬럼·인덱스)은 2026-09-08 에 마이그레이션 0010 으로 정리했다. 참조 0·데이터 0 인 컬럼 4개(`ai_reports.weak_areas/recommendations/expected_grade`·`exams.exam_file_url`)를 지웠고, 사용 중인 `classes.is_active` 와 지점 비활성 설계용 `branches.is_active` 는 남겼다. 조회에 쓰이는데 없던 인덱스 2개(`student_parents(parent_id)`·`exam_attempts(distribution_id)`)를 더했다. 적용 결과 `__drizzle_migrations` 10 → 11, `ai_reports` 13 → 10열, `exams` 13 → 12열, 인덱스 2개 실존, 주요 테이블 행수는 전부 불변이다. 자세한 경과는 분석서 §10.1.5 를 참조한다.
 
 D-4(중복 배포)는 2026-09-07 에 정리를 마쳤다. 조사 결과 "16지점 × 2건 이중 실행" 추정이 틀렸고, 같은 제목 시험 2개와 "미수등" 시험이 각각 17지점에 배포된 것이었다. 사용자 결정에 따라 응시 기록이 없는 배포 31건만 삭제해 `exam_distributions` 가 52 에서 21 로 줄었고, 응시 20건·보고서 10건·배정 0건은 그대로다. 삭제한 31행은 백업 JSON 으로 남겼다. 자세한 경과는 분석서 §10.1.3 을 참조한다.
 

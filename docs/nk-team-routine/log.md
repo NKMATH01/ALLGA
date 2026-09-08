@@ -2,6 +2,52 @@
 
 한 항목이 루틴 한 바퀴다. 최근 것을 위에 쌓는다.
 
+## 2026-09-08 · D-8 미사용 컬럼 4개·조회 인덱스 2개 정리 (마이그레이션 0010, 클로드 점검)
+
+- **저장 지점**: `c7529d0` (죽은 엔드포인트 문서 push 직후)
+- **조사**: 참조 0·데이터 0 컬럼은 4개였다. `ai_reports.weak_areas`·`recommendations`·
+  `expected_grade`(9행 전부 NULL), `exams.exam_file_url`(1행 NULL). 점검 목록에 함께
+  적힌 `classes.is_active` 는 **사용 중**이라 목록이 틀렸다(`server/routes/classes.ts:26`,
+  `BranchDashboard.tsx` 의 "운영 중/비활성"). `branches.is_active` 는 코드 참조 0 이지만
+  전부 true 이고 지점 비활성 설계용이라 유지. 인덱스는 반대로 정정됐다. 조회에 쓰이는데
+  없던 것은 `student_parents(parent_id)`(`parents.ts:40` 등 4곳)와
+  `exam_attempts(distribution_id)`(`attempts.ts:100`·`distributions.ts:389` 등 9곳,
+  점검 목록에 **없던** 항목)이고, 점검이 지목한 `ai_reports(student_id/exam_id)` 는
+  조회 0(관계·연쇄 삭제만)이라 대상이 아니었다.
+- **사용자 결정**: 컬럼 4개만 삭제, 인덱스 2개(`student_parents_parent_id_idx`,
+  `exam_attempts_distribution_id_idx`) 추가. 점검 모드는 "클로드 점검".
+- **감사 A(Opus)**: **통과 100%**(요구 9항목 전부 ✓), 🟡1 (가드 DO 블록이 삭제 대상
+  컬럼을 직접 참조해, 적용 뒤 수동 재실행 시 "column does not exist" 로 실패한다.
+  journal 이 재실행을 막고 트랜잭션이라 부분 적용도 없어 실무 위험 낮음, 미수정)
+- **기술 점검(Sonnet)**: **통과**, 🟡1 (가드의 `IS NOT NULL` 은 SQL NULL 만 보므로 JSON
+  리터럴 `null` 행이 있으면 과잉 차단. 데이터를 지키는 방향의 실패라 안전하고 실제 그런
+  행은 없어 적용 성공). ✅ 로 확인된 것: 마이그레이터 단일 트랜잭션, journal `when`
+  1788510616841 < 1788849729388 이라 적용 대상, 인덱스 정당성(기존 UNIQUE 는 student_id
+  선두라 parent_id·distribution_id 단독 조회 미커버), 초소형 테이블이라 잠금 위험 없음,
+  스키마 주석의 파일명 실재.
+- **종합 판정**: 통과, 되돌림 0회. 화면 변화가 없어 입장 점검은 생략.
+- **적용**: 사용자가 `npm run db:migrate` 를 1회 직접 실행(2026-09-08 16시경).
+  세션 안전장치가 실행 위임을 막아 사용자가 직접 눌렀다.
+- **결과**: `c4d04b6` 4파일(`drizzle/0010_keen_zarek.sql`,
+  `drizzle/meta/0010_snapshot.json`, `drizzle/meta/_journal.json`, `server/db/schema.ts`).
+  SQL 은 가드 `DO $$` → `CREATE INDEX IF NOT EXISTS` 2개 → `DROP COLUMN IF EXISTS` 4개
+  순서다. 전후 대조(팀장 읽기 전용): `__drizzle_migrations` 10 → **11**(last
+  1788849729388), 삭제 대상 4열 **부재**, `ai_reports` 13 → **10열**, `exams` 13 →
+  **12열**, 새 인덱스 0 → **2**, 유지 컬럼 전후 실존, 행수 exams 1 · ai_reports 9 ·
+  exam_attempts 17 · student_parents 1 · exam_distributions 18 · users 30 **전부 불변**.
+- **게이트**: 서버 tsc 0 · 클라이언트 tsc 0 · vitest 5파일 87건 · 하드코딩 hex 0
+  (주석 1, `BranchDashboard.tsx:3628`, D-8 이전부터) · `npx drizzle-kit check`
+  "Everything's fine" · 삭제 컬럼 코드 참조 0(`reports.ts:1164-1183` 의
+  `recommendations` 는 요약 계산 지역 변수).
+- **비용 어림**: 약 $2
+- **배운 것**: ① 세션이 끊기면 `state.json` 이 아니라 메모리 파일로 재개했다. 노드마다
+  `state.json` 을 갱신하지 않은 탓이니 다음 루틴부터는 구현 커밋 직후에 바로 갱신한다.
+  ② 컬럼 삭제는 0009 와 순서가 반대다. 옛 코드가 도는 서버가 있으면 코드 배포가 먼저,
+  마이그레이션이 나중이어야 한다(이 저장소는 배포 설정이 없고 서버를 로컬에서 띄우므로
+  해당 없음).
+- **잔여**: 감사 🟡2 미수정. `docs/02-design/data-model.md` 에 0007 `target_kind` 와
+  0009 `status`·`failure_reason` 이 빠져 있는 기존 드리프트가 있다(이번 범위 밖, 기록만).
+
 ## 2026-09-07 · 죽은 엔드포인트 7개 제거 (코드만, 클로드 점검)
 
 - **저장 지점**: `719dc8c` (E-3 문서 push 직후)

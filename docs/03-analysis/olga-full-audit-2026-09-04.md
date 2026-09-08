@@ -141,7 +141,7 @@
 | D-5 | 중간 | 신규 | `schema.ts:16,29` | users 30/30 `updated_at==created_at`, `$onUpdate` 없음 | `$onUpdate(() => new Date())` |
 | D-6 | 중간 | 신규 | `students.ts:177-199` | users INSERT → students INSERT 비트랜잭션 | 실패 시 고아 users + username 점유 | 트랜잭션 |
 | D-7 | 낮음 | 신규 | `drizzle/0005` | `ADD CONSTRAINT` 무가드(0000~0002는 `DO $$`, 0006은 `IF NOT EXISTS`) | 재실행·중복 데이터 환경에서 체인 중단 |
-| D-8 | 낮음 | 신규 | `schema.ts:165-177` 등 | 미사용 컬럼 `ai_reports.weak_areas/recommendations/expected_grade`, `exams.exam_file_url`, `classes.is_active`, `branches.is_active`; `student_parents` 인덱스 없음; `ai_reports.student_id/exam_id` 인덱스 없음 | 정리 |
+| D-8 | 낮음 | 신규 | `schema.ts:165-177` 등 | 참조 0·데이터 0 인 미사용 컬럼은 4개다. `ai_reports.weak_areas/recommendations/expected_grade`(9행 전부 NULL), `exams.exam_file_url`(1행 NULL). `classes.is_active` 는 사용 중이고(`server/routes/classes.ts:26`, `BranchDashboard.tsx` "운영 중/비활성" 표시) `branches.is_active` 는 코드 참조 0 이지만 전부 true 이고 지점 비활성 설계용이라, 점검 당시 목록이 틀렸다. 조회에 쓰이는데 없던 인덱스는 `student_parents(parent_id)`(`parents.ts:40` 등 4곳)·`exam_attempts(distribution_id)`(`attempts.ts:100`·`distributions.ts:389` 등 9곳, 점검 목록에 없던 항목)이고 `ai_reports(student_id/exam_id)` 는 조회 0(관계·연쇄 삭제만) | **2026-09-08 마이그레이션 0010 적용 완료**(§10.1.5) |
 
 ### 4.4 화면·기능 계약 (U)
 
@@ -353,6 +353,7 @@ UI login-as(강하준): /auth/me role=student originalUser=null · restore → 4
 | D-4 | 응시 기록이 없는 중복 배포 31건(재등록본 16 · "미수등" 15) 삭제, 시험 기록 3개와 응시 3건은 보존 | `6151479`, `5d04c88` | **운영 DB 삭제 + 읽기 전용 전후 대조**: `exam_distributions` 52→21, 응시·보고서·배정 불변, 백업 31행 |
 | D-4 후속 | 같은 제목 시험 2개·"미수등" 시험 기록 정리: 원본 8문항 해설 이식 후 재등록본·미수등 삭제(연쇄 배포 3·테스트 응시 3·보고서 1) | `86aab2b` | **운영 DB 갱신·삭제 + 읽기 전용 전후 대조**: exams 3→1, dists 21→18, attempts 20→17, reports 10→9, 원본 18/17/9·채점 지문 불변, 백업 349 KB(미추적) |
 | 죽은 엔드포인트 | 화면 미호출 12개 중 대체 경로 있는 7개 + `/api/branch-students` 이중 마운트 제거, 명세 3절 표기 | `19443c0` | **런타임**: 제거 8주소 404(available 은 `/:id` 폴스루 401), 이웃 주소 정상; 게이트 0/0/87/0 |
+| D-8 | 미사용 컬럼 4개 삭제(`ai_reports.weak_areas/recommendations/expected_grade`·`exams.exam_file_url`) + 조회 인덱스 2개(`student_parents(parent_id)`·`exam_attempts(distribution_id)`), DROP 전 비-NULL 가드 | `c4d04b6` | **운영 DB 0010 적용 + 읽기 전용 전후 대조**: migrations 10→11, 삭제 4열 부재, ai_reports 13→10열·exams 13→12열, 인덱스 2개 실존, 행수 불변; 게이트 0/0/87/0 |
 
 정적 확정만 된 항목(S-2·P-3·U-1·U-5·S-3)의 런타임 확인은 다음 기회에 한다. P-2·P-4·P-5·P-6, U-7·U-2·U-8~U-13·U-19, D-1·D-2·D-4·D-5·D-6·D-7, U-14~U-18·U-20·U-21·R-1~R-3 을 제외한 중간·낮음 결함은 §4 를 그대로 둔다.
 
@@ -480,6 +481,47 @@ R-2 수정으로 생긴 세 번째 쓰기다. 사용자 승인 후 2026-09-07 �
 **백업.** `docs/nk-team-routine/evidence/e3-exam-cleanup-2026-09-07.json`(349 KB)에 갱신 전 원본 exams 행, 삭제한 시험 2·배포 3·응시 3(답안 포함)·보고서 1(HTML 포함), 이식 diff 8건을 남겼다. **이 파일은 학생 답안과 보고서 HTML 을 담고 있어 git 에 추적하지 않는다.** `.gitignore` 에 `docs/nk-team-routine/evidence/e3-*.json` 을 넣어 실수로 커밋되는 것을 막았다. id·날짜만 담긴 D-4 백업(§10.1.3)은 그대로 커밋되어 있다.
 
 **잔여.** 감사 B 의 🟡2(스크립트 개선 여지)는 고치지 않았다. 재등록본의 정체는 끝내 확인하지 못했으나 기록이 삭제되어 종결한다.
+
+### 10.1.5 운영 DB 마이그레이션 0010: D-8 미사용 컬럼·인덱스 (2026-09-08)
+
+§4.3 의 D-8 을 정리한 네 번째 스키마 쓰기다. 사용자 승인 후 `npm run db:migrate` 를 한 번 실행해 적용했다(`drizzle/0010_keen_zarek.sql`). 구현 커밋 `c4d04b6` 은 마이그레이션 생성과 스키마 반영 4파일뿐이고 적용은 별도 단계였다.
+
+**조사.** 읽기 전용으로 코드 참조와 데이터를 함께 셌다. 참조 0 이면서 데이터도 0 인 컬럼은 넷이다. `ai_reports.weak_areas`·`recommendations`·`expected_grade` 는 9행 전부 NULL 이고, `exams.exam_file_url` 은 1행 NULL 이다. 점검 당시 D-8 목록에 함께 적힌 `classes.is_active` 는 **사용 중이라 목록이 틀렸다**(`server/routes/classes.ts:26` 조회 조건, `BranchDashboard.tsx` 의 "운영 중/비활성" 표시). `branches.is_active` 는 코드 참조가 0 이지만 값이 전부 true 이고 지점 비활성화 설계에 쓰일 자리라 유지했다. 인덱스는 반대 방향의 정정이 있었다. 조회에 쓰이는데 없던 것은 `student_parents(parent_id)`(`parents.ts:40` 등 4곳)와 `exam_attempts(distribution_id)`(`attempts.ts:100`·`distributions.ts:389` 등 9곳)인데, 뒤엣것은 점검 목록에 아예 없던 항목이다. 반대로 점검이 지목한 `ai_reports(student_id/exam_id)` 는 조회가 0 이라(관계 정의와 연쇄 삭제에만 쓰인다) 추가하지 않았다.
+
+**사용자 결정(2026-09-08).** 컬럼은 4개만 삭제하고, 인덱스는 `student_parents_parent_id_idx`·`exam_attempts_distribution_id_idx` 2개만 추가한다. 점검 모드는 "클로드 점검"이다.
+
+**SQL 안전장치.** `drizzle/0010_keen_zarek.sql` 은 맨 앞에 `DO $$ … RAISE EXCEPTION 'D-8 guard: dropping columns that still hold data'` 가드를 두어, 삭제 대상 4개 컬럼에 비-NULL 행이 하나라도 있으면 중단한다. 그 뒤가 `CREATE INDEX IF NOT EXISTS` 2개, 마지막이 `DROP COLUMN IF EXISTS` 4개 순서다. drizzle 의 postgres-js 마이그레이터는 파일 전체를 단일 트랜잭션으로 실행하므로(`node_modules/drizzle-orm/pg-core/dialect.js:54-63`), 가드가 걸리면 인덱스 생성까지 되돌아가 아무것도 바뀌지 않는다.
+
+**감사 경과.** 두 검사자에게 같은 코드를 읽기 전용으로 보냈다.
+
+| 감사 | 판정 | 지적 |
+|---|---|---|
+| 감사 A (Opus 읽기 전용) | **통과 100%** (요구 9항목 전부 ✓) | 🟡1: 가드 DO 블록이 삭제 대상 컬럼을 직접 참조하므로, 적용 뒤 이 파일을 수동으로 다시 돌리면 "column does not exist" 로 실패한다 |
+| 기술 점검 (Sonnet 읽기 전용) | **통과** | 🟡1: 가드의 `IS NOT NULL` 은 SQL NULL 만 보므로 JSON 리터럴 `null` 이 저장된 행이 있으면 데이터로 간주해 과잉 차단한다 |
+
+감사 A 의 🟡 은 고치지 않았다. journal 이 재실행을 막고 파일 전체가 트랜잭션이라 부분 적용도 없어 실무 위험이 낮다고 판단했다. 기술 점검의 🟡 은 데이터를 지키는 방향의 실패라 안전하고, 실제로 그런 행이 없어 적용이 성공했다. 기술 점검은 그 밖에 마이그레이터의 단일 트랜잭션, journal 의 `when` 값 1788510616841 이 마지막 적용본 1788849729388 보다 작아 적용 대상이 되는 점, 인덱스 정당성(기존 UNIQUE 는 `student_id` 가 선두라 `parent_id`·`distribution_id` 단독 조회를 커버하지 못한다), 초소형 테이블이라 잠금 위험이 없는 점, 스키마 주석이 가리키는 파일명이 실재하는 점을 ✅ 로 확인했다.
+
+**종합 판정.** 통과, 되돌림 0회. 화면 변화가 없는 작업이라 입장 점검은 생략했다.
+
+**적용.** 사용자가 `npm run db:migrate` 를 1회 직접 실행했다(2026-09-08 16시경). 세션 안전장치가 실행 위임을 막아 사용자가 직접 눌렀다.
+
+**전후 수치**(팀장이 읽기 전용으로 직접 대조).
+
+| 항목 | 전 | 후 |
+|---|---|---|
+| `__drizzle_migrations` | 10 | **11** (last 1788849729388) |
+| 삭제 대상 4열 | 존재 | **없음** |
+| `ai_reports` 열 수 | 13 | **10** |
+| `exams` 열 수 | 13 | **12** |
+| 새 인덱스 | 0 | **2** (`exam_attempts_distribution_id_idx`, `student_parents_parent_id_idx`) |
+| 행수 exams / ai_reports / exam_attempts | 1 / 9 / 17 | 1 / 9 / 17 |
+| 행수 student_parents / exam_distributions / users | 1 / 18 / 30 | 1 / 18 / 30 |
+
+유지하기로 한 컬럼(`branches.is_active`·`classes.is_active`·`ai_reports.status/failure_reason/analysis/summary/html_content`)은 전후 모두 실재한다. 게이트는 서버 tsc 0 · 클라이언트 tsc 0 · vitest 5파일 87건 통과 · 하드코딩 hex 0(주석 1건, `BranchDashboard.tsx:3628`, D-8 이전부터 있던 것) · `npx drizzle-kit check` "Everything's fine" · 삭제 컬럼의 코드 참조 0(`reports.ts:1164-1183` 의 `recommendations` 는 요약 계산에 쓰는 지역 변수라 컬럼과 무관)이다.
+
+**배운 것.** 둘이다. ① 세션이 끊겼을 때 `state.json` 이 아니라 메모리 파일로 재개했다. 노드마다 `state.json` 을 갱신하지 않은 탓이니, 다음 루틴부터는 구현 커밋 직후에 바로 갱신한다. ② 컬럼 삭제는 0009 와 순서가 반대다. 옛 코드가 도는 서버가 있으면 코드 배포가 먼저고 마이그레이션이 나중이어야 한다. 이 저장소는 배포 설정이 없고 서버를 로컬에서 띄우므로 해당 없다.
+
+**잔여.** 감사 🟡2 는 둘 다 미수정이다. 그리고 `docs/02-design/data-model.md` 에는 0007 의 `target_kind` 와 0009 의 `status`·`failure_reason` 이 아직 빠져 있는 기존 드리프트가 있다(이번 범위 밖, 기록만 남긴다).
 
 ### 10.2 검증 방법과 한계
 

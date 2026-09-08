@@ -196,6 +196,8 @@
 
 **제약**: UNIQUE (studentId, parentId) (2026-09-04 0008 로 DB 반영)
 
+**인덱스**: `student_parents_parent_id_idx` ON (parentId) (2026-09-08 0010. 학부모의 자녀 조회가 parent_id 단독 조건이라 UNIQUE(studentId, parentId) 로는 커버되지 않는다)
+
 **외래키**:
 - `studentId` → students.id (CASCADE DELETE)
 - `parentId` → parents.id (CASCADE DELETE)
@@ -234,7 +236,7 @@
 | description | TEXT | | 설명 |
 | totalQuestions | INTEGER | NOT NULL | 총 문제 수 (표준: 45) |
 | totalScore | INTEGER | NOT NULL | 만점 (표준: 100) |
-| examFileUrl | TEXT | | 시험지 파일 URL |
+| ~~examFileUrl~~ | TEXT | | 시험지 파일 URL (2026-09-08 마이그레이션 0010 으로 제거. 참조 0·데이터 0) |
 | questionsData | JSON | NOT NULL | 문제 메타데이터 배열 |
 | examTrends | JSON | | 출제 경향 분석 |
 | overallReview | TEXT | | 총평 |
@@ -330,6 +332,8 @@
 
 **제약**: UNIQUE (studentId, distributionId)
 
+**인덱스**: `exam_attempts_exam_id_idx` ON (examId), `exam_attempts_distribution_id_idx` ON (distributionId) (2026-09-08 0010. 배포별 응시 조회가 distribution_id 단독·IN 조건)
+
 **answers 구조**:
 ```json
 {
@@ -354,9 +358,9 @@ Google Gemini API로 생성된 AI 분석 보고서를 저장합니다.
 | studentId | VARCHAR(255) | FK, NOT NULL | 학생 ID |
 | examId | VARCHAR(255) | FK, NOT NULL | 시험 ID |
 | analysis | JSON | | AI 분석 데이터 |
-| weakAreas | JSON | | 취약 영역 배열 |
-| recommendations | JSON | | 추천 학습 전략 |
-| expectedGrade | INTEGER | | 예상 등급 |
+| ~~weakAreas~~ | JSON | | 취약 영역 배열 (2026-09-08 0010 으로 제거) |
+| ~~recommendations~~ | JSON | | 추천 학습 전략 (2026-09-08 0010 으로 제거) |
+| ~~expectedGrade~~ | INTEGER | | 예상 등급 (2026-09-08 0010 으로 제거) |
 | summary | TEXT | | 종합 요약 |
 | htmlContent | TEXT | | 완성된 HTML 보고서 |
 | generatedAt | TIMESTAMP | DEFAULT NOW() | 생성일시 |
