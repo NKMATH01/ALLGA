@@ -1,16 +1,12 @@
 import * as React from 'react';
 import { cn } from '../../lib/utils';
 
-/*
- * DESIGN.md 4.4 표면 위계
- *   카드는 1px 테두리로 구분하고 그림자는 거의 없게 둔다.
- *   테두리와 그림자를 둘 다 강하게 쓰지 않는다.
- */
+/* White workspace surfaces use one soft elevation instead of an enclosing border. */
 const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
   ({ className, ...props }, ref) => (
     <div
       ref={ref}
-      className={cn('rounded-md border border-line bg-surface text-ink shadow-sm', className)}
+      className={cn('rounded-lg bg-surface text-ink shadow-md', className)}
       {...props}
     />
   )

@@ -433,6 +433,13 @@ export default function AdminDashboard({ user }: { user: User }) {
     { id: 'distributions' as MenuSection, label: '시험 배포', icon: Send },
   ];
 
+  const sectionDescriptions: Record<MenuSection, string> = {
+    dashboard: '전체 지점의 운영 현황과 성적을 한눈에 확인하세요.',
+    branches: '지점 정보를 관리하고 소속 학생과 운영 현황을 확인하세요.',
+    exams: '시험을 등록하고 문항과 배점을 확인하세요.',
+    distributions: '준비한 시험을 지점에 배포하고 진행 상황을 확인하세요.',
+  };
+
   /*
     지점·시험·배포는 셋 다 데이터가 쌓이는 만큼 늘어나는 목록이라 20행씩 자른다
     (DESIGN.md 11.2). 렌더 헬퍼가 식(expression) 본문이라 자르기는 여기서 미리 해 둔다.
@@ -503,12 +510,12 @@ export default function AdminDashboard({ user }: { user: User }) {
       </div>
 
       {/* 관리 테이블은 카드로 감싸지 않는다 (DESIGN.md 11.2). 제목은 한 줄 툴바로 (4.4) */}
-      <section>
-        <div className="flex items-center justify-between gap-3 mb-3">
-          <h2 className="text-sm font-semibold text-ink-secondary">지점별 통계</h2>
+      <section className="workspace-panel rounded-2xl border border-line shadow-none bg-surface p-4 md:p-6">
+        <div className="mb-4 flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <h2 className="text-lg font-semibold tracking-tight text-ink">지점별 통계</h2>
         </div>
         <div className="overflow-x-auto">
-            <table className="w-full min-w-[640px] [&_td]:whitespace-nowrap [&_thead_th:first-child]:sticky [&_thead_th:first-child]:left-0 [&_thead_th:first-child]:z-10 [&_tbody_td:first-child]:sticky [&_tbody_td:first-child]:left-0 [&_tbody_td:first-child]:bg-surface [&_tbody_tr:hover_td:first-child]:bg-surface-subtle">
+            <table className="bg-surface tabular-nums w-full min-w-[640px] [&_td]:whitespace-nowrap [&_thead_th:first-child]:sticky [&_thead_th:first-child]:left-0 [&_thead_th:first-child]:z-10 [&_tbody_td:first-child]:sticky [&_tbody_td:first-child]:left-0 [&_tbody_td:first-child]:bg-surface [&_tbody_tr:hover_td:first-child]:bg-surface-subtle">
               <thead>
                 <tr className="border-b border-line-strong">
                   <th className="text-left px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">지점명</th>
@@ -566,8 +573,8 @@ export default function AdminDashboard({ user }: { user: User }) {
   const renderBranches = () => (
     <>
       {/* 관리 테이블은 카드로 감싸지 않는다 (DESIGN.md 11.2). 제목은 한 줄 툴바로 (4.4) */}
-      <section>
-        <div className="flex items-center justify-between gap-3 mb-3">
+      <section className="workspace-panel rounded-2xl border border-line shadow-none bg-surface p-4 md:p-6">
+        <div className="mb-4 flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
           <h2 className="text-sm font-semibold text-ink-secondary">지점 관리</h2>
           <Button
             onClick={() => {
@@ -581,7 +588,7 @@ export default function AdminDashboard({ user }: { user: User }) {
           </Button>
         </div>
         <div className="overflow-x-auto">
-            <table className="w-full min-w-[640px] [&_td]:whitespace-nowrap [&_thead_th:first-child]:sticky [&_thead_th:first-child]:left-0 [&_thead_th:first-child]:z-10 [&_tbody_td:first-child]:sticky [&_tbody_td:first-child]:left-0 [&_tbody_td:first-child]:bg-surface [&_tbody_tr:hover_td:first-child]:bg-surface-subtle">
+            <table className="bg-surface tabular-nums w-full min-w-[640px] [&_td]:whitespace-nowrap [&_thead_th:first-child]:sticky [&_thead_th:first-child]:left-0 [&_thead_th:first-child]:z-10 [&_tbody_td:first-child]:sticky [&_tbody_td:first-child]:left-0 [&_tbody_td:first-child]:bg-surface [&_tbody_tr:hover_td:first-child]:bg-surface-subtle">
               <thead>
                 <tr className="border-b border-line-strong">
                   <th className="text-center px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">순서</th>
@@ -785,13 +792,13 @@ export default function AdminDashboard({ user }: { user: User }) {
   const renderExams = () => (
     <>
       {/* 관리 테이블은 카드로 감싸지 않는다 (DESIGN.md 11.2). 제목은 한 줄 툴바로 (4.4) */}
-      <section>
-        <div className="flex items-center justify-between gap-3 mb-3">
+      <section className="workspace-panel rounded-2xl border border-line shadow-none bg-surface p-4 md:p-6">
+        <div className="mb-4 flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
           <h2 className="text-sm font-semibold text-ink-secondary">시험 생성</h2>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button
               onClick={() => setShowExamModal(true)}
-              className="bg-action hover:bg-action-hover"
+              variant="outline"
             >
               <Plus className="w-4 h-4 mr-2" />
               직접 생성
@@ -825,7 +832,7 @@ export default function AdminDashboard({ user }: { user: User }) {
             <ErrorState detail="시험 목록 조회가 실패했습니다." onRetry={() => refetchExams()} />
           ) : exams && exams.length > 0 ? (
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[640px] [&_td]:whitespace-nowrap [&_thead_th:first-child]:sticky [&_thead_th:first-child]:left-0 [&_thead_th:first-child]:z-10 [&_tbody_td:first-child]:sticky [&_tbody_td:first-child]:left-0 [&_tbody_td:first-child]:bg-surface [&_tbody_tr:hover_td:first-child]:bg-surface-subtle">
+              <table className="bg-surface tabular-nums w-full min-w-[640px] [&_td]:whitespace-nowrap [&_thead_th:first-child]:sticky [&_thead_th:first-child]:left-0 [&_thead_th:first-child]:z-10 [&_tbody_td:first-child]:sticky [&_tbody_td:first-child]:left-0 [&_tbody_td:first-child]:bg-surface [&_tbody_tr:hover_td:first-child]:bg-surface-subtle">
                 <thead>
                   <tr className="border-b border-line-strong">
                     <th className="text-left px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">시험명</th>
@@ -1107,7 +1114,7 @@ export default function AdminDashboard({ user }: { user: User }) {
                     <div>
                       <h3 className="font-bold text-ink mb-3">문제 목록</h3>
                       <div className="overflow-x-auto">
-                        <table className="w-full text-sm min-w-[640px] [&_td]:whitespace-nowrap [&_thead_th:first-child]:sticky [&_thead_th:first-child]:left-0 [&_thead_th:first-child]:z-10 [&_tbody_td:first-child]:sticky [&_tbody_td:first-child]:left-0 [&_tbody_td:first-child]:bg-surface [&_tbody_tr:hover_td:first-child]:bg-surface-subtle">
+                        <table className="bg-surface tabular-nums w-full text-sm min-w-[640px] [&_td]:whitespace-nowrap [&_thead_th:first-child]:sticky [&_thead_th:first-child]:left-0 [&_thead_th:first-child]:z-10 [&_tbody_td:first-child]:sticky [&_tbody_td:first-child]:left-0 [&_tbody_td:first-child]:bg-surface [&_tbody_tr:hover_td:first-child]:bg-surface-subtle">
                           <thead>
                             <tr className="border-b border-line-strong bg-surface-subtle">
                               <th className="text-left px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">번호</th>
@@ -1240,7 +1247,7 @@ export default function AdminDashboard({ user }: { user: User }) {
                     <div>
                       <h3 className="font-bold text-ink mb-3">문제 목록</h3>
                       <div className="overflow-x-auto">
-                        <table className="w-full text-sm min-w-[640px] [&_td]:whitespace-nowrap [&_thead_th:first-child]:sticky [&_thead_th:first-child]:left-0 [&_thead_th:first-child]:z-10 [&_tbody_td:first-child]:sticky [&_tbody_td:first-child]:left-0 [&_tbody_td:first-child]:bg-surface [&_tbody_tr:hover_td:first-child]:bg-surface-subtle">
+                        <table className="bg-surface tabular-nums w-full text-sm min-w-[640px] [&_td]:whitespace-nowrap [&_thead_th:first-child]:sticky [&_thead_th:first-child]:left-0 [&_thead_th:first-child]:z-10 [&_tbody_td:first-child]:sticky [&_tbody_td:first-child]:left-0 [&_tbody_td:first-child]:bg-surface [&_tbody_tr:hover_td:first-child]:bg-surface-subtle">
                           <thead>
                             <tr className="border-b border-line-strong bg-surface-subtle">
                               <th className="text-left px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">번호</th>
@@ -1306,8 +1313,8 @@ export default function AdminDashboard({ user }: { user: User }) {
   const renderDistributions = () => (
     <>
       {/* 관리 테이블은 카드로 감싸지 않는다 (DESIGN.md 11.2). 제목은 한 줄 툴바로 (4.4) */}
-      <section>
-        <div className="flex items-center justify-between gap-3 mb-3">
+      <section className="workspace-panel rounded-2xl border border-line shadow-none bg-surface p-4 md:p-6">
+        <div className="mb-4 flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
           <h2 className="text-sm font-semibold text-ink-secondary">시험 배포</h2>
           <Button
             onClick={() => setShowDistributionModal(true)}
@@ -1325,7 +1332,7 @@ export default function AdminDashboard({ user }: { user: User }) {
             <ErrorState detail="배포 목록 조회가 실패했습니다." onRetry={() => refetchDistributions()} />
           ) : distributions && distributions.length > 0 ? (
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[640px] [&_td]:whitespace-nowrap [&_thead_th:first-child]:sticky [&_thead_th:first-child]:left-0 [&_thead_th:first-child]:z-10 [&_tbody_td:first-child]:sticky [&_tbody_td:first-child]:left-0 [&_tbody_td:first-child]:bg-surface [&_tbody_tr:hover_td:first-child]:bg-surface-subtle">
+              <table className="bg-surface tabular-nums w-full min-w-[640px] [&_td]:whitespace-nowrap [&_thead_th:first-child]:sticky [&_thead_th:first-child]:left-0 [&_thead_th:first-child]:z-10 [&_tbody_td:first-child]:sticky [&_tbody_td:first-child]:left-0 [&_tbody_td:first-child]:bg-surface [&_tbody_tr:hover_td:first-child]:bg-surface-subtle">
                 <thead>
                   <tr className="border-b border-line-strong">
                     <th className="text-left px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">시험명</th>
@@ -1509,7 +1516,7 @@ export default function AdminDashboard({ user }: { user: User }) {
   );
 
   return (
-    <div className="flex min-h-[100dvh] bg-surface-sunken">
+    <div className="app-shell flex min-h-[100dvh] bg-surface-sunken">
       {/*
         DESIGN.md 7.2 사이드바
           >= 768px : 문서 흐름 안 고정 기둥 (펼침 264px / 접힘 72px, 기존 동작 유지)
@@ -1525,7 +1532,7 @@ export default function AdminDashboard({ user }: { user: User }) {
       )}
       <aside
         ref={drawerRef}
-        className={`fixed inset-y-0 left-0 z-40 w-[264px] flex flex-col bg-surface border-r border-line transition-transform duration-200 ease-out ${
+        className={`app-sidebar fixed inset-y-0 left-0 z-40 w-[264px] flex flex-col bg-surface border-r border-line transition-transform duration-200 ease-out ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         } md:static md:z-auto md:translate-x-0 md:transition-[width] ${
           sidebarOpen ? 'md:w-[264px]' : 'md:w-[72px]'
@@ -1544,16 +1551,16 @@ export default function AdminDashboard({ user }: { user: User }) {
             {sidebarOpen && (
               <div className="overflow-hidden">
                 <h2 className="font-semibold tracking-[-0.01em] text-ink whitespace-nowrap">
-                  ALLGA 시스템
+                  ALLGA
                 </h2>
-                <p className="text-xs text-ink-secondary truncate">{user.name}</p>
+                <p className="mt-1 text-xs text-ink-secondary truncate">전체 관리자 · {user.name}</p>
               </div>
             )}
           </div>
         </div>
 
         {/* Menu Items */}
-        <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
+        <nav className="flex-1 px-3 py-6 space-y-2 overflow-y-auto" aria-label="관리자 메뉴">
           {menuItems.map((item) => {
             const Icon = item.icon;
             const isActive = activeSection === item.id;
@@ -1561,15 +1568,17 @@ export default function AdminDashboard({ user }: { user: User }) {
               <button
                 key={item.id}
                 onClick={() => setActiveSection(item.id)}
+                aria-label={item.label}
+                aria-current={isActive ? 'page' : undefined}
                 /*
                   그린 2곳째: 활성 메뉴의 좌측 강조 바. 세로 내비이므로 하단 밑줄이
                   아니라 좌측 바가 같은 역할을 한다 (border-b-2 -> border-l-2).
                   색 단독 표기가 아니다 - 굵기와 면이 함께 바뀐다 (12.2).
                   비활성도 같은 두께의 투명 바를 깔아 전환 시 글자가 밀리지 않게 한다.
                 */
-                className={`w-full flex items-center gap-3 border-l-2 px-4 py-3 rounded-md text-sm transition-colors duration-150 ease-out ${
+                className={`w-full flex items-center gap-3 border px-3 py-3.5 rounded-xl text-sm transition-colors duration-150 ease-out ${
                   isActive
-                    ? 'border-accent bg-action-subtle text-ink font-semibold'
+                    ? 'border-line bg-accent-surface text-ink font-semibold'
                     : 'border-transparent text-ink-secondary hover:bg-surface-subtle hover:text-ink'
                 }`}
               >
@@ -1586,6 +1595,7 @@ export default function AdminDashboard({ user }: { user: User }) {
         <div className="p-4 border-t border-line">
           <button
             onClick={() => logoutMutation.mutate()}
+            aria-label="로그아웃"
             className="w-full flex items-center gap-3 px-4 py-3 rounded-md text-sm text-ink-secondary transition-colors duration-150 ease-out hover:bg-surface-subtle hover:text-ink"
           >
             <LogOut className="w-4 h-4 flex-shrink-0" strokeWidth={1.5} />
@@ -1606,7 +1616,7 @@ export default function AdminDashboard({ user }: { user: User }) {
       {/* Main Content */}
       <div className="flex-1 min-w-0 overflow-auto">
         {/* Header */}
-        <header className="bg-surface border-b border-line sticky top-0 z-10">
+        <header className="app-header bg-surface border-b border-line sticky top-0 z-10">
           <div className="flex items-center gap-3 px-4 py-3 md:px-8 md:py-5">
             {/* 모바일 전용 드로어 토글. 기존 sidebarOpen 상태를 그대로 쓴다 */}
             <button
@@ -1617,11 +1627,8 @@ export default function AdminDashboard({ user }: { user: User }) {
               <Menu className="w-5 h-5" strokeWidth={1.5} />
             </button>
             <div className="min-w-0">
-              <h1 className="text-xl font-semibold tracking-[-0.015em] text-ink md:text-2xl">
+              <p className="text-sm font-semibold text-ink">
                 {menuItems.find((item) => item.id === activeSection)?.label}
-              </h1>
-              <p className="text-xs text-ink-tertiary mt-1 md:text-sm">
-                {user.name}님 환영합니다
               </p>
             </div>
 
@@ -1633,7 +1640,13 @@ export default function AdminDashboard({ user }: { user: User }) {
         </header>
 
         {/* Content */}
-        <main className="p-4 md:p-8">
+        <main className="app-main p-4 md:p-8 lg:p-10">
+          <div className="mb-8 border-b border-line pb-6">
+            <h1 className="page-heading text-2xl font-semibold tracking-[-0.03em] text-ink md:text-3xl">
+              {activeSection === 'dashboard' ? '운영 대시보드' : menuItems.find((item) => item.id === activeSection)?.label}
+            </h1>
+            <p className="page-description mt-2 text-sm leading-relaxed text-ink-secondary">{sectionDescriptions[activeSection]}</p>
+          </div>
           {activeSection === 'dashboard' && renderDashboard()}
           {activeSection === 'branches' && renderBranches()}
           {activeSection === 'exams' && renderExams()}

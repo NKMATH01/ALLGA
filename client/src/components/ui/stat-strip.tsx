@@ -25,7 +25,7 @@ const CELL_DIVIDER =
 
 export function StatStrip({ children }: { children: React.ReactNode }) {
   return (
-    <div className="overflow-hidden rounded-lg border border-line bg-surface">
+    <div className="metric-strip">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4">{children}</div>
     </div>
   );
@@ -51,7 +51,7 @@ export function StatStripItem({
 }) {
   const body = (
     <>
-      <p className="text-xs font-semibold tracking-[0.08em] text-ink-tertiary">{label}</p>
+      <p className="text-xs font-semibold text-ink-tertiary">{label}</p>
       <div className="mt-3">{children}</div>
       {footnote && <p className="mt-3 text-xs text-ink-secondary">{footnote}</p>}
     </>
@@ -60,7 +60,7 @@ export function StatStripItem({
   // 눌리지 않는 것에 버튼 시맨틱을 주지 않는다. 스크린리더가 "버튼"이라고
   // 읽어 놓고 아무 일도 일어나지 않는 것이 가장 나쁘다.
   if (!onClick) {
-    return <div className={`p-5 ${CELL_DIVIDER}`}>{body}</div>;
+    return <div className={`p-6 ${CELL_DIVIDER}`}>{body}</div>;
   }
 
   return (
@@ -68,7 +68,7 @@ export function StatStripItem({
       type="button"
       onClick={onClick}
       aria-pressed={!!isActive}
-      className={`w-full cursor-pointer p-5 text-left transition-colors duration-150 ease-out hover:bg-surface-subtle ${
+      className={`w-full cursor-pointer p-6 text-left transition-colors duration-150 ease-out hover:bg-surface-subtle ${
         isActive ? 'bg-surface-subtle' : ''
       } ${CELL_DIVIDER}`}
     >

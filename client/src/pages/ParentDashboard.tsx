@@ -18,6 +18,7 @@ import {
   X,
   FileText,
   Loader2,
+  ChevronRight,
 } from 'lucide-react';
 
 interface User {
@@ -158,7 +159,7 @@ export default function ParentDashboard({ user }: { user: User }) {
   };
 
   return (
-    <div className="flex h-[100dvh] overflow-hidden bg-surface-sunken">
+    <div className="app-shell flex h-[100dvh] overflow-hidden bg-surface-sunken">
       {/* 모바일에서는 오버레이 드로어 (DESIGN.md 7.2) */}
       {sidebarOpen && (
         <div
@@ -170,7 +171,7 @@ export default function ParentDashboard({ user }: { user: User }) {
 
       <aside
         ref={drawerRef}
-        className={`fixed inset-y-0 left-0 z-40 w-[264px] flex flex-col border-r border-line bg-surface text-ink transition-transform duration-200 ease-out ${
+        className={`app-sidebar fixed inset-y-0 left-0 z-40 w-[264px] flex flex-col border-r border-line bg-surface text-ink transition-transform duration-200 ease-out ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         } md:static md:z-auto md:translate-x-0 md:overflow-hidden md:transition-[width] ${
           sidebarOpen ? 'md:w-[264px]' : 'md:w-0'
@@ -185,12 +186,12 @@ export default function ParentDashboard({ user }: { user: User }) {
             <GraduationCap className="h-5 w-5 text-action-text" strokeWidth={1.5} />
           </div>
           <div className="min-w-0">
-            <p className="truncate text-sm font-semibold">학부모</p>
-            <p className="truncate text-xs text-ink-secondary">{user.name}</p>
+            <p className="truncate text-base font-semibold tracking-[-0.02em]">ALLGA</p>
+            <p className="truncate text-xs text-ink-secondary">학부모 · {user.name}</p>
           </div>
         </div>
 
-        <nav className="flex-1 space-y-1 px-3 py-2">
+        <nav aria-label="학부모 메뉴" className="flex-1 space-y-1.5 px-3 py-5">
           {menuItems.map((item) => {
             const Icon = item.icon;
             const active = activeSection === item.id;
@@ -234,9 +235,9 @@ export default function ParentDashboard({ user }: { user: User }) {
         </div>
       </aside>
 
-      <div className="flex flex-1 flex-col overflow-hidden">
-        <header className="z-10 border-b border-line bg-surface">
-          <div className="flex items-center justify-between gap-4 px-4 py-3 md:px-6">
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        <header className="app-header z-10 border-b border-line bg-surface">
+          <div className="flex items-center justify-between gap-4 px-4 py-4 md:px-6">
             <div className="flex min-w-0 items-center gap-3">
               <Button
                 variant="ghost"
@@ -252,9 +253,9 @@ export default function ParentDashboard({ user }: { user: User }) {
               </Button>
               <div className="min-w-0">
                 {/* 이 화면의 유일한 h1. 상단 바 제목이 곧 페이지 제목이다. */}
-                <h1 className="truncate text-xl font-semibold tracking-[-0.015em] text-ink">
+                <p className="truncate text-sm font-semibold text-ink">
                   {activeSection === 'dashboard' ? '대시보드' : '자녀 성적'}
-                </h1>
+                </p>
                 <p className="truncate text-xs text-ink-tertiary">{user.name}님 환영합니다</p>
               </div>
             </div>
@@ -265,17 +266,26 @@ export default function ParentDashboard({ user }: { user: User }) {
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto p-4 md:p-6">
+        <main className="app-main flex-1 overflow-y-auto p-5 md:p-8 lg:p-10">
+          <div className="mx-auto max-w-6xl">
+          <div className="mb-8 border-b border-line pb-7 pt-2">
+            <h1 className="page-heading text-3xl font-semibold tracking-[-0.03em] text-ink md:text-4xl">
+              {activeSection === 'dashboard' ? '자녀의 배움을 함께 살펴보세요' : activeChild ? activeChild.name + '의 학습 기록' : '자녀의 학습 기록'}
+            </h1>
+            <p className="page-description mt-3 max-w-xl text-sm leading-7 text-ink-secondary">
+              {activeSection === 'dashboard' ? '자녀를 선택해 시험 결과와 분석 보고서를 확인하세요.' : '시험별 점수와 등급을 살펴보고, 보고서에서 자세한 분석을 확인하세요.'}
+            </p>
+          </div>
           {activeSection === 'dashboard' && (
-            <Card>
-              <CardHeader>
-                <CardTitle>자녀 목록</CardTitle>
+            <Card className="workspace-panel overflow-hidden">
+              <CardHeader className="border-b border-line-subtle px-6 py-5">
+                <CardTitle>연결된 자녀</CardTitle>
               </CardHeader>
               <CardContent>
                 {childrenLoading ? (
-                  <p className="py-8 text-center text-sm text-ink-secondary">불러오는 중입니다.</p>
+                  <p className="py-16 text-center text-sm text-ink-secondary">불러오는 중입니다.</p>
                 ) : childrenError ? (
-                  <div className="py-8 text-center">
+                  <div className="py-16 text-center">
                     <p className="text-sm font-semibold text-fn-error">불러오지 못했습니다</p>
                     <button
                       type="button"
@@ -286,24 +296,25 @@ export default function ParentDashboard({ user }: { user: User }) {
                     </button>
                   </div>
                 ) : childList.length === 0 ? (
-                  <p className="py-8 text-center text-sm text-ink-secondary">
+                  <p className="py-16 text-center text-sm text-ink-secondary">
                     연결된 자녀가 없습니다. 지점에 문의해주세요.
                   </p>
                 ) : (
-                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  <div className="divide-y divide-line-subtle">
                     {childList.map((child) => (
                       <button
                         key={child.id}
                         onClick={() => selectChild(child.id)}
-                        className="rounded-md border border-line bg-surface p-4 text-left transition-colors duration-150 ease-out hover:border-line-strong hover:bg-surface-subtle active:scale-[0.99]"
+                        className="group flex w-full flex-wrap items-center gap-x-6 gap-y-3 px-2 py-6 text-left transition-colors duration-150 ease-out hover:bg-surface-subtle"
                       >
-                        <p className="text-base font-semibold text-ink">{child.name}</p>
+                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-surface-subtle text-ink-secondary"><GraduationCap className="h-5 w-5" strokeWidth={1.5} /></div>
+                        <div className="min-w-0 flex-1"><p className="text-lg font-semibold tracking-[-0.02em] text-ink">{child.name}</p>
                         <p className="mt-1 text-sm text-ink-secondary">
                           {child.school || '학교 미지정'} · {child.grade || '학년 미지정'}
                         </p>
-                        <p className="mt-3 text-sm text-ink-tertiary">
-                          응시 {child.attemptCount}회
-                        </p>
+                        </div>
+                        <span className="text-sm tabular-nums text-ink-secondary">응시 {child.attemptCount}회</span>
+                        <span className="inline-flex items-center gap-2 text-sm font-semibold text-ink">성적 보기 <ChevronRight className="h-4 w-4" strokeWidth={1.5} /></span>
                       </button>
                     ))}
                   </div>
@@ -313,7 +324,7 @@ export default function ParentDashboard({ user }: { user: User }) {
           )}
 
           {activeSection === 'results' && (
-            <div className="space-y-4">
+            <div className="space-y-6">
               {childList.length > 1 && (
                 <div className="flex flex-wrap gap-2">
                   {childList.map((child) => (
@@ -333,39 +344,39 @@ export default function ParentDashboard({ user }: { user: User }) {
                 </div>
               )}
 
-              <Card>
-                <CardHeader>
+              <Card className="workspace-panel overflow-hidden">
+                <CardHeader className="border-b border-line-subtle px-6 py-5">
                   <CardTitle>
                     {activeChild ? `${activeChild.name} 성적` : '자녀 성적'}
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
                   {!activeChildId ? (
-                    <p className="py-8 text-center text-sm text-ink-secondary">
+                    <p className="py-16 text-center text-sm text-ink-secondary">
                       자녀를 선택하면 성적이 표시됩니다.
                     </p>
                   ) : attemptsLoading ? (
-                    <p className="py-8 text-center text-sm text-ink-secondary">불러오는 중입니다.</p>
+                    <p className="py-16 text-center text-sm text-ink-secondary">불러오는 중입니다.</p>
                   ) : attemptList.length === 0 ? (
-                    <p className="py-8 text-center text-sm text-ink-secondary">
+                    <p className="py-16 text-center text-sm text-ink-secondary">
                       아직 완료된 시험이 없습니다.
                     </p>
                   ) : (
                     <div className="overflow-x-auto">
-                      <table className="w-full min-w-[640px] text-sm [&_thead_th:first-child]:sticky [&_thead_th:first-child]:left-0 [&_thead_th:first-child]:z-10 [&_thead_th:first-child]:bg-surface [&_tbody_td:first-child]:sticky [&_tbody_td:first-child]:left-0 [&_tbody_td:first-child]:bg-surface [&_tbody_tr:hover_td:first-child]:bg-surface-subtle">
+                      <table className="w-full min-w-[640px] text-sm tabular-nums [&_thead_th:first-child]:sticky [&_thead_th:first-child]:left-0 [&_thead_th:first-child]:z-10 [&_thead_th:first-child]:bg-surface [&_tbody_td:first-child]:sticky [&_tbody_td:first-child]:left-0 [&_tbody_td:first-child]:bg-surface [&_tbody_tr:hover_td:first-child]:bg-surface-subtle">
                         <thead>
                           <tr className="border-b border-line text-left text-ink-secondary">
-                            <th className="px-4 py-3 font-semibold">시험명</th>
-                            <th className="px-4 py-3 text-center font-semibold">점수</th>
-                            <th className="px-4 py-3 text-center font-semibold">등급</th>
-                            <th className="px-4 py-3 font-semibold">제출일</th>
-                            <th className="px-4 py-3 text-center font-semibold">보고서</th>
+                            <th className="px-4 py-4 font-semibold">시험명</th>
+                            <th className="px-4 py-4 text-center font-semibold">점수</th>
+                            <th className="px-4 py-4 text-center font-semibold">등급</th>
+                            <th className="px-4 py-4 font-semibold">제출일</th>
+                            <th className="px-4 py-4 text-center font-semibold">보고서</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-line-subtle">
                           {attemptList.map((a) => (
                             <tr key={a.attemptId} className="hover:bg-surface-subtle">
-                              <td className="px-4 py-3">
+                              <td className="px-4 py-4">
                                 <span
                                   className={
                                     a.attemptId === bestAttemptId
@@ -379,22 +390,22 @@ export default function ParentDashboard({ user }: { user: User }) {
                                   {a.examSubject}
                                 </span>
                               </td>
-                              <td className="px-4 py-3 text-center text-ink">
+                              <td className="px-4 py-4 text-center text-ink">
                                 {a.score ?? '-'} / {a.maxScore ?? '-'}
                               </td>
-                              <td className="px-4 py-3 text-center">
+                              <td className="px-4 py-4 text-center">
                                 <span
                                   className={`inline-block rounded-sm border px-2 py-0.5 text-xs font-semibold ${gradeBadgeClass(a.grade)}`}
                                 >
                                   {a.grade ? `${a.grade}등급` : '-'}
                                 </span>
                               </td>
-                              <td className="px-4 py-3 text-ink-secondary">
+                              <td className="px-4 py-4 text-ink-secondary">
                                 {a.submittedAt
                                   ? new Date(a.submittedAt).toLocaleDateString('ko-KR')
                                   : '-'}
                               </td>
-                              <td className="px-4 py-3 text-center">
+                              <td className="px-4 py-4 text-center">
                                 <button
                                   onClick={() => openReport(a.attemptId)}
                                   disabled={openingReportFor === a.attemptId}
@@ -418,6 +429,7 @@ export default function ParentDashboard({ user }: { user: User }) {
               </Card>
             </div>
           )}
+          </div>
         </main>
       </div>
 

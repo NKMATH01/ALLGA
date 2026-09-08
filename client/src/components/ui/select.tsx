@@ -18,7 +18,7 @@ const SelectTrigger = React.forwardRef<
     ref={ref}
     className={cn(
       // DESIGN.md 5.5: 입력과 같은 규격(40px, --border-strong, --radius-sm)
-      "flex h-10 w-full items-center justify-between rounded-sm border border-line-strong bg-surface px-3 text-sm text-ink transition-colors duration-150 ease-out placeholder:text-ink-tertiary disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1",
+      "flex h-10 w-full items-center justify-between rounded-md border border-line-strong bg-surface px-3 text-sm text-ink transition-colors duration-150 ease-out placeholder:text-ink-tertiary disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1",
       className
     )}
     {...props}

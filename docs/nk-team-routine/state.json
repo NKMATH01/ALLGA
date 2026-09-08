@@ -1,21 +1,50 @@
 {
-  "run": "2026-09-08-olga-d8-unused-columns-indexes",
-  "save_point": "c7529d0",
-  "cost_usd": 2,
-  "next": null,
+  "run": "2026-09-08-premium-ui-redesign",
+  "save_point": "7369457",
+  "approval": "사용자 진행해줘",
+  "started_at": "2026-09-08T10:38:44Z",
+  "next": "visual-qa-private-roles",
   "nodes": [
-    { "id": "save-point", "label": "저장 지점 확보 (c7529d0)", "status": "통과" },
-    { "id": "investigate", "label": "조사 (참조 0·데이터 0 컬럼 4 · 없던 조회 인덱스 2)", "status": "통과" },
-    { "id": "decision", "label": "사용자 결정 (컬럼 4개만 삭제, 인덱스 2개 추가)", "status": "통과" },
-    { "id": "implement", "label": "구현 (c4d04b6, 마이그레이션 0010 생성만)", "status": "통과" },
-    { "id": "gates", "label": "게이트 (서버 tsc 0 · 클라 tsc 0 · vitest 87 · hex 0 · drizzle-kit check)", "status": "통과" },
-    { "id": "audit-a", "label": "감사 A Opus (통과 100%, 노랑 1)", "status": "통과" },
-    { "id": "tech-check", "label": "기술 점검 Sonnet (통과, 노랑 1)", "status": "통과" },
-    { "id": "verdict", "label": "종합 판정 (되돌림 0회 통과)", "status": "통과" },
-    { "id": "apply", "label": "적용 (사용자가 npm run db:migrate 직접 1회 실행)", "status": "통과" },
-    { "id": "compare", "label": "전후 대조 (migrations 10→11, 4열 부재, 인덱스 2, 행수 불변)", "status": "통과" },
-    { "id": "docs", "label": "문서 반영 (분석서 4.3·10 표·10.1.5, 계획서 3.4, 보고서 3.4·5.1·8·9, 데이터 모델, 팀 루틴)", "status": "통과" },
-    { "id": "push", "label": "push", "status": "통과" },
-    { "id": "wrapup", "label": "마무리 보고", "status": "통과" }
-  ]
+    {
+      "status": "통과",
+      "id": "direction"
+    },
+    {
+      "status": "통과: 모바일 로그인 보완 포함",
+      "id": "foundation"
+    },
+    {
+      "status": "통과",
+      "id": "management"
+    },
+    {
+      "status": "통과",
+      "id": "family"
+    },
+    {
+      "status": "통과",
+      "id": "independent-review"
+    },
+    {
+      "status": "부분 확인: 로그인·관리자·지점. 학생/학부모 열람 승인 대기",
+      "id": "visual-qa"
+    },
+    {
+      "status": "통과",
+      "id": "gates"
+    },
+    {
+      "status": "구현 저장, 실제 계정 QA 승인 대기",
+      "id": "wrapup"
+    }
+  ],
+  "checks": {
+    "client_tsc": "0",
+    "review": "요구 충족 90%, 심각 회귀 없음",
+    "server_tsc": "0",
+    "build": "0 Node22",
+    "qa": "390px 로그인/관리자/지점, 관리자 생성 모달 열기/닫기. 학생 전환 자동승인 차단",
+    "tests": "87/87",
+    "rework": "관리 toolbar/패널 1회, 모바일 login 1회"
+  }
 }

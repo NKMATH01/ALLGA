@@ -24,10 +24,10 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         className={cn(
           'inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-semibold transition-colors duration-150 ease-out active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50',
           {
-            'bg-action text-action-text hover:bg-action-hover': variant === 'default',
+            'bg-action text-action-text shadow-sm hover:bg-action-hover': variant === 'default',
             'border border-fn-error-border bg-surface text-fn-error hover:bg-fn-error-surface':
               variant === 'destructive',
-            'border border-line-strong bg-surface text-ink hover:bg-surface-subtle':
+            'border border-line bg-surface text-ink hover:bg-surface-subtle':
               variant === 'outline',
             'bg-action-subtle text-ink hover:bg-action-subtle-hover': variant === 'secondary',
             'text-ink-secondary hover:bg-surface-subtle hover:text-ink': variant === 'ghost',

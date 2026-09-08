@@ -732,7 +732,7 @@ export default function BranchDashboard({ user }: { user: User }) {
       {/* 상세 정보 표 */}
       {selectedDashboardView === 'students' && (
         <section className="mb-6">
-          <h2 className="mb-2 border-l-[3px] border-action pl-2 text-sm font-bold tracking-wide text-ink">학생 목록</h2>
+          <h2 className="mb-4 text-lg font-semibold tracking-tight text-ink">학생 목록</h2>
           <div>
             {/* 못 받아온 것과 0명은 다르다. 확정 문구를 먼저 그리지 않는다 (11.7). */}
             {studentsLoading ? (
@@ -741,7 +741,7 @@ export default function BranchDashboard({ user }: { user: User }) {
               <ErrorState detail="학생 목록 조회가 실패했습니다." onRetry={() => refetchStudents()} />
             ) : students && students.length > 0 ? (
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[640px] text-sm [&_td]:whitespace-nowrap [&_thead_th:first-child]:sticky [&_thead_th:first-child]:left-0 [&_thead_th:first-child]:z-10 [&_thead_th:first-child]:bg-surface [&_tbody_td:first-child]:sticky [&_tbody_td:first-child]:left-0 [&_tbody_td:first-child]:bg-surface [&_tbody_tr:hover_td:first-child]:bg-surface-subtle">
+                <table className="bg-surface tabular-nums w-full min-w-[640px] text-sm [&_td]:whitespace-nowrap [&_thead_th:first-child]:sticky [&_thead_th:first-child]:left-0 [&_thead_th:first-child]:z-10 [&_thead_th:first-child]:bg-surface [&_tbody_td:first-child]:sticky [&_tbody_td:first-child]:left-0 [&_tbody_td:first-child]:bg-surface [&_tbody_tr:hover_td:first-child]:bg-surface-subtle">
                   <thead>
                     <tr className="border-b border-line-strong">
                       <th className="text-left px-3 py-2 text-xs font-semibold text-ink-secondary whitespace-nowrap">이름</th>
@@ -785,7 +785,7 @@ export default function BranchDashboard({ user }: { user: User }) {
 
       {selectedDashboardView === 'classes' && (
         <section className="mb-6">
-          <h2 className="mb-2 border-l-[3px] border-action pl-2 text-sm font-bold tracking-wide text-ink">반 목록</h2>
+          <h2 className="mb-4 text-lg font-semibold tracking-tight text-ink">반 목록</h2>
           <div>
             {/* 못 받아온 것과 0개는 다르다 (11.7). */}
             {classesLoading ? (
@@ -794,7 +794,7 @@ export default function BranchDashboard({ user }: { user: User }) {
               <ErrorState detail="반 목록 조회가 실패했습니다." onRetry={() => refetchClasses()} />
             ) : classes && classes.length > 0 ? (
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[640px] text-sm [&_td]:whitespace-nowrap [&_thead_th:first-child]:sticky [&_thead_th:first-child]:left-0 [&_thead_th:first-child]:z-10 [&_thead_th:first-child]:bg-surface [&_tbody_td:first-child]:sticky [&_tbody_td:first-child]:left-0 [&_tbody_td:first-child]:bg-surface [&_tbody_tr:hover_td:first-child]:bg-surface-subtle">
+                <table className="bg-surface tabular-nums w-full min-w-[640px] text-sm [&_td]:whitespace-nowrap [&_thead_th:first-child]:sticky [&_thead_th:first-child]:left-0 [&_thead_th:first-child]:z-10 [&_thead_th:first-child]:bg-surface [&_tbody_td:first-child]:sticky [&_tbody_td:first-child]:left-0 [&_tbody_td:first-child]:bg-surface [&_tbody_tr:hover_td:first-child]:bg-surface-subtle">
                   <thead>
                     <tr className="border-b border-line-strong">
                       <th className="text-left px-3 py-2 text-xs font-semibold text-ink-secondary whitespace-nowrap">반 이름</th>
@@ -833,7 +833,7 @@ export default function BranchDashboard({ user }: { user: User }) {
 
       {selectedDashboardView === 'exam-attempts' && (
         <section className="mb-6">
-          <h2 className="mb-2 border-l-[3px] border-action pl-2 text-sm font-bold tracking-wide text-ink">시험 응시 및 채점 학생</h2>
+          <h2 className="mb-4 text-lg font-semibold tracking-tight text-ink">시험 응시 및 채점 학생</h2>
           <div>
             {/* 못 받아온 것과 0건은 다르다 (11.7). */}
             {distributionsLoading || allDistLoading ? (
@@ -871,7 +871,7 @@ export default function BranchDashboard({ user }: { user: User }) {
                       </div>
 
                       <div className="overflow-x-auto">
-                        <table className="w-full min-w-[640px] text-sm [&_td]:whitespace-nowrap [&_thead_th:first-child]:sticky [&_thead_th:first-child]:left-0 [&_thead_th:first-child]:z-10 [&_thead_th:first-child]:bg-surface [&_tbody_td:first-child]:sticky [&_tbody_td:first-child]:left-0 [&_tbody_td:first-child]:bg-surface [&_tbody_tr:hover_td:first-child]:bg-surface-subtle">
+                        <table className="bg-surface tabular-nums w-full min-w-[640px] text-sm [&_td]:whitespace-nowrap [&_thead_th:first-child]:sticky [&_thead_th:first-child]:left-0 [&_thead_th:first-child]:z-10 [&_thead_th:first-child]:bg-surface [&_tbody_td:first-child]:sticky [&_tbody_td:first-child]:left-0 [&_tbody_td:first-child]:bg-surface [&_tbody_tr:hover_td:first-child]:bg-surface-subtle">
                           <thead>
                             <tr className="border-b border-line-subtle">
                               <th className="text-left px-3 py-2 text-xs font-semibold text-ink-secondary whitespace-nowrap">학생</th>
@@ -1059,7 +1059,7 @@ export default function BranchDashboard({ user }: { user: User }) {
         <>
           {renderAttemptBoard()}
         <section className="mb-6">
-          <h2 className="mb-2 border-l-[3px] border-action pl-2 text-sm font-bold tracking-wide text-ink">시험 응시 학생</h2>
+          <h2 className="mb-4 text-lg font-semibold tracking-tight text-ink">시험 응시 학생</h2>
           <div>
             {/* 못 받아온 것과 0명은 다르다 (11.7). */}
             {distributionsLoading || allDistLoading ? (
@@ -1095,7 +1095,7 @@ export default function BranchDashboard({ user }: { user: User }) {
                       </div>
 
                       <div className="overflow-x-auto">
-                        <table className="w-full min-w-[640px] text-sm [&_td]:whitespace-nowrap [&_thead_th:first-child]:sticky [&_thead_th:first-child]:left-0 [&_thead_th:first-child]:z-10 [&_thead_th:first-child]:bg-surface [&_tbody_td:first-child]:sticky [&_tbody_td:first-child]:left-0 [&_tbody_td:first-child]:bg-surface [&_tbody_tr:hover_td:first-child]:bg-surface-subtle">
+                        <table className="bg-surface tabular-nums w-full min-w-[640px] text-sm [&_td]:whitespace-nowrap [&_thead_th:first-child]:sticky [&_thead_th:first-child]:left-0 [&_thead_th:first-child]:z-10 [&_thead_th:first-child]:bg-surface [&_tbody_td:first-child]:sticky [&_tbody_td:first-child]:left-0 [&_tbody_td:first-child]:bg-surface [&_tbody_tr:hover_td:first-child]:bg-surface-subtle">
                           <thead>
                             <tr className="border-b border-line">
                               <th className="text-left px-3 py-2 text-xs font-semibold text-ink-secondary whitespace-nowrap">학생</th>
@@ -1436,10 +1436,8 @@ export default function BranchDashboard({ user }: { user: User }) {
   const renderStudentPanel = () => (
     <div className="flex h-full flex-col bg-surface">
       <div className="border-b border-line px-4 py-3">
-        <p className="text-xs font-semibold tracking-wide text-ink-tertiary">학생 성적</p>
-        <p className="mt-0.5 truncate text-base font-semibold text-ink">
-          {selectedStudent ? selectedStudent.user?.name : '학생을 선택하세요'}
-        </p>
+        <h2 className="text-base font-semibold text-ink">학생 목록</h2>
+        <p className="mt-1 text-xs leading-relaxed text-ink-secondary">학생을 선택해 성적과 보고서를 확인하세요.</p>
       </div>
       <div className="border-b border-line px-4 py-2.5">
         <div className="relative">
@@ -1561,7 +1559,7 @@ export default function BranchDashboard({ user }: { user: User }) {
   */
   const renderAttemptBoard = () => {
     const boardTitle = (
-      <h2 className="mb-2 border-l-[3px] border-action pl-2 text-sm font-bold tracking-wide text-ink">
+      <h2 className="mb-4 text-lg font-semibold tracking-tight text-ink">
         응시 현황
       </h2>
     );
@@ -1733,7 +1731,7 @@ export default function BranchDashboard({ user }: { user: User }) {
     return (
       <section className="mb-6">
         <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <h2 className="border-l-[3px] border-action pl-2 text-sm font-bold tracking-wide text-ink">
+          <h2 className="text-lg font-semibold tracking-tight text-ink">
             응시 현황
           </h2>
           {boardDistributions.length > 1 && (
@@ -1932,8 +1930,9 @@ export default function BranchDashboard({ user }: { user: User }) {
     ];
     return (
       <>
+        <div className="mb-6 rounded-2xl border border-line bg-surface p-5 md:p-7">
         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-          <h1 className="text-xl font-semibold tracking-[-0.015em] text-ink">{selectedStudent.user?.name}</h1>
+          <h1 className="page-heading text-2xl font-semibold tracking-[-0.03em] text-ink md:text-3xl">{selectedStudent.user?.name}</h1>
           <span className="text-sm text-ink-tertiary">
             {selectedStudent.grade || '학년 미지정'} · {selectedStudent.school || '학교 미등록'}
           </span>
@@ -1946,7 +1945,7 @@ export default function BranchDashboard({ user }: { user: User }) {
           </button>
         </div>
         {/* 요약 지표: 제출 완료 건만 집계 (DESIGN.md 11.6.3) */}
-        <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-ink-secondary">
+        <p className="mt-5 flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-line pt-4 text-sm text-ink-secondary">
           {studentSummary ? (
             <>
               <span>응시 <b className="tabular-nums text-ink">{studentSummary.count}</b>회</span>
@@ -1970,6 +1969,7 @@ export default function BranchDashboard({ user }: { user: User }) {
             <span className="text-ink-tertiary">응시 기록 없음</span>
           )}
         </p>
+        </div>
 
         {/* 학생 컨텍스트 탭 */}
         <div className="mt-3 flex gap-1 overflow-x-auto border-b border-line">
@@ -2010,7 +2010,7 @@ export default function BranchDashboard({ user }: { user: User }) {
           ) : (
             // 5.4 스크롤 표 첫 열 고정. 행 배경이 펼침 상태에 따라 바뀌므로
             // 첫 칸 배경은 bg-inherit 로 두고 tr 이 배경을 정하게 한다.
-            <table className="mt-3 w-full text-sm [&_thead_th:first-child]:sticky [&_thead_th:first-child]:left-0 [&_thead_th:first-child]:z-10 [&_thead_th:first-child]:bg-surface [&_tbody_td:first-child]:sticky [&_tbody_td:first-child]:left-0 [&_tbody_td:first-child]:bg-inherit">
+            <table className="bg-surface tabular-nums mt-3 w-full text-sm [&_thead_th:first-child]:sticky [&_thead_th:first-child]:left-0 [&_thead_th:first-child]:z-10 [&_thead_th:first-child]:bg-surface [&_tbody_td:first-child]:sticky [&_tbody_td:first-child]:left-0 [&_tbody_td:first-child]:bg-inherit">
               <thead>
                 <tr className="border-b border-line-strong">
                   <th className="px-3 py-2 text-left text-xs font-semibold text-ink-secondary">시험</th>
@@ -2258,7 +2258,7 @@ export default function BranchDashboard({ user }: { user: User }) {
       {sortedStudents.length > 0 ? (
         <>
           {/* 데스크톱: 표가 본문 폭 전체를 쓴다. 카드로 감싸지 않는다 (11.2) */}
-          <table className="mt-3 hidden w-full text-sm md:table [&_thead_th:first-child]:sticky [&_thead_th:first-child]:left-0 [&_thead_th:first-child]:z-10 [&_thead_th:first-child]:bg-surface [&_tbody_td:first-child]:sticky [&_tbody_td:first-child]:left-0 [&_tbody_td:first-child]:bg-surface [&_tbody_tr:hover_td:first-child]:bg-surface-subtle">
+          <table className="bg-surface tabular-nums mt-3 hidden w-full text-sm md:table [&_thead_th:first-child]:sticky [&_thead_th:first-child]:left-0 [&_thead_th:first-child]:z-10 [&_thead_th:first-child]:bg-surface [&_tbody_td:first-child]:sticky [&_tbody_td:first-child]:left-0 [&_tbody_td:first-child]:bg-surface [&_tbody_tr:hover_td:first-child]:bg-surface-subtle">
             <thead>
               <tr className="border-b border-line-strong">
                 <th className="w-20 whitespace-nowrap px-3 py-2 text-left text-xs font-semibold text-ink-secondary">
@@ -2341,7 +2341,7 @@ export default function BranchDashboard({ user }: { user: User }) {
           {/* 모바일: 표 대신 카드 리스트 (11.3) */}
           <div className="mt-3 flex flex-col gap-2 md:hidden">
             {pagedStudents.map((student: any) => (
-              <div key={student.id} className="rounded-sm border border-line bg-surface p-3">
+              <div key={student.id} className="rounded-xl border border-line bg-surface p-4">
                 <div className="flex items-baseline gap-2">
                   <p className="text-base font-semibold text-ink">{student.user?.name}</p>
                   <span className="text-xs text-ink-tertiary">{student.grade || '-'}</span>
@@ -2600,7 +2600,7 @@ export default function BranchDashboard({ user }: { user: User }) {
 
       {rows.length > 0 ? (
         <>
-          <table className="mt-3 hidden w-full text-sm md:table [&_thead_th:first-child]:sticky [&_thead_th:first-child]:left-0 [&_thead_th:first-child]:z-10 [&_thead_th:first-child]:bg-surface [&_tbody_td:first-child]:sticky [&_tbody_td:first-child]:left-0 [&_tbody_td:first-child]:bg-surface [&_tbody_tr:hover_td:first-child]:bg-surface-subtle">
+          <table className="bg-surface tabular-nums mt-3 hidden w-full text-sm md:table [&_thead_th:first-child]:sticky [&_thead_th:first-child]:left-0 [&_thead_th:first-child]:z-10 [&_thead_th:first-child]:bg-surface [&_tbody_td:first-child]:sticky [&_tbody_td:first-child]:left-0 [&_tbody_td:first-child]:bg-surface [&_tbody_tr:hover_td:first-child]:bg-surface-subtle">
             <thead>
               <tr className="border-b border-line-strong">
                 <th className="px-3 py-2 text-left text-xs font-semibold text-ink-secondary">반 이름</th>
@@ -2650,7 +2650,7 @@ export default function BranchDashboard({ user }: { user: User }) {
           {/* 모바일: 카드 리스트 (11.3) */}
           <div className="mt-3 flex flex-col gap-2 md:hidden">
             {pageRows.map((cls: any) => (
-              <div key={cls.id} className="rounded-sm border border-line bg-surface p-3">
+              <div key={cls.id} className="rounded-xl border border-line bg-surface p-4">
                 <div className="flex items-baseline gap-2">
                   <p className="text-base font-semibold text-ink">{cls.name}</p>
                   <span className="text-xs text-ink-tertiary">{cls.grade || '-'}</span>
@@ -2856,7 +2856,7 @@ export default function BranchDashboard({ user }: { user: User }) {
 
       {rows.length > 0 ? (
         <>
-          <table className="mt-3 hidden w-full text-sm md:table [&_thead_th:first-child]:sticky [&_thead_th:first-child]:left-0 [&_thead_th:first-child]:z-10 [&_thead_th:first-child]:bg-surface [&_tbody_td:first-child]:sticky [&_tbody_td:first-child]:left-0 [&_tbody_td:first-child]:bg-surface [&_tbody_tr:hover_td:first-child]:bg-surface-subtle">
+          <table className="bg-surface tabular-nums mt-3 hidden w-full text-sm md:table [&_thead_th:first-child]:sticky [&_thead_th:first-child]:left-0 [&_thead_th:first-child]:z-10 [&_thead_th:first-child]:bg-surface [&_tbody_td:first-child]:sticky [&_tbody_td:first-child]:left-0 [&_tbody_td:first-child]:bg-surface [&_tbody_tr:hover_td:first-child]:bg-surface-subtle">
             <thead>
               <tr className="border-b border-line-strong">
                 <th className="px-3 py-2 text-left text-xs font-semibold text-ink-secondary">시험명</th>
@@ -2908,7 +2908,7 @@ export default function BranchDashboard({ user }: { user: User }) {
 
           <div className="mt-3 flex flex-col gap-2 md:hidden">
             {pageRows.map((dist: any) => (
-              <div key={dist.id} className="rounded-sm border border-line bg-surface p-3">
+              <div key={dist.id} className="rounded-xl border border-line bg-surface p-4">
                 <p className="text-base font-semibold text-ink">{dist.exam?.title || '-'}</p>
                 <p className="mt-0.5 text-xs text-ink-secondary">
                   {new Date(dist.startDate).toLocaleDateString('ko-KR')} ~ {new Date(dist.endDate).toLocaleDateString('ko-KR')}
@@ -3202,7 +3202,7 @@ export default function BranchDashboard({ user }: { user: User }) {
 
         {rows.length > 0 ? (
           <>
-            <table className="mt-3 hidden w-full text-sm md:table [&_thead_th:first-child]:sticky [&_thead_th:first-child]:left-0 [&_thead_th:first-child]:z-10 [&_thead_th:first-child]:bg-surface [&_tbody_td:first-child]:sticky [&_tbody_td:first-child]:left-0 [&_tbody_td:first-child]:bg-surface [&_tbody_tr:hover_td:first-child]:bg-surface-subtle">
+            <table className="bg-surface tabular-nums mt-3 hidden w-full text-sm md:table [&_thead_th:first-child]:sticky [&_thead_th:first-child]:left-0 [&_thead_th:first-child]:z-10 [&_thead_th:first-child]:bg-surface [&_tbody_td:first-child]:sticky [&_tbody_td:first-child]:left-0 [&_tbody_td:first-child]:bg-surface [&_tbody_tr:hover_td:first-child]:bg-surface-subtle">
               <thead>
                 <tr className="border-b border-line-strong">
                   <th className="px-3 py-2 text-left text-xs font-semibold text-ink-secondary">시험명</th>
@@ -3295,7 +3295,7 @@ export default function BranchDashboard({ user }: { user: User }) {
                 const st = distStatusOf(dist);
                 const pg = distProgressOf(dist.id);
                 return (
-                  <div key={dist.id} className="rounded-sm border border-line bg-surface p-3">
+                  <div key={dist.id} className="rounded-xl border border-line bg-surface p-4">
                     <p className="text-base font-semibold text-ink">{dist.exam?.title || '-'}</p>
                     <p className="mt-0.5 text-xs text-ink-secondary">
                       {classNameOf(dist.classId)} · {new Date(dist.startDate).toLocaleDateString('ko-KR')} ~{' '}
@@ -3342,7 +3342,7 @@ export default function BranchDashboard({ user }: { user: User }) {
       // Show list of distributions
       return (
         <section className="mb-6">
-          <h2 className="mb-2 border-l-[3px] border-action pl-2 text-sm font-bold tracking-wide text-ink">보고서 및 성적 관리</h2>
+          <h2 className="mb-4 text-lg font-semibold tracking-tight text-ink">보고서 및 성적 관리</h2>
           <div>
             {/* 못 받아온 것과 0건은 다르다 (11.7). */}
             {distributionsLoading ? (
@@ -3439,7 +3439,7 @@ export default function BranchDashboard({ user }: { user: User }) {
           <div>
             {distributionStudents && distributionStudents.students && distributionStudents.students.length > 0 ? (
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[640px] text-sm [&_td]:whitespace-nowrap [&_thead_th:first-child]:sticky [&_thead_th:first-child]:left-0 [&_thead_th:first-child]:z-10 [&_thead_th:first-child]:bg-surface [&_tbody_td:first-child]:sticky [&_tbody_td:first-child]:left-0 [&_tbody_td:first-child]:bg-surface [&_tbody_tr:hover_td:first-child]:bg-surface-subtle">
+                <table className="bg-surface tabular-nums w-full min-w-[640px] text-sm [&_td]:whitespace-nowrap [&_thead_th:first-child]:sticky [&_thead_th:first-child]:left-0 [&_thead_th:first-child]:z-10 [&_thead_th:first-child]:bg-surface [&_tbody_td:first-child]:sticky [&_tbody_td:first-child]:left-0 [&_tbody_td:first-child]:bg-surface [&_tbody_tr:hover_td:first-child]:bg-surface-subtle">
                   <thead>
                     <tr className="border-b border-line-strong">
                       <th className="text-left px-3 py-2 text-xs font-semibold text-ink-secondary whitespace-nowrap">학생</th>
@@ -3606,6 +3606,14 @@ export default function BranchDashboard({ user }: { user: User }) {
 
   const subSections = TOP_TABS.find((t) => t.id === topTab)?.sections ?? [];
 
+  const sectionDescriptions: Record<string, string> = {
+    students: '학생 정보를 정리하고 학년별 명단을 관리하세요.',
+    classes: '반을 구성하고 소속 학생을 관리하세요.',
+    exams: '배포받은 시험을 확인하고 학생과 반에 전달하세요.',
+    distributions: '시험별 배포 일정과 응시 진행 상황을 확인하세요.',
+    reports: '학생별 성적과 분석 보고서를 확인하세요.',
+  };
+
   const switchTopTab = (id: TopTab) => {
     setTopTab(id);
     const first = TOP_TABS.find((t) => t.id === id)?.sections[0];
@@ -3614,7 +3622,7 @@ export default function BranchDashboard({ user }: { user: User }) {
   };
 
   return (
-    <div className="flex min-h-[100dvh] flex-col bg-surface-sunken">
+    <div className="app-shell flex min-h-[100dvh] flex-col bg-surface-sunken">
       {/*
         ── 상단 GNB (DESIGN.md 11.6). 주요 메뉴가 여기 있고, 사이드바는 학생 패널이 된다 ──
 
@@ -3628,14 +3636,14 @@ export default function BranchDashboard({ user }: { user: User }) {
         1.74:1 로 무너진다. action-text 는 라이트 #FFF / 다크 slate-900 으로 함께
         뒤집혀 3.30:1 / 10.3:1 을 유지한다. 새 토큰이 아니라 기존 토큰 선택이다.
       */}
-      <header className="sticky top-0 z-30 border-b border-line bg-surface">
-        <div className="flex items-center gap-2 px-3 md:px-6">
+      <header className="app-header sticky top-0 z-30 border-b border-line bg-surface">
+        <div className="flex h-14 items-center gap-2 px-3 md:gap-6 md:px-6">
           <div className="flex flex-shrink-0 items-center gap-2.5 py-2.5">
             <div className="flex h-8 w-8 items-center justify-center rounded-md bg-accent">
               <GraduationCap className="h-4 w-4 text-action-text" strokeWidth={1.5} />
             </div>
             <div className="hidden min-w-0 lg:block">
-              <p className="truncate text-sm font-semibold text-ink">지점 관리</p>
+              <p className="truncate text-sm font-semibold tracking-wide text-ink">ALLGA <span className="ml-2 font-normal tracking-normal text-ink-secondary">지점 관리</span></p>
               <p className="truncate text-xs text-ink-secondary">{user.name}</p>
             </div>
           </div>
@@ -3693,7 +3701,7 @@ export default function BranchDashboard({ user }: { user: User }) {
               role={panelIsDialog ? 'dialog' : undefined}
               aria-modal={panelIsDialog ? true : undefined}
               aria-label={panelIsDialog ? '학생 목록' : undefined}
-              className={`fixed inset-y-0 left-0 z-40 w-[264px] border-r border-line bg-surface transition-transform duration-200 ease-out ${
+              className={`app-sidebar fixed inset-y-0 left-0 z-40 w-[264px] border-r border-line bg-surface transition-transform duration-200 ease-out ${
                 panelOpen ? 'translate-x-0' : '-translate-x-full'
               } md:sticky md:top-[57px] md:z-auto md:h-[calc(100dvh-57px)] md:translate-x-0 md:flex-shrink-0`}
             >
@@ -3745,15 +3753,21 @@ export default function BranchDashboard({ user }: { user: User }) {
             </div>
           )}
 
-          <main className="min-w-0 flex-1 p-4 md:p-8">
+          <main className="app-main min-w-0 flex-1 p-4 md:p-8 lg:p-10">
             {topTab === 'grades' && renderStudentContext()}
             {topTab !== 'grades' && (
               <>
+                <div className="mb-7 border-b border-line pb-6">
+                  <h1 className="page-heading text-2xl font-semibold tracking-[-0.03em] text-ink md:text-3xl">{menuItems.find((item) => item.id === activeSection)?.label}</h1>
+                  <p className="page-description mt-2 text-sm leading-relaxed text-ink-secondary">{sectionDescriptions[activeSection]}</p>
+                </div>
+                <div className="workspace-panel rounded-2xl border border-line shadow-none bg-surface p-4 md:p-6">
                 {activeSection === 'students' && renderStudents()}
                 {activeSection === 'classes' && renderClasses()}
                 {activeSection === 'exams' && renderExams()}
                 {activeSection === 'distributions' && renderDistributions()}
                 {activeSection === 'reports' && renderReports()}
+                </div>
               </>
             )}
           </main>

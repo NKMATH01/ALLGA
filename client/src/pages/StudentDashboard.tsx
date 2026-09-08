@@ -37,7 +37,6 @@ import {
   ChevronRight,
   GraduationCap,
   Trophy,
-  Star,
   PlayCircle,
   ClipboardCheck,
   Settings,
@@ -1068,7 +1067,7 @@ export default function StudentDashboard({ user }: { user: User }) {
   };
 
   return (
-    <div className="flex h-[100dvh] bg-surface-sunken">
+    <div className="app-shell flex h-[100dvh] overflow-hidden bg-surface-sunken">
       {/* Exam Taking Modal */}
       {examModal && (
         <ExamTakingModal
@@ -1101,13 +1100,13 @@ export default function StudentDashboard({ user }: { user: User }) {
       )}
       <aside
         ref={drawerRef}
-        className={`fixed inset-y-0 left-0 z-40 w-[264px] flex flex-col border-r border-line bg-surface text-ink transition-transform duration-200 ease-out ${
+        className={`app-sidebar fixed inset-y-0 left-0 z-40 w-[264px] flex flex-col border-r border-line bg-surface text-ink transition-transform duration-200 ease-out ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         } md:static md:z-auto md:translate-x-0 md:overflow-hidden md:transition-[width] ${
           sidebarOpen ? 'md:w-[264px]' : 'md:w-0'
         }`}
       >
-        <div className="p-6 flex-1 overflow-y-auto">
+        <div className="p-5 flex-1 overflow-y-auto">
           {/*
             Logo. 이 화면의 그린 1곳째. 아이콘 색은 --accent 와 함께 뒤집히는
             action-text 를 쓴다 (라이트 흰 글자 3.30:1 / 다크 slate-900 10.3:1).
@@ -1124,7 +1123,7 @@ export default function StudentDashboard({ user }: { user: User }) {
           </div>
 
           {/* User Card */}
-          <div className="mb-8 p-4 rounded-md border border-line">
+          <div className="mb-7 border-y border-line py-5">
             <div className="flex items-center gap-3">
               <div className="w-11 h-11 border border-line rounded-full flex items-center justify-center flex-shrink-0">
                 <User className="w-5 h-5" strokeWidth={1.5} />
@@ -1151,12 +1150,13 @@ export default function StudentDashboard({ user }: { user: User }) {
           </div>
 
           {/* Navigation */}
-          <nav className="space-y-1">
+          <nav aria-label="학생 메뉴" className="space-y-1.5">
             {menuItems.map((item) => {
               const Icon = item.icon;
               return (
                 <button
                   key={item.id}
+                  aria-current={activeSection === item.id ? 'page' : undefined}
                   onClick={() => setActiveSection(item.id)}
                   /*
                     그린 2곳째: 활성 메뉴의 좌측 강조 바 (세로 내비에서 밑줄의 대응물).
@@ -1180,7 +1180,7 @@ export default function StudentDashboard({ user }: { user: User }) {
 
           {/* Quick Stats */}
           {completedExams.length > 0 && (
-            <div className="mt-8 p-4 rounded-md border border-line">
+            <div className="mt-8 border-t border-line px-3 pt-5">
               <h3 className="text-xs font-semibold tracking-[0.08em] text-ink-secondary mb-3">
                 나의 성적 요약
               </h3>
@@ -1216,9 +1216,9 @@ export default function StudentDashboard({ user }: { user: User }) {
       </aside>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="min-w-0 flex-1 flex flex-col overflow-hidden">
         {/* Header */}
-        <header className="bg-surface border-b border-line z-10">
+        <header className="app-header bg-surface border-b border-line z-10">
           <div className="flex items-center justify-between gap-4 px-4 py-3 md:px-6">
             <div className="flex items-center gap-3 min-w-0">
               <Button
@@ -1284,25 +1284,30 @@ export default function StudentDashboard({ user }: { user: User }) {
         </header>
 
         {/* Content Area */}
-        <main className="flex-1 overflow-y-auto p-4 md:p-6">
+        <main className="app-main flex-1 overflow-y-auto p-5 md:p-8 lg:p-10">
+          {activeSection !== 'dashboard' && (
+            <div className="mx-auto mb-8 max-w-5xl border-b border-line pb-7 pt-2">
+              <h1 className="page-heading text-3xl font-semibold tracking-[-0.03em] text-ink">
+                {activeSection === 'exams' ? '나의 시험' : activeSection === 'results' ? '학습의 흐름을 확인하세요' : '내 학습 정보'}
+              </h1>
+              <p className="page-description mt-3 text-sm leading-7 text-ink-secondary">
+                {activeSection === 'exams' ? '배정된 시험과 응시 일정을 확인하고, 진행 중인 시험을 이어가세요.' : activeSection === 'results' ? '시험별 결과를 비교하고, 분석 보고서에서 다음 학습의 방향을 찾아보세요.' : '학교와 소속 지점, 계정 정보를 한곳에서 확인하세요.'}
+              </p>
+            </div>
+          )}
           {/* ============ DASHBOARD SECTION ============ */}
           {activeSection === 'dashboard' && (
-            <div className="space-y-6 max-w-7xl mx-auto">
+            <div className="space-y-8 max-w-7xl mx-auto">
               {/* Welcome Banner */}
-              <div className="bg-surface-inverse text-ink-inverse rounded-md p-6 md:p-8">
+              <div className="border-b border-line pb-8 pt-2">
                 <div className="flex items-center justify-between gap-6">
                   <div className="min-w-0">
-                    <h1 className="text-2xl font-bold tracking-[-0.02em] mb-2">
+                    <h1 className="page-heading mb-3 text-3xl md:text-4xl font-semibold tracking-[-0.03em] text-ink">
                       안녕하세요, {user.name}님
                     </h1>
-                    <p className="text-ink-inverse-muted">
+                    <p className="page-description max-w-xl text-sm leading-7 text-ink-secondary">
                       오늘 응시할 시험과 지난 성적을 여기서 확인합니다.
                     </p>
-                  </div>
-                  <div className="hidden md:block flex-shrink-0">
-                    <div className="w-16 h-16 border border-line-inverse rounded-full flex items-center justify-center">
-                      <Star className="w-7 h-7 text-ink-inverse-muted" strokeWidth={1.5} />
-                    </div>
                   </div>
                 </div>
 
@@ -1314,7 +1319,7 @@ export default function StudentDashboard({ user }: { user: User }) {
                         setActiveSection('exams');
                         setActiveExamTab('available');
                       }}
-                      className="bg-surface text-ink hover:bg-surface-subtle"
+                      className="bg-action text-action-text hover:bg-action-hover"
                     >
                       <PlayCircle className="w-4 h-4 mr-2" strokeWidth={1.5} />
                       시험 응시하기 ({availableExams.length})
@@ -1327,7 +1332,7 @@ export default function StudentDashboard({ user }: { user: User }) {
                         setActiveExamTab('in_progress');
                       }}
                       variant="outline"
-                      className="border-line-inverse bg-transparent text-ink-inverse hover:bg-line-inverse"
+                      className="border-line-strong bg-surface text-ink hover:bg-surface-subtle"
                     >
                       <Clock className="w-4 h-4 mr-2" strokeWidth={1.5} />
                       진행 중인 시험 ({inProgressExams.length})
@@ -1339,11 +1344,11 @@ export default function StudentDashboard({ user }: { user: User }) {
               {/*
                 통계 카드: DESIGN.md 5.2. 아이콘 타일을 넣지 않는다 (4개가 나란히 놓일 때
                 아이콘이 수치 스캔을 방해한다). 라벨 / 수치+단위 / 각주 3단 구조.
-                브라스 1곳 / 2: 최고 점수. 배경을 칠하지 않고 상단 규칙선과 수치 색만 쓴다.
+                최고 점수는 옅은 강조 면과 수치 색으로 구분한다.
               */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <Card>
-                  <CardContent className="p-5 pt-5">
+              <div className="metric-strip grid grid-cols-2 lg:grid-cols-4 gap-0 overflow-hidden rounded-xl border border-line bg-surface [&>div]:rounded-none [&>div]:border-0 [&>div]:shadow-none [&>div]:border-r [&>div]:border-line-subtle">
+                <div>
+                  <div className="p-5 pt-5">
                     <p className="text-xs font-semibold tracking-[0.08em] text-ink-tertiary">평균 점수</p>
                     <StatValue
                       value={averageScore}
@@ -1354,11 +1359,11 @@ export default function StudentDashboard({ user }: { user: User }) {
                       valueClassName="mt-3 text-4xl font-bold leading-none tracking-[-0.03em] text-ink"
                     />
                     <p className="mt-3 text-xs text-ink-secondary">{completedExams.length}회 응시 기준</p>
-                  </CardContent>
-                </Card>
+                  </div>
+                </div>
 
-                <Card className="border-t-[3px] border-t-accent">
-                  <CardContent className="p-5 pt-5">
+                <div className="bg-accent-surface">
+                  <div className="p-5 pt-5">
                     <p className="text-xs font-semibold tracking-[0.08em] text-ink-tertiary">최고 점수</p>
                     <StatValue
                       value={highestScore}
@@ -1369,11 +1374,11 @@ export default function StudentDashboard({ user }: { user: User }) {
                       valueClassName="mt-3 text-4xl font-bold leading-none tracking-[-0.03em] text-accent-strong"
                     />
                     <p className="mt-3 text-xs text-ink-secondary">지금까지의 최고 기록</p>
-                  </CardContent>
-                </Card>
+                  </div>
+                </div>
 
-                <Card>
-                  <CardContent className="p-5 pt-5">
+                <div>
+                  <div className="p-5 pt-5">
                     <p className="text-xs font-semibold tracking-[0.08em] text-ink-tertiary">응시 횟수</p>
                     <StatValue
                       value={completedExams.length}
@@ -1384,11 +1389,11 @@ export default function StudentDashboard({ user }: { user: User }) {
                       valueClassName="mt-3 text-4xl font-bold leading-none tracking-[-0.03em] text-ink"
                     />
                     <p className="mt-3 text-xs text-ink-secondary">완료한 시험</p>
-                  </CardContent>
-                </Card>
+                  </div>
+                </div>
 
-                <Card>
-                  <CardContent className="p-5 pt-5">
+                <div>
+                  <div className="p-5 pt-5">
                     <p className="text-xs font-semibold tracking-[0.08em] text-ink-tertiary">대기 시험</p>
                     {/* 아직 못 받아온 것을 "배정 없음"으로 확정해 그리지 않는다 (11.7) */}
                     {examsLoading || examsError ? (
@@ -1408,15 +1413,15 @@ export default function StudentDashboard({ user }: { user: User }) {
                       <p className="mt-3 py-2 text-base font-semibold text-ink-tertiary">배정 없음</p>
                     )}
                     <p className="mt-3 text-xs text-ink-secondary">응시 가능과 진행 중 합계</p>
-                  </CardContent>
-                </Card>
+                  </div>
+                </div>
               </div>
 
               {/* Charts Row */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Score Trend Chart */}
                 <Card>
-                  <CardHeader className="border-b border-line bg-surface-subtle">
+                  <CardHeader className="border-b border-line-subtle bg-surface">
                     <CardTitle className="flex items-center gap-2.5">
                       <TrendingUp className="w-5 h-5 flex-shrink-0 text-ink-secondary" strokeWidth={1.5} />
                       성적 추이
@@ -1451,7 +1456,7 @@ export default function StudentDashboard({ user }: { user: User }) {
 
                 {/* Grade Distribution Chart */}
                 <Card>
-                  <CardHeader className="border-b border-line bg-surface-subtle">
+                  <CardHeader className="border-b border-line-subtle bg-surface">
                     <CardTitle className="flex items-center gap-2.5">
                       <PieChart className="w-5 h-5 flex-shrink-0 text-ink-secondary" strokeWidth={1.5} />
                       등급 분포
@@ -1484,10 +1489,10 @@ export default function StudentDashboard({ user }: { user: User }) {
               </div>
 
               {/* Recent Results & Upcoming Exams */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Recent Exam Results */}
                 <Card>
-                  <CardHeader className="border-b border-line bg-surface-subtle">
+                  <CardHeader className="border-b border-line-subtle bg-surface">
                     <CardTitle className="flex items-center gap-2.5">
                       <FileText className="w-5 h-5 flex-shrink-0 text-ink-secondary" strokeWidth={1.5} />
                       최근 시험 결과
@@ -1534,7 +1539,7 @@ export default function StudentDashboard({ user }: { user: User }) {
 
                 {/* Available & Upcoming Exams */}
                 <Card>
-                  <CardHeader className="border-b border-line bg-surface-subtle">
+                  <CardHeader className="border-b border-line-subtle bg-surface">
                     <CardTitle className="flex items-center gap-2.5">
                       <Calendar className="w-5 h-5 flex-shrink-0 text-ink-secondary" strokeWidth={1.5} />
                       응시 대기 시험
@@ -1935,7 +1940,7 @@ export default function StudentDashboard({ user }: { user: User }) {
 
               {/* Results List */}
               <Card>
-                <CardHeader className="border-b border-line bg-surface-subtle">
+                <CardHeader className="border-b border-line-subtle bg-surface">
                   <CardTitle className="flex items-center gap-2.5">
                     <BarChart3 className="w-5 h-5 flex-shrink-0 text-ink-secondary" strokeWidth={1.5} />
                     상세 성적 조회
@@ -2117,7 +2122,7 @@ export default function StudentDashboard({ user }: { user: User }) {
 
               {/* Stats Card */}
               <Card>
-                <CardHeader className="border-b border-line bg-surface-subtle">
+                <CardHeader className="border-b border-line-subtle bg-surface">
                   <CardTitle className="flex items-center gap-2.5">
                     <Trophy className="w-5 h-5 flex-shrink-0 text-ink-secondary" strokeWidth={1.5} />
                     나의 학습 현황

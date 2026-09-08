@@ -5,8 +5,7 @@ import { toast } from '../components/ui/toast';
 import { ThemeToggle } from '../components/ui/theme-toggle';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
-import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
-import { GraduationCap, LogIn } from 'lucide-react';
+import { GraduationCap, ArrowRight, BookOpen, ClipboardCheck, ChartNoAxesCombined } from 'lucide-react';
 
 export default function LoginPage() {
   const [username, setUsername] = useState('');
@@ -32,45 +31,39 @@ export default function LoginPage() {
     loginMutation.mutate({ username, password, userType: userType || undefined });
   };
 
-  /*
-   * DESIGN.md 9.2 매핑 적용 (오렌지레드 -> 네이비 체계)
-   *   배경 그라디언트와 pulse 글로우 원은 제거 (1.4 그라디언트 금지, 8.2 자동 애니메이션 금지)
-   *   주 버튼은 --action 슬레이트. 로고 칩만 --accent 그린이다 (색 전환 2단계).
-   *     이 화면의 그린은 로고 칩 1곳뿐이다 (1.3 화면당 최대 2곳).
-   *     아이콘 색은 --accent 와 함께 뒤집히는 action-text 를 쓴다
-   *     (라이트 흰 글자 3.30:1 / 다크 slate-900 10.3:1).
-   *   브라스 사용 0곳. 로그인 화면에는 강조할 성취가 없으므로 브라스를 쓰지 않는다 (1.2)
-   */
   return (
-    <div className="relative flex min-h-[100dvh] items-center justify-center bg-surface-sunken p-4">
-      {/* 로그인도 야간 모드 대상 (DESIGN.md 6.3) */}
-      <div className="absolute right-4 top-4">
-        <ThemeToggle />
-      </div>
-      <Card className="w-full max-w-md shadow-lg">
-        <CardHeader className="space-y-4 pb-8">
-          <div className="flex justify-center">
-            <div className="flex h-16 w-16 items-center justify-center rounded-md bg-accent">
-              <GraduationCap className="h-9 w-9 text-action-text" strokeWidth={1.5} />
-            </div>
+    <main className="grid min-h-[100dvh] bg-surface lg:grid-cols-[1.05fr_1fr]">
+      <section className="login-brand relative flex flex-col justify-between px-6 py-5 md:px-12 lg:min-h-screen lg:px-16 lg:py-12 xl:px-20">
+        <div className="flex items-center gap-3">
+          <GraduationCap className="h-9 w-9" strokeWidth={1.5} aria-hidden="true" />
+          <span className="text-xl font-bold tracking-[0.06em]">ALLGA<span className="ml-3 text-sm font-normal tracking-normal login-brand-copy">올가 미수등</span></span>
+        </div>
+        <div className="max-w-lg pb-1 pt-5 lg:py-20">
+          <h1 className="text-2xl font-semibold leading-[1.3] tracking-[-0.035em] lg:text-5xl">배움의 과정이,<br className="hidden lg:block" /> 성장의 기록으로.</h1>
+          <p className="login-brand-copy mt-6 hidden max-w-sm text-sm leading-7 lg:block lg:text-base">시험부터 성적 확인까지.<br />학생의 배움과 학원의 일상을 한곳에서 연결합니다.</p>
+          <div className="mt-12 hidden border-t border-line-inverse pt-7 lg:block">
+            <div className="flex items-center gap-4 py-3"><BookOpen className="h-5 w-5 shrink-0 login-brand-copy" strokeWidth={1.5} /><span className="text-sm">학생과 수업 관리</span></div>
+            <div className="flex items-center gap-4 py-3"><ClipboardCheck className="h-5 w-5 shrink-0 login-brand-copy" strokeWidth={1.5} /><span className="text-sm">시험 운영과 답안 채점</span></div>
+            <div className="flex items-center gap-4 py-3"><ChartNoAxesCombined className="h-5 w-5 shrink-0 login-brand-copy" strokeWidth={1.5} /><span className="text-sm">성적 분석과 학습 기록</span></div>
           </div>
-          <CardTitle className="text-center">
-            <div className="text-2xl font-bold tracking-[-0.02em] text-ink">
-              올가 미수등 시스템
-            </div>
-            <div className="mt-2 text-sm font-normal text-ink-tertiary">
-              ALLGA Academy Management System
-            </div>
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-5">
+        </div>
+        <p className="login-brand-copy hidden text-xs lg:block">ALLGA Academy Management System</p>
+      </section>
+      <section className="relative flex flex-col px-6 pb-8 pt-2 md:px-12 lg:px-16 lg:pb-10 lg:pt-6">
+        <div className="flex justify-end"><ThemeToggle /></div>
+        <div className="mx-auto flex w-full max-w-[380px] flex-1 flex-col justify-center pb-6 pt-2 lg:py-12">
+          <div className="mb-6 lg:mb-9">
+            <h2 className="text-2xl font-bold tracking-[-0.03em] text-ink lg:text-3xl">반갑습니다</h2>
+            <p className="mt-3 text-sm leading-6 text-ink-secondary">올가 미수등 시스템에 로그인하세요.</p>
+          </div>
+          <form onSubmit={handleSubmit} className="login-form space-y-5">
             <div className="space-y-2">
               <label htmlFor="login-username" className="block text-sm font-semibold text-ink">
                 아이디
               </label>
               <Input
                 id="login-username"
+                autoComplete="username"
                 type="text"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
@@ -84,6 +77,7 @@ export default function LoginPage() {
               </label>
               <Input
                 id="login-password"
+                autoComplete="current-password"
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -99,7 +93,7 @@ export default function LoginPage() {
                   index.css 의 전역 :focus-visible 에 기대지 않고 DESIGN.md 5.1 을 명시한다 */}
               <select
                 id="login-usertype"
-                className="flex h-10 w-full rounded-sm border border-line-strong bg-surface px-3 text-sm text-ink transition-colors duration-150 ease-out focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                className="flex h-10 w-full rounded-md border border-line-strong bg-surface px-3 text-sm text-ink transition-colors duration-150 ease-out focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                 value={userType}
                 onChange={(e) => setUserType(e.target.value)}
               >
@@ -111,8 +105,8 @@ export default function LoginPage() {
               </select>
             </div>
             <Button type="submit" className="h-12 w-full" disabled={loginMutation.isPending}>
-              <LogIn className="mr-2 h-4 w-4" strokeWidth={1.5} />
               {loginMutation.isPending ? '로그인 중...' : '로그인'}
+              <ArrowRight className="ml-2 h-4 w-4" strokeWidth={1.5} />
             </Button>
           </form>
           {import.meta.env.DEV && (
@@ -121,21 +115,22 @@ export default function LoginPage() {
               <div className="space-y-1.5 text-xs text-ink-secondary">
                 <p>
                   관리자
-                  <span className="ml-2 rounded-sm border border-line bg-surface px-2 py-0.5 font-mono text-ink">
+                  <span className="ml-2 rounded-md border border-line bg-surface px-2 py-0.5 font-mono text-ink">
                     allga / allga
                   </span>
                 </p>
                 <p>
                   지점장
-                  <span className="ml-2 rounded-sm border border-line bg-surface px-2 py-0.5 font-mono text-ink">
+                  <span className="ml-2 rounded-md border border-line bg-surface px-2 py-0.5 font-mono text-ink">
                     allga1 / allga1
                   </span>
                 </p>
               </div>
             </div>
           )}
-        </CardContent>
-      </Card>
-    </div>
+        </div>
+        <p className="pb-2 text-center text-xs text-ink-secondary">계정 정보는 소속 학원에 문의해 주세요.</p>
+      </section>
+    </main>
   );
 }
