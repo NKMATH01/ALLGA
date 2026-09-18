@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import { toast } from '../components/ui/toast';
 import { ThemeToggle } from '../components/ui/theme-toggle';
+import { AdminAnalytics } from '../components/AdminAnalytics';
 import { StatValue } from '../components/ui/stat-value';
 import { StatStrip, StatStripItem } from '../components/ui/stat-strip';
 import { useModalA11y, isMobileViewport } from '../lib/useModalA11y';
@@ -450,21 +451,6 @@ export default function AdminDashboard({ user }: { user: User }) {
 
   const renderDashboard = () => (
     <>
-      {/*
-        제목 블록을 두지 않는다. 이 화면의 레이아웃 헤더가 이미 활성 메뉴 라벨을
-        <h1>로 그리고 있고(아래 상단 바), 사이드바 활성 표시까지 합치면 같은 자리를
-        세 번 말하게 된다 (DESIGN.md 11.2 - 지면 낭비). 11.9의 "요약 화면에는
-        제목 블록" 요건은 그 레이아웃 헤더로 이미 충족된다. 한 페이지에 <h1>이
-        둘이면 접근성상으로도 문제다. 그래서 KPI 스트립으로 바로 시작한다.
-      */}
-
-      {/*
-        KPI 스트립: DESIGN.md 5.2 / 11.9. 카드 4장으로 흩지 않고 한 컨테이너
-        안에서 구분선으로 가른다.
-        브라스 0곳: 관리 화면에는 브라스를 쓰지 않는다 (DESIGN.md 1.2).
-        평균 점수는 전사 집계 수치이지 누군가의 성취가 아니므로, 이전의
-        accent 강조(카드 상단 바 + 숫자 색)를 걷어내고 무채색으로 통일한다.
-      */}
       <div className="mb-8">
         <StatStrip>
           <StatStripItem label="총 학생 수" footnote="전체 등록 학생">
@@ -477,7 +463,7 @@ export default function AdminDashboard({ user }: { user: User }) {
             />
           </StatStripItem>
 
-          <StatStripItem label="총 지점 수" footnote="운영 중인 지점">
+          <StatStripItem label="총 지점 수" footnote="전체 등록 지점 · 목록 보기" onClick={() => setActiveSection('branches')}>
             <StatValue
               value={stats?.totalBranches}
               isLoading={statsLoading}
@@ -487,7 +473,7 @@ export default function AdminDashboard({ user }: { user: User }) {
             />
           </StatStripItem>
 
-          <StatStripItem label="총 시험 수" footnote="생성된 시험">
+          <StatStripItem label="총 시험 수" footnote="생성된 시험 · 목록 보기" onClick={() => setActiveSection('exams')}>
             <StatValue
               value={stats?.totalExams}
               isLoading={statsLoading}
@@ -497,7 +483,7 @@ export default function AdminDashboard({ user }: { user: User }) {
             />
           </StatStripItem>
 
-          <StatStripItem label="평균 점수" footnote="전체 평균">
+          <StatStripItem label="평균 점수" footnote="제출 완료 원점수 평균">
             <StatValue
               value={stats?.averageScore}
               isLoading={statsLoading}
@@ -509,10 +495,15 @@ export default function AdminDashboard({ user }: { user: User }) {
         </StatStrip>
       </div>
 
-      {/* 관리 테이블은 카드로 감싸지 않는다 (DESIGN.md 11.2). 제목은 한 줄 툴바로 (4.4) */}
+      <AdminAnalytics branches={stats?.branchStats || []} grades={stats?.gradeDistribution || []} loading={statsLoading} error={statsError} onRetry={() => refetchStats()} />
+      <div className="admin-quick-actions">
+        <div><h2 className="text-base font-semibold text-ink">다음 업무로 바로 이동</h2><p className="mt-1 text-sm text-ink-secondary">지점 관리부터 시험 배포까지</p></div>
+        <div className="flex flex-wrap gap-2"><Button variant="outline" onClick={() => setActiveSection('branches')}><Building2 className="mr-2 h-4 w-4" />지점 관리</Button><Button variant="outline" onClick={() => setActiveSection('exams')}><Plus className="mr-2 h-4 w-4" />시험 생성</Button><Button onClick={() => setActiveSection('distributions')}><Send className="mr-2 h-4 w-4" />시험 배포</Button></div>
+      </div>
+
       <section className="workspace-panel rounded-2xl border border-line shadow-none bg-surface p-4 md:p-6">
         <div className="mb-4 flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <h2 className="text-lg font-semibold tracking-tight text-ink">지점별 통계</h2>
+          <div><h2 className="text-lg font-semibold tracking-tight text-ink">지점별 상세 통계</h2><p className="mt-1 text-sm text-ink-secondary">평균 점수는 시험별 만점 차이를 보정하지 않은 원점수입니다.</p></div>
         </div>
         <div className="overflow-x-auto">
             <table className="bg-surface tabular-nums w-full min-w-[640px] [&_td]:whitespace-nowrap [&_thead_th:first-child]:sticky [&_thead_th:first-child]:left-0 [&_thead_th:first-child]:z-10 [&_tbody_td:first-child]:sticky [&_tbody_td:first-child]:left-0 [&_tbody_td:first-child]:bg-surface [&_tbody_tr:hover_td:first-child]:bg-surface-subtle">
@@ -520,7 +511,7 @@ export default function AdminDashboard({ user }: { user: User }) {
                 <tr className="border-b border-line-strong">
                   <th className="text-left px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">지점명</th>
                   <th className="text-right px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">학생 수</th>
-                  <th className="text-right px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">시험 응시 수</th>
+                  <th className="text-right px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">응시 기록 수</th>
                   <th className="text-right px-4 py-3 text-xs font-semibold text-ink-secondary bg-surface-subtle whitespace-nowrap">평균 점수</th>
                 </tr>
               </thead>
@@ -530,6 +521,7 @@ export default function AdminDashboard({ user }: { user: User }) {
                 {!statsLoading && statsError && (
                   <ErrorRow cols={4} detail="지점별 통계 조회가 실패했습니다." onRetry={() => refetchStats()} />
                 )}
+                {!statsLoading && !statsError && pagedBranchStats.pageItems.length === 0 && <tr><td colSpan={4} className="p-10 text-center text-sm text-ink-secondary">등록된 지점이 없습니다.</td></tr>}
                 {!statsLoading && !statsError && pagedBranchStats.pageItems.map((branch: any) => (
                   <tr
                     key={branch.branchName}
@@ -575,7 +567,7 @@ export default function AdminDashboard({ user }: { user: User }) {
       {/* 관리 테이블은 카드로 감싸지 않는다 (DESIGN.md 11.2). 제목은 한 줄 툴바로 (4.4) */}
       <section className="workspace-panel rounded-2xl border border-line shadow-none bg-surface p-4 md:p-6">
         <div className="mb-4 flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <h2 className="text-sm font-semibold text-ink-secondary">지점 관리</h2>
+          <div><h2 className="text-lg font-semibold text-ink">등록 지점</h2><p className="mt-1 text-sm text-ink-secondary">지점 정보와 관리자 계정을 한곳에서 관리합니다.</p></div>
           <Button
             onClick={() => {
               setEditingBranch(null);
@@ -794,7 +786,7 @@ export default function AdminDashboard({ user }: { user: User }) {
       {/* 관리 테이블은 카드로 감싸지 않는다 (DESIGN.md 11.2). 제목은 한 줄 툴바로 (4.4) */}
       <section className="workspace-panel rounded-2xl border border-line shadow-none bg-surface p-4 md:p-6">
         <div className="mb-4 flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <h2 className="text-sm font-semibold text-ink-secondary">시험 생성</h2>
+          <div><h2 className="text-lg font-semibold text-ink">시험 목록</h2><p className="mt-1 text-sm text-ink-secondary">시험 원본을 등록하고 문항과 배점을 검토합니다.</p></div>
           <div className="flex flex-wrap gap-2">
             <Button
               onClick={() => setShowExamModal(true)}
@@ -1315,7 +1307,7 @@ export default function AdminDashboard({ user }: { user: User }) {
       {/* 관리 테이블은 카드로 감싸지 않는다 (DESIGN.md 11.2). 제목은 한 줄 툴바로 (4.4) */}
       <section className="workspace-panel rounded-2xl border border-line shadow-none bg-surface p-4 md:p-6">
         <div className="mb-4 flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <h2 className="text-sm font-semibold text-ink-secondary">시험 배포</h2>
+          <div><h2 className="text-lg font-semibold text-ink">배포 내역</h2><p className="mt-1 text-sm text-ink-secondary">배포 대상과 시험 일정을 확인합니다.</p></div>
           <Button
             onClick={() => setShowDistributionModal(true)}
             className="bg-action hover:bg-action-hover"
@@ -1516,7 +1508,7 @@ export default function AdminDashboard({ user }: { user: User }) {
   );
 
   return (
-    <div className="app-shell flex min-h-[100dvh] bg-surface-sunken">
+    <div className="management-theme admin-console app-shell flex min-h-[100dvh] bg-surface-sunken">
       {/*
         DESIGN.md 7.2 사이드바
           >= 768px : 문서 흐름 안 고정 기둥 (펼침 264px / 접힘 72px, 기존 동작 유지)
@@ -1567,7 +1559,7 @@ export default function AdminDashboard({ user }: { user: User }) {
             return (
               <button
                 key={item.id}
-                onClick={() => setActiveSection(item.id)}
+                onClick={() => { setActiveSection(item.id); if (isMobileViewport()) setSidebarOpen(false); }}
                 aria-label={item.label}
                 aria-current={isActive ? 'page' : undefined}
                 /*
@@ -1626,24 +1618,35 @@ export default function AdminDashboard({ user }: { user: User }) {
             >
               <Menu className="w-5 h-5" strokeWidth={1.5} />
             </button>
-            <div className="min-w-0">
+            <div className="hidden min-w-0 md:block">
               <p className="text-sm font-semibold text-ink">
-                {menuItems.find((item) => item.id === activeSection)?.label}
+                전체 관리자 <span className="mx-2 text-ink-tertiary">/</span> {menuItems.find((item) => item.id === activeSection)?.label}
               </p>
             </div>
 
+            <div className="ml-auto flex min-w-0 items-center gap-2">
+              <label htmlFor="admin-branch-access" className="hidden shrink-0 text-sm font-semibold text-ink sm:block">지점 관리</label>
+              <select id="admin-branch-access" aria-label="지점 관리 · 이동할 지점 선택" value=""
+                disabled={branchesLoading || branchesError || impersonateBranchMutation.isPending}
+                onChange={(event) => { if (event.target.value) impersonateBranchMutation.mutate(event.target.value); }}
+                className="h-11 w-36 min-w-0 rounded-lg border border-line-strong bg-surface px-3 text-sm text-ink sm:w-52">
+                <option value="">{impersonateBranchMutation.isPending ? '지점 이동 중…' : branchesLoading ? '지점 불러오는 중…' : branchesError ? '지점 조회 실패' : '지점 관리 · 바로가기'}</option>
+                {(branches || []).map((branch: any) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
+              </select>
+              {branchesError && <button type="button" onClick={() => refetchBranches()} className="min-h-11 text-xs text-ink-secondary underline">재시도</button>}
+            </div>
             {/* 야간 모드 토글 (DESIGN.md 6장) */}
-            <div className="ml-auto flex flex-shrink-0 items-center gap-2">
+            <div className="flex flex-shrink-0 items-center gap-2">
               <ThemeToggle />
             </div>
           </div>
         </header>
 
         {/* Content */}
-        <main className="app-main p-4 md:p-8 lg:p-10">
-          <div className="mb-8 border-b border-line pb-6">
+        <main className="app-main mx-auto max-w-[1600px] p-4 md:p-8 lg:p-10">
+          <div className="admin-page-intro mb-8">
             <h1 className="page-heading text-2xl font-semibold tracking-[-0.03em] text-ink md:text-3xl">
-              {activeSection === 'dashboard' ? '운영 대시보드' : menuItems.find((item) => item.id === activeSection)?.label}
+              {activeSection === 'dashboard' ? '운영 인사이트' : menuItems.find((item) => item.id === activeSection)?.label}
             </h1>
             <p className="page-description mt-2 text-sm leading-relaxed text-ink-secondary">{sectionDescriptions[activeSection]}</p>
           </div>

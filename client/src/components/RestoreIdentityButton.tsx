@@ -1,6 +1,7 @@
 import { useMutation } from '@tanstack/react-query';
 import { Undo2 } from 'lucide-react';
 import { api } from '../lib/api';
+import { toast } from './ui/toast';
 import { Button } from './ui/button';
 
 /*
@@ -18,14 +19,17 @@ import { Button } from './ui/button';
 export function RestoreIdentityButton({
   originalUser,
   className,
+  label = '원래 계정으로 돌아가기',
 }: {
   originalUser?: { name?: string } | null;
   className?: string;
+  label?: string;
 }) {
   const restoreMutation = useMutation({
     mutationFn: async () => {
       await api.post('/auth/impersonate/restore');
     },
+    onError: () => toast.error('원래 계정으로 돌아가지 못했습니다. 다시 시도해주세요.'),
     onSuccess: () => {
       window.location.reload();
     },
@@ -42,7 +46,7 @@ export function RestoreIdentityButton({
       onClick={() => restoreMutation.mutate()}
     >
       <Undo2 className="mr-2 h-4 w-4 flex-shrink-0" strokeWidth={1.5} />
-      <span className="truncate">원래 계정으로 돌아가기</span>
+      <span className="truncate">{label}</span>
     </Button>
   );
 }

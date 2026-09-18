@@ -5,13 +5,14 @@ import { filterGroupStudents, readSelection, saveSelection, selectionKey, valida
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import { toast } from '../components/ui/toast';
+import { RestoreIdentityButton } from '../components/RestoreIdentityButton';
 import { ThemeToggle } from '../components/ui/theme-toggle';
 import { StatValue } from '../components/ui/stat-value';
 import { StatStrip, StatStripItem } from '../components/ui/stat-strip';
 import { PageHeader } from '../components/ui/page-header';
 import { SegmentedControl } from '../components/ui/segmented-control';
 import { StatusBoard, StatusBoardCard, type StatusTone } from '../components/ui/status-board';
-import { ensureReport, openFullReport, openReportWindowSync } from '../lib/reportClient';
+import { ensureReport, openWebReport } from '../lib/reportClient';
 import { useModalA11y, isMobileViewport } from '../lib/useModalA11y';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -27,6 +28,7 @@ interface User {
   name: string;
   role: string;
   branchId?: string;
+  originalUser?: { name?: string; role?: string } | null;
 }
 
 type MenuSection = 'dashboard' | 'students' | 'classes' | 'exams' | 'distributions' | 'reports';
@@ -61,17 +63,9 @@ const gradeBadgeOperate = (grade?: number | string | null): string => {
   return 'border-line-strong bg-surface-subtle text-ink-secondary';
 };
 
-/*
-  보고서 전체 HTML 은 서버가 `/api/reports/:id` 로 직접 서빙한다.
-  `/reports/:id` 는 SPA 라우트가 아니라 404 다. 이 화면에 같은 열기 동작이 세 벌
-  복붙돼 있었고 한 벌만 `/api/` 가 빠져 있었으므로 여기 한 곳으로 모은다.
-
-  이 함수는 reportId 를 이미 아는 자리에서 쓴다. 동기 호출이라 클릭 제스처를 잃지 않는다.
-  보고서를 먼저 생성해야 하는 자리(openStudentReport)는 openReportWindowSync 로 창을
-  잡아 둔 뒤 openFullReport 에 넘긴다. 이유는 같다 — await 뒤의 open 은 차단된다.
-*/
+/** 기존 보고서도 생성 직후 보고서도 같은 웹 읽기 화면을 사용한다. */
 function openReportWindow(reportId: string): void {
-  window.open(`/api/reports/${reportId}`, '_blank', 'width=1000,height=800');
+  openWebReport(reportId);
 }
 
 export default function BranchDashboard({ user }: { user: User }) {
@@ -1442,18 +1436,15 @@ export default function BranchDashboard({ user }: { user: User }) {
    * 그것만 부르면 사용자에게는 아무 일도 일어나지 않는다 (학생·학부모 화면과 같은 흐름).
    */
   const openStudentReport = async (attemptId: string) => {
-    // await 이후의 window.open 은 사용자 제스처와 분리돼 차단된다. 창은 지금 잡아 둔다.
-    const win = openReportWindowSync();
     try {
       const ref = await ensureReport(attemptId, (stage) => {
         if (stage === 'generating') {
           toast.info('AI 분석을 시작했습니다...', '완료까지 시간이 걸릴 수 있습니다.');
         }
       });
-      await openFullReport(ref, win);
+      openWebReport(ref.reportId);
       refetchAllDistributionStudents();
     } catch (error: any) {
-      win?.close();
       toast.error(error.response?.data?.message || error.message || '보고서를 열 수 없습니다.');
     }
   };
@@ -3556,7 +3547,7 @@ export default function BranchDashboard({ user }: { user: User }) {
   };
 
   return (
-    <div className="app-shell flex min-h-[100dvh] flex-col bg-surface-sunken">
+    <div className="management-theme app-shell flex min-h-[100dvh] flex-col bg-surface-sunken">
       {/*
         ── 상단 GNB (DESIGN.md 11.6). 주요 메뉴가 여기 있고, 사이드바는 학생 패널이 된다 ──
 
@@ -3606,6 +3597,7 @@ export default function BranchDashboard({ user }: { user: User }) {
           </nav>
 
           <div className="flex flex-shrink-0 items-center gap-1">
+            {user.originalUser?.role === 'admin' && <RestoreIdentityButton originalUser={user.originalUser} label="총괄 관리" className="h-11 px-2 text-xs sm:px-3" />}
             <ThemeToggle />
             <button
               type="button"
