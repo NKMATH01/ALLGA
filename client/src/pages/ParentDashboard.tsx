@@ -5,8 +5,7 @@ import { Button } from '../components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
 import { ThemeToggle } from '../components/ui/theme-toggle';
 import { toast } from '../components/ui/toast';
-import { ensureReport, openFullReport, openReportWindowSync, prefersSummaryView } from '../lib/reportClient';
-import { ReportSummaryModal } from '../components/ReportSummaryModal';
+import { ensureReport, openWebReport } from '../lib/reportClient';
 import { RestoreIdentityButton } from '../components/RestoreIdentityButton';
 import { useModalA11y, isMobileViewport } from '../lib/useModalA11y';
 import {
@@ -69,7 +68,6 @@ export default function ParentDashboard({ user }: { user: User }) {
   );
   const [selectedChildId, setSelectedChildId] = useState<string | null>(null);
   const [openingReportFor, setOpeningReportFor] = useState<string | null>(null);
-  const [summaryReportId, setSummaryReportId] = useState<string | null>(null);
 
   const drawerRef = useModalA11y<HTMLElement>({
     active: sidebarOpen && isMobileViewport(),
@@ -123,11 +121,9 @@ export default function ParentDashboard({ user }: { user: User }) {
 
   // 보고서 열람.
   // 생성 전이면 서버 큐에 적재하고 완료까지 폴링한다(reportClient).
-  // 모바일에서는 8쪽 지면 대신 요약 뷰를 먼저 띄운다.
+  // 휴대폰과 PC 모두 웹 보고서를 먼저 연다.
   const openReport = async (attemptId: string) => {
     setOpeningReportFor(attemptId);
-    // await 이후의 window.open 은 사용자 제스처와 분리돼 차단된다. 창은 지금 잡아 둔다.
-    const win = prefersSummaryView() ? null : openReportWindowSync();
     try {
       const ref = await ensureReport(attemptId, (stage) => {
         if (stage === 'generating') {
@@ -135,13 +131,8 @@ export default function ParentDashboard({ user }: { user: User }) {
         }
       });
 
-      if (prefersSummaryView()) {
-        setSummaryReportId(ref.reportId);
-      } else {
-        await openFullReport(ref, win);
-      }
+      openWebReport(ref.reportId);
     } catch (error: any) {
-      win?.close();
       toast.error(error.response?.data?.message || error.message || '보고서를 불러오지 못했습니다.');
     } finally {
       setOpeningReportFor(null);
@@ -433,9 +424,6 @@ export default function ParentDashboard({ user }: { user: User }) {
         </main>
       </div>
 
-      {summaryReportId && (
-        <ReportSummaryModal reportId={summaryReportId} onClose={() => setSummaryReportId(null)} />
-      )}
     </div>
   );
 }

@@ -2,6 +2,7 @@ import { Route, Router, Switch } from 'wouter';
 import { useQuery } from '@tanstack/react-query';
 import { api } from './lib/api';
 import LoginPage from './pages/LoginPage';
+import WebReportPage from './pages/WebReportPage';
 import AdminDashboard from './pages/AdminDashboard';
 import BranchDashboard from './pages/BranchDashboard';
 import StudentDashboard from './pages/StudentDashboard';
@@ -38,6 +39,7 @@ function App() {
   ) : (
     <Router>
       <Switch>
+        <Route path="/reports/:reportId">{(params) => <WebReportPage reportId={params.reportId} />}</Route>
         <Route path="/" nest>
           {user.role === 'admin' && <AdminDashboard user={user} />}
           {user.role === 'branch' && <BranchDashboard user={user} />}

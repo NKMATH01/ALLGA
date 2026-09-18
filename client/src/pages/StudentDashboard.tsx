@@ -6,8 +6,7 @@ import { ThemeToggle } from '../components/ui/theme-toggle';
 import { useTheme } from '../lib/useTheme';
 import { StatValue } from '../components/ui/stat-value';
 import { ListLoading, LoadingBlock, ErrorState } from '../components/ui/list-state';
-import { ensureReport, openFullReport, openReportWindowSync, prefersSummaryView } from '../lib/reportClient';
-import { ReportSummaryModal } from '../components/ReportSummaryModal';
+import { ensureReport, openWebReport } from '../lib/reportClient';
 import { RestoreIdentityButton } from '../components/RestoreIdentityButton';
 import { useModalA11y, isMobileViewport } from '../lib/useModalA11y';
 import { Button } from '../components/ui/button';
@@ -409,13 +408,10 @@ function AIReportButton({ attemptId, hasReport }: { attemptId: string; hasReport
   const [reportStatus, setReportStatus] = useState<'completed' | 'none'>(
     hasReport ? 'completed' : 'none'
   );
-  const [summaryReportId, setSummaryReportId] = useState<string | null>(null);
 
-  // 생성 전이면 큐에 적재하고 완료까지 폴링한다. 모바일은 요약 뷰 우선.
+  // 생성 전이면 큐에 적재하고 완료까지 폴링한다. 모든 화면에서 웹 보고서를 연다.
   const handleViewReport = async () => {
     setLoading(true);
-    // await 이후의 window.open 은 사용자 제스처와 분리돼 차단된다. 창은 지금 잡아 둔다.
-    const win = prefersSummaryView() ? null : openReportWindowSync();
     try {
       const ref = await ensureReport(attemptId, (stage) => {
         if (stage === 'generating') {
@@ -425,13 +421,8 @@ function AIReportButton({ attemptId, hasReport }: { attemptId: string; hasReport
 
       setReportStatus('completed');
 
-      if (prefersSummaryView()) {
-        setSummaryReportId(ref.reportId);
-      } else {
-        await openFullReport(ref, win);
-      }
+      openWebReport(ref.reportId);
     } catch (error: any) {
-      win?.close();
       toast.error(
         error.response?.data?.message || error.message || 'AI 보고서를 불러오는데 실패했습니다.'
       );
@@ -465,9 +456,6 @@ function AIReportButton({ attemptId, hasReport }: { attemptId: string; hasReport
       <Clock className="w-4 h-4 mr-2" />
       보고서 대기 중
     </Button>
-      {summaryReportId && (
-        <ReportSummaryModal reportId={summaryReportId} onClose={() => setSummaryReportId(null)} />
-      )}
     </>
   );
 }

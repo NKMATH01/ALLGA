@@ -181,3 +181,8 @@ export async function fetchReportSummary(reportId: string): Promise<ReportSummar
 export function prefersSummaryView(): boolean {
   return typeof window !== 'undefined' && window.innerWidth < 768;
 }
+
+/** 인증을 유지한 같은 탭에서 반응형 웹 보고서를 연다. */
+export function openWebReport(reportId: string): void {
+  window.location.assign(`/reports/${encodeURIComponent(reportId)}`);
+}
