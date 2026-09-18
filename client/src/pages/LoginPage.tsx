@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
+import { loginErrorMessage } from '../lib/loginError';
 import { toast } from '../components/ui/toast';
 import { ThemeToggle } from '../components/ui/theme-toggle';
 import { Button } from '../components/ui/button';
@@ -22,7 +23,7 @@ export default function LoginPage() {
       queryClient.invalidateQueries({ queryKey: ['auth', 'me'] });
     },
     onError: (error: any) => {
-      toast.error(error.response?.data?.message || '로그인에 실패했습니다.');
+      toast.error(loginErrorMessage(error));
     },
   });
 
