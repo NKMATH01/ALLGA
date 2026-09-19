@@ -280,6 +280,7 @@
 | examId | VARCHAR(255) | FK, NOT NULL | 시험 ID |
 | branchId | VARCHAR(255) | FK, NOT NULL | 대상 지점 |
 | classId | VARCHAR(255) | FK | 대상 반 (NULL = 전체) |
+| targetKind | TEXT | NOT NULL, DEFAULT 'branch', CHECK(branch\|class\|students) | 배포 대상 구분. branch = 지점 전원, class = classId 가 가리키는 반, students = distribution_students 에 배정된 학생만 (2026-09-04 마이그레이션 0007) |
 | parentDistributionId | VARCHAR(255) | FK | 상위 배포 ID |
 | startDate | TIMESTAMP | NOT NULL | 응시 시작일시 |
 | endDate | TIMESTAMP | NOT NULL | 응시 종료일시 |
@@ -363,6 +364,8 @@ Google Gemini API로 생성된 AI 분석 보고서를 저장합니다.
 | ~~expectedGrade~~ | INTEGER | | 예상 등급 (2026-09-08 0010 으로 제거) |
 | summary | TEXT | | 종합 요약 |
 | htmlContent | TEXT | | 완성된 HTML 보고서 |
+| status | TEXT | NOT NULL, DEFAULT 'processing', CHECK(processing\|completed\|failed) | 생성 진행 상태. 행이 곧 잠금이라 큐 적재 전에 processing 으로 먼저 넣는다 (2026-09-04 마이그레이션 0009) |
+| failureReason | TEXT | | 실패 사유. 사용자에게 그대로 보여줄 수 있는 짧은 문구만 저장한다 (2026-09-04 마이그레이션 0009) |
 | generatedAt | TIMESTAMP | DEFAULT NOW() | 생성일시 |
 
 **외래키**:
