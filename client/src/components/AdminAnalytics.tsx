@@ -23,8 +23,8 @@ export function AdminAnalytics({ branches, grades, loading, error, onRetry }: Pr
       {rows.length ? <dl className="mt-7 space-y-5">{rows.map((b, i) => <div key={`${b.branchName}:${i}`}>
         <div className="mb-2 flex items-baseline justify-between gap-3"><dt className="min-w-0 break-words text-sm font-medium text-ink">{b.branchName}</dt><dd className="shrink-0 text-sm font-semibold tabular-nums text-ink">{b[metric]}{metric === 'studentCount' ? '명' : '건'}</dd></div>
         <div className="h-2.5 overflow-hidden rounded-full bg-surface-subtle" aria-hidden="true"><div className="h-full rounded-full bg-accent" style={{ width: `${Math.max(0, Number(b[metric]) / max * 100)}%` }} /></div>
-      </div>)}</dl> : <p className="py-16 text-center text-sm text-ink-secondary">등록된 지점이 없습니다.</p>}
-      {rows.length < branches.length && <p className="mt-5 text-xs text-ink-secondary">표시 {rows.length}개 / 전체 {branches.length}개 지점(0은 제외) · 전체 지점은 아래 통계표에서 확인</p>}
+      </div>)}</dl> : <p className="py-16 text-center text-sm text-ink-secondary">{branches.length ? `지점 ${branches.length}개 모두 아직 기록이 없습니다.` : '등록된 지점이 없습니다.'}</p>}
+      {rows.length > 0 && rows.length < branches.length && <p className="mt-5 text-xs text-ink-secondary">표시 {rows.length}개 / 전체 {branches.length}개 지점{ranked.length < branches.length ? '(0은 제외)' : ''} · 전체 지점은 아래 통계표에서 확인</p>}
     </section>
     <section className="admin-chart-panel" aria-labelledby="grade-distribution">
       <div className="flex items-start justify-between gap-3"><div><h2 id="grade-distribution" className="text-lg font-semibold text-ink">등급 분포</h2><p className="mt-1 text-sm text-ink-secondary">제출 완료 · 등급이 산출된 응시 기록</p></div><span className="rounded-full bg-accent-surface px-3 py-1.5 text-sm font-semibold text-accent-strong">{total}건</span></div>
