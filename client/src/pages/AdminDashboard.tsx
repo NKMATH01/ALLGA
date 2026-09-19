@@ -1628,7 +1628,14 @@ export default function AdminDashboard({ user }: { user: User }) {
               <label htmlFor="admin-branch-access" className="hidden shrink-0 text-sm font-semibold text-ink sm:block">지점 관리</label>
               <select id="admin-branch-access" aria-label="지점 관리 · 이동할 지점 선택" value=""
                 disabled={branchesLoading || branchesError || impersonateBranchMutation.isPending}
-                onChange={(event) => { if (event.target.value) impersonateBranchMutation.mutate(event.target.value); }}
+                onChange={(event) => {
+                  const branchId = event.target.value;
+                  if (!branchId) return;
+                  // 표의 '로그인' 버튼과 같은 확인창을 거친다. 실수로 스친 선택이 바로 지점 이동이 되지 않게 한다.
+                  const picked = (branches || []).find((branch: any) => branch.id === branchId);
+                  if (confirm(`${picked?.name || '선택한 지점'} 관리자로 로그인하시겠습니까?`)) impersonateBranchMutation.mutate(branchId);
+                  else event.target.value = '';
+                }}
                 className="h-11 w-36 min-w-0 rounded-lg border border-line-strong bg-surface px-3 text-sm text-ink sm:w-52">
                 <option value="">{impersonateBranchMutation.isPending ? '지점 이동 중…' : branchesLoading ? '지점 불러오는 중…' : branchesError ? '지점 조회 실패' : '지점 관리 · 바로가기'}</option>
                 {(branches || []).map((branch: any) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}

@@ -30,9 +30,9 @@ export function ReportReadingView({ summary }: { summary: ReportSummary }) {
     <section aria-labelledby="report-result" className="py-8 sm:py-10">
       <h2 id="report-result" className="text-xl font-semibold">이번 시험 결과</h2>
       <dl className="mt-6 grid grid-cols-2 gap-y-6 rounded-xl bg-accent-surface px-5 py-6 sm:grid-cols-3 sm:px-7">
-        <div><dt className="text-sm text-ink-secondary">원점수</dt><dd className="mt-2"><strong className="text-4xl font-semibold tracking-tight text-accent-strong">{v.rawScore ?? '—'}</strong><span className="ml-1 text-sm text-ink-secondary">/ {v.rawScoreMax ?? '—'}점</span></dd></div>
-        <div className="border-l border-line pl-5"><dt className="text-sm text-ink-secondary">등급</dt><dd className="mt-2 text-3xl font-semibold">{v.grade != null ? `${v.grade}등급` : '미산출'}</dd></div>
-        <div className="col-span-2 border-t border-line pt-4 sm:col-span-1 sm:border-l sm:border-t-0 sm:pl-5 sm:pt-0"><dt className="text-sm text-ink-secondary">백분위</dt><dd className="mt-2 text-2xl font-semibold sm:text-3xl">{v.percentile ?? '미산출'}</dd></div>
+        <div><dt className="text-sm text-ink-secondary">원점수</dt><dd className="mt-2"><strong className="text-4xl font-semibold tracking-tight text-accent-strong">{v.rawScore ?? '-'}</strong><span className="ml-1 text-sm text-ink-secondary">/ {v.rawScoreMax ?? '-'}점</span></dd></div>
+        <div className="border-l border-line pl-5"><dt className="text-sm text-ink-secondary">등급</dt><dd className="mt-2 text-3xl font-semibold">{v.grade != null ? `${v.grade}등급` : '등급 기준 축적 중'}{v.grade == null && <p className="mt-1 text-xs text-ink-secondary">응시자 표본이 모이기 전이라 등급을 내지 않았습니다.</p>}</dd></div>
+        <div className="col-span-2 border-t border-line pt-4 sm:col-span-1 sm:border-l sm:border-t-0 sm:pl-5 sm:pt-0"><dt className="text-sm text-ink-secondary">백분위</dt><dd className="mt-2 text-2xl font-semibold sm:text-3xl">{v.percentile ?? '-'}</dd></div>
       </dl>
       {v.overallReference?.available && <p className="mt-4 text-sm leading-6 text-ink-secondary">전체 정답률 참고 범위 {v.overallReference.low}–{v.overallReference.high}%</p>}
     </section>

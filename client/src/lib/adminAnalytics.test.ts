@@ -11,6 +11,11 @@ describe('관리자 분석 화면', () => {
     const html = render({ branches: [{ branchName: '예시 지점', studentCount: 11, examCount: 3 }], grades: [{ grade: 4, count: 2 }], loading: false, error: false, onRetry: () => {} });
     expect(html).toContain('예시 지점'); expect(html).toContain('11'); expect(html).toContain('4등급'); expect(html).toContain('2건');
   });
+  it('0명 지점은 차트에서 제외하고 표시 개수를 밝힌다', () => {
+    const html = render({ branches: [{ branchName: '운영 지점', studentCount: 11, examCount: 3 }, { branchName: '빈 지점', studentCount: 0, examCount: 0 }], grades: [], loading: false, error: false, onRetry: () => {} });
+    expect(html).toContain('운영 지점'); expect(html).not.toContain('빈 지점');
+    expect(html).toContain('표시 1개 / 전체 2개 지점(0은 제외)');
+  });
   it('조회 실패 시 이전 차트를 정상 결과처럼 표시하지 않는다', () => {
     const html = render({ branches: [{ branchName: '이전 지점', studentCount: 11, examCount: 3 }], grades: [], loading: false, error: true, onRetry: () => {} });
     expect(html).toContain('다시 시도'); expect(html).not.toContain('이전 지점');

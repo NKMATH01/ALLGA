@@ -21,7 +21,7 @@ export function buildDistributionStudentRow(
     answers: attempt?.answers || null,
     score: attempt?.score ?? null,
     maxScore: attempt?.maxScore ?? null,
-    grade: attempt?.grade || null,
+    grade: attempt?.grade ?? null,
     submittedAt: attempt?.submittedAt || null,
     hasAttempt: !!attempt,
     isSubmitted: !!(attempt && attempt.submittedAt),

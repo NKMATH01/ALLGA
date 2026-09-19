@@ -45,6 +45,11 @@ describe('buildDistributionStudentRow response contract', () => {
     });
   });
 
+  it('preserves a zero grade instead of turning it into null', () => {
+    expect(buildDistributionStudentRow(row, { ...submitted, grade: 0 }, new Map()))
+      .toMatchObject({ grade: 0 });
+  });
+
   it('preserves a zero maximum score and a nullable grade', () => {
     expect(buildDistributionStudentRow(row, { ...submitted, maxScore: 0, grade: null }, new Map()))
       .toMatchObject({ score: 0, maxScore: 0, grade: null });

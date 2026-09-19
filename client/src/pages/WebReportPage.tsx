@@ -10,7 +10,7 @@ export default function WebReportPage({ reportId }: { reportId: string }) {
   return <div className="min-h-[100dvh] bg-surface text-ink">
     <header className="sticky top-0 z-20 border-b border-line bg-surface">
       <div className="mx-auto flex min-h-16 max-w-5xl items-center justify-between gap-2 px-4 sm:px-8">
-        <Link href="/" className="inline-flex min-h-11 items-center gap-2 rounded-md px-2 text-sm font-medium"><ArrowLeft className="h-4 w-4" />성적 화면</Link>
+        <Link href="/" aria-label="이전 화면으로 돌아가기" className="inline-flex min-h-11 items-center gap-2 rounded-md px-2 text-sm font-medium"><ArrowLeft className="h-4 w-4" />돌아가기</Link>
         <div className="flex items-center gap-1"><ThemeToggle />{report.data && <a href={`/api/reports/${encodeURIComponent(reportId)}`} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center gap-2 rounded-md px-3 text-sm font-medium hover:bg-surface-subtle">인쇄용 전체<ExternalLink className="h-4 w-4" /></a>}</div>
       </div>
     </header>

@@ -6,7 +6,9 @@ export function AdminAnalytics({ branches, grades, loading, error, onRetry }: Pr
   const [metric, setMetric] = useState<'studentCount' | 'examCount'>('studentCount');
   if (loading) return <div role="status" className="admin-analysis-state">지점과 성적 데이터를 불러오는 중입니다.</div>;
   if (error) return <div role="alert" className="admin-analysis-state">분석 데이터를 불러오지 못했습니다. <button type="button" onClick={onRetry} className="ml-3 underline underline-offset-4">다시 시도</button></div>;
-  const rows = [...branches].sort((a, b) => Number(b[metric]) - Number(a[metric])).slice(0, 6);
+  // 0 인 지점은 막대가 보이지 않아 '작은 지점'과 '기록 없는 지점'이 구분되지 않는다. 차트에서 뺀다.
+  const ranked = branches.filter((b) => Number(b[metric]) > 0).sort((a, b) => Number(b[metric]) - Number(a[metric]));
+  const rows = ranked.slice(0, 6);
   const max = Math.max(1, ...rows.map((b) => Number(b[metric]) || 0));
   const maxGrade = Math.max(1, ...grades.map((g) => Number(g.count) || 0));
   const total = grades.reduce((sum, g) => sum + Number(g.count), 0);
@@ -22,7 +24,7 @@ export function AdminAnalytics({ branches, grades, loading, error, onRetry }: Pr
         <div className="mb-2 flex items-baseline justify-between gap-3"><dt className="min-w-0 break-words text-sm font-medium text-ink">{b.branchName}</dt><dd className="shrink-0 text-sm font-semibold tabular-nums text-ink">{b[metric]}{metric === 'studentCount' ? '명' : '건'}</dd></div>
         <div className="h-2.5 overflow-hidden rounded-full bg-surface-subtle" aria-hidden="true"><div className="h-full rounded-full bg-accent" style={{ width: `${Math.max(0, Number(b[metric]) / max * 100)}%` }} /></div>
       </div>)}</dl> : <p className="py-16 text-center text-sm text-ink-secondary">등록된 지점이 없습니다.</p>}
-      {branches.length > 6 && <p className="mt-5 text-xs text-ink-secondary">규모순 상위 6개 지점 · 전체 지점은 아래 통계표에서 확인</p>}
+      {rows.length < branches.length && <p className="mt-5 text-xs text-ink-secondary">표시 {rows.length}개 / 전체 {branches.length}개 지점(0은 제외) · 전체 지점은 아래 통계표에서 확인</p>}
     </section>
     <section className="admin-chart-panel" aria-labelledby="grade-distribution">
       <div className="flex items-start justify-between gap-3"><div><h2 id="grade-distribution" className="text-lg font-semibold text-ink">등급 분포</h2><p className="mt-1 text-sm text-ink-secondary">제출 완료 · 등급이 산출된 응시 기록</p></div><span className="rounded-full bg-accent-surface px-3 py-1.5 text-sm font-semibold text-accent-strong">{total}건</span></div>
