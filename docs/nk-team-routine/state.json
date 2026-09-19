@@ -1,56 +1,32 @@
 {
-  "run": "2026-09-19-full-audit-2",
-  "save_point": "ef594a4",
-  "approval": "사용자 점검 지시(클로드 점검단)",
+  "run": "2026-09-19-audit2-fixes",
+  "save_point": "5c5a4f2",
+  "approval": "사용자 소수정 지시(점검 2차 N-1~N-8)",
   "next": null,
   "nodes": [
     {
-      "id": "savepoint",
-      "status": "통과: 미커밋 작업을 aed233a·fd8be58·ef594a4 3커밋으로 저장"
+      "id": "impl",
+      "status": "통과: c24ee97 코드 6곳(N-1·2·3·4·6·7), 6cd22ef 문서 2곳(N-5·8)"
     },
     {
-      "id": "db",
-      "status": "통과: 마이그레이션 11, 무결성 6종 0건, 스키마↔스냅샷 정합"
+      "id": "gates",
+      "status": "통과: tsc 0/0, vitest 11파일 116건(113→116), hex 0, em-dash 0"
     },
     {
-      "id": "runtime",
-      "status": "통과: 권한 경계 12건, 보고서 권한, 전환 사슬·복귀 확인"
+      "id": "audit-a",
+      "status": "통과: 요구 충족 약 95%, 🟡1 (지점 비교 빈 상태 문구·\"(0은 제외)\" 조건)"
     },
     {
-      "id": "tech-server",
-      "status": "통과: 🟡1 (N-7 grade || null)"
+      "id": "tech",
+      "status": "통과: 🟡2 (select DOM 조작 무해, 결측 문구 줄바꿈)"
     },
     {
-      "id": "tech-client",
-      "status": "통과: 🟡4 (N-1·N-2·N-5·N-6)"
+      "id": "polish",
+      "status": "통과: c132490 손질 1커밋으로 🟡3건 정리, 되돌림 0"
     },
     {
-      "id": "view-student",
-      "status": "통과: N-1·N-2 지적"
-    },
-    {
-      "id": "view-parent",
-      "status": "통과: 지적 없음"
-    },
-    {
-      "id": "view-branch",
-      "status": "통과: 지적 없음"
-    },
-    {
-      "id": "view-admin",
-      "status": "통과: N-3·N-4 지적"
-    },
-    {
-      "id": "ops",
-      "status": "통과: 🟡2 (N-8 문서 드리프트, N-9 번들 부채)"
-    },
-    {
-      "id": "synthesis",
-      "status": "통과: 🔴0 🟡9, 회귀와 기존 부채를 구분해 재판정"
-    },
-    {
-      "id": "report",
-      "status": "통과: docs/03-analysis/olga-full-audit-2026-09-19.md, 루틴 로그 6회차 기록"
+      "id": "log",
+      "status": "통과: 루틴 로그 7회차 기록"
     }
   ]
 }
